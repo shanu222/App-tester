@@ -1,0 +1,831 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum IntegrationProvider {
+  FACEBOOK
+  GOOGLE
+  GOOGLE_PLAY
+  GMAIL
+  GOOGLE_WORKSPACE
+}
+
+enum IntegrationStatus {
+  NOT_CONNECTED
+  CONNECTING
+  CONNECTED
+  EXPIRED
+  ERROR
+}
+
+enum FacebookSourceType {
+  PAGE
+  MANUAL_GROUP
+  IMPORTED
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum TestingType {
+  INTERNAL
+  CLOSED
+  OPEN
+}
+
+enum TesterStatus {
+  DISCOVERED
+  CONTACTED
+  REPLIED
+  EMAIL_RECEIVED
+  EMAIL_CONFIRMED
+  ADDING
+  ADDED
+  INVITATION_SENT
+  GROUP_MEMBER
+  OPT_IN_PENDING
+  OPTED_IN
+  INSTALL_STATUS_UNKNOWN
+  TESTING
+  FEEDBACK_REQUESTED
+  FEEDBACK_RECEIVED
+  COMPLETED
+  DECLINED
+  BLOCKED
+  ERROR
+}
+
+enum ReciprocalSideStatus {
+  PENDING
+  CONFIRMED
+  TESTING
+  COMPLETED
+}
+
+enum CommentDraftStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  POSTED
+  MANUAL_COPY
+  CANCELLED
+  FAILED
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum OutreachChannel {
+  FACEBOOK_COMMENT
+  EMAIL
+  MANUAL
+}
+
+model User {
+  id                   String    @id @default(cuid())
+  email                String    @unique
+  emailVerified        DateTime?
+  passwordHash         String?
+  name                 String?
+  developerName        String?
+  company              String?
+  image                String?
+  role                 UserRole  @default(USER)
+  onboardingStep       Int       @default(0)
+  onboardingCompleted  Boolean   @default(false)
+  demoMode             Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+
+  accounts               Account[]
+  sessions               Session[]
+  settings               UserSettings?
+  integrations           Integration[]
+  facebookSources        FacebookSource[]
+  facebookPosts          FacebookPost[]
+  opportunities          Opportunity[]
+  commentDrafts          CommentDraft[]
+  apps                   App[]
+  campaigns              Campaign[]
+  testers                Tester[]
+  testerCampaigns        TesterCampaign[]
+  messages               Message[]
+  emailEvents            EmailEvent[]
+  googleGroups           GoogleGroup[]
+  invitations            Invitation[]
+  feedback               Feedback[]
+  activityLogs           ActivityLog[]
+  notifications          Notification[]
+  jobs                   Job[]
+  blockList              BlockListEntry[]
+  templates              MessageTemplate[]
+  passwordResetTokens    PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  dataExports            DataExport[]
+  telemetryEvents        TelemetryEvent[]
+  outreachUsages         OutreachUsage[]
+
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserSettings {
+  id                       String   @id @default(cuid())
+  userId                   String   @unique
+  commentsPerHour          Int      @default(3)
+  commentsPerDay           Int      @default(8)
+  processedPostsPerDay     Int      @default(40)
+  messagesPerDay           Int      @default(15)
+  requireCommentApproval   Boolean  @default(true)
+  allowAutomatedEmail      Boolean  @default(false)
+  notifyOpportunities      Boolean  @default(true)
+  notifyReplies            Boolean  @default(true)
+  notifyTesters            Boolean  @default(true)
+  notifyIntegrations       Boolean  @default(true)
+  notifyFeedback           Boolean  @default(true)
+  defaultKeywords          String[] @default(["need testers", "looking for testers", "Android testers", "Google Play testing", "closed testing", "beta testers", "test my app", "I need Android testers", "app testing"])
+  playClosedTestTarget     Int      @default(12)
+  playClosedTestDays       Int      @default(14)
+  timezone                 String   @default("UTC")
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Integration {
+  id                    String              @id @default(cuid())
+  userId                String
+  provider              IntegrationProvider
+  status                IntegrationStatus   @default(NOT_CONNECTED)
+  displayName           String?
+  encryptedCredentials  String?
+  scopes                String[]            @default([])
+  externalAccountId     String?
+  lastSyncAt            DateTime?
+  lastTestAt            DateTime?
+  lastError             String?
+  capabilities          Json?
+  metadata              Json?
+  isDemo                Boolean             @default(false)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  facebookSources       FacebookSource[]
+  googleGroups          GoogleGroup[]
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@index([status])
+}
+
+model FacebookSource {
+  id                   String              @id @default(cuid())
+  userId               String
+  integrationId        String?
+  type                 FacebookSourceType
+  externalId           String
+  name                 String
+  url                  String?
+  canReadPosts         Boolean             @default(false)
+  canComment           Boolean             @default(false)
+  canMonitorReplies    Boolean             @default(false)
+  limitationNote       String?
+  encryptedPageToken   String?
+  lastSyncAt           DateTime?
+  isDemo               Boolean             @default(false)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  integration          Integration?        @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  posts                FacebookPost[]
+  opportunities        Opportunity[]
+  campaigns            Campaign[]
+
+  @@unique([userId, externalId])
+  @@index([userId])
+  @@index([type])
+}
+
+model FacebookPost {
+  id            String    @id @default(cuid())
+  userId        String
+  sourceId      String
+  sourcePostId  String
+  contentHash   String
+  authorName    String?
+  authorId      String?
+  message       String
+  permalink     String?
+  postedAt      DateTime?
+  lastSeenAt    DateTime  @default(now())
+  processedAt   DateTime?
+  rawPayload    Json?
+  isDemo        Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source        FacebookSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  opportunities Opportunity[]
+
+  @@unique([userId, sourcePostId])
+  @@index([userId])
+  @@index([sourceId])
+  @@index([contentHash])
+  @@index([processedAt])
+}
+
+model Opportunity {
+  id                 String   @id @default(cuid())
+  userId             String
+  campaignId         String?
+  sourceId           String?
+  postId             String?
+  personName         String?
+  personExternalId   String?
+  postContent        String
+  groupName          String?
+  postTimestamp      DateTime?
+  postLink           String?
+  relevanceScore     Int
+  matchedKeywords    String[] @default([])
+  testingIntent      String?
+  reciprocalLanguage Boolean  @default(false)
+  whyMatched         Json?
+  skipped            Boolean  @default(false)
+  ignored            Boolean  @default(false)
+  ignoreReason       String?
+  previousContact    Boolean  @default(false)
+  isDemo             Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign           Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  source             FacebookSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  post               FacebookPost? @relation(fields: [postId], references: [id], onDelete: SetNull)
+  commentDrafts      CommentDraft[]
+  testers            Tester[]
+
+  @@index([userId])
+  @@index([campaignId])
+  @@index([sourceId])
+  @@index([postId])
+  @@index([relevanceScore])
+  @@index([createdAt])
+}
+
+model CommentDraft {
+  id              String             @id @default(cuid())
+  userId          String
+  opportunityId   String
+  campaignId      String?
+  body            String
+  tone            String             @default("professional")
+  status          CommentDraftStatus @default(DRAFT)
+  postedAt        DateTime?
+  externalCommentId String?
+  failReason      String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity     Opportunity        @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  campaign        Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([opportunityId])
+  @@index([status])
+}
+
+model App {
+  id                String       @id @default(cuid())
+  userId            String
+  name              String
+  packageName       String
+  platform          String       @default("Android")
+  testingType       TestingType  @default(CLOSED)
+  playStoreUrl      String?
+  webOptInUrl       String?
+  androidOptInUrl   String?
+  iconUrl           String?
+  syncedFromPlay    Boolean      @default(false)
+  lastSyncedAt      DateTime?
+  isDemo            Boolean      @default(false)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tracks            TestingTrack[]
+  campaigns         Campaign[]
+  feedback          Feedback[]
+  telemetryEvents   TelemetryEvent[]
+
+  @@unique([userId, packageName])
+  @@index([userId])
+  @@index([packageName])
+}
+
+model TestingTrack {
+  id             String      @id @default(cuid())
+  appId          String
+  name           String
+  trackId        String
+  testingType    TestingType
+  testMethod     String?
+  googleGroupEmail String?
+  testingLink    String?
+  syncedFromPlay Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  app            App         @relation(fields: [appId], references: [id], onDelete: Cascade)
+  campaigns      Campaign[]
+
+  @@index([appId])
+}
+
+model GoogleGroup {
+  id              String   @id @default(cuid())
+  userId          String
+  integrationId   String?
+  email           String
+  name            String?
+  canManageMembers Boolean @default(false)
+  limitationNote  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  integration     Integration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  campaigns       Campaign[]
+  memberships     GoogleGroupMembership[]
+
+  @@unique([userId, email])
+  @@index([userId])
+}
+
+model Campaign {
+  id                   String         @id @default(cuid())
+  userId               String
+  appId                String
+  trackId              String?
+  sourceId             String?
+  googleGroupId        String?
+  name                 String
+  status               CampaignStatus @default(DRAFT)
+  testingType          TestingType    @default(CLOSED)
+  targetTesters        Int            @default(12)
+  playStoreUrl         String?
+  webOptInUrl          String?
+  androidOptInUrl      String?
+  telemetryToken       String         @unique @default(cuid())
+  requiredTesters      Int            @default(12)
+  requiredActiveDays   Int            @default(14)
+  startedAt            DateTime?
+  pausedAt             DateTime?
+  completedAt          DateTime?
+  isDemo               Boolean        @default(false)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app                  App            @relation(fields: [appId], references: [id], onDelete: Cascade)
+  track                TestingTrack?  @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  source               FacebookSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  googleGroup          GoogleGroup?   @relation(fields: [googleGroupId], references: [id], onDelete: SetNull)
+  opportunities        Opportunity[]
+  testerCampaigns      TesterCampaign[]
+  commentDrafts        CommentDraft[]
+  invitations          Invitation[]
+  feedback             Feedback[]
+  activityLogs         ActivityLog[]
+  notifications        Notification[]
+  messages             Message[]
+  emailEvents          EmailEvent[]
+  telemetryEvents      TelemetryEvent[]
+  templates            MessageTemplate[]
+
+  @@index([userId])
+  @@index([appId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Tester {
+  id                 String   @id @default(cuid())
+  userId             String
+  email              String?
+  emailNormalized    String?
+  name               String?
+  facebookProfile    String?
+  facebookUserId     String?
+  sourceLabel        String?
+  opportunityId      String?
+  city               String?
+  country            String?
+  blocked            Boolean  @default(false)
+  notes              String?
+  isDemo             Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity        Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  campaigns          TesterCampaign[]
+  statusHistory      TesterStatusHistory[]
+  messages           Message[]
+  invitations        Invitation[]
+  feedback           Feedback[]
+  memberships        GoogleGroupMembership[]
+  emailEvents        EmailEvent[]
+
+  @@index([userId])
+  @@index([emailNormalized])
+  @@index([facebookUserId])
+}
+
+model TesterCampaign {
+  id                 String       @id @default(cuid())
+  userId             String
+  testerId           String
+  campaignId         String
+  appId              String?
+  status             TesterStatus @default(DISCOVERED)
+  dateContacted      DateTime?
+  dateReplied        DateTime?
+  dateEmailReceived  DateTime?
+  dateEmailConfirmed DateTime?
+  dateAdded          DateTime?
+  dateInvitationSent DateTime?
+  dateGroupMember    DateTime?
+  dateOptedIn        DateTime?
+  dateTesting        DateTime?
+  dateFeedback       DateTime?
+  accessAdded        Boolean      @default(false)
+  optedIn            Boolean      @default(false)
+  lastActivityAt     DateTime?
+  lastError          String?
+  ourTestStatus      ReciprocalSideStatus @default(PENDING)
+  theirTestStatus    ReciprocalSideStatus @default(PENDING)
+  theirAppName       String?
+  theirPlayLink      String?
+  theirInstructions  String?
+  pastedReply        String?
+  detectedEmail      String?
+  emailConfirmed     Boolean      @default(false)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tester             Tester       @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  campaign           Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([testerId, campaignId])
+  @@index([userId])
+  @@index([campaignId])
+  @@index([status])
+  @@index([emailConfirmed])
+}
+
+model TesterStatusHistory {
+  id               String       @id @default(cuid())
+  testerId         String
+  testerCampaignId String?
+  fromStatus       TesterStatus?
+  toStatus         TesterStatus
+  note             String?
+  createdAt        DateTime     @default(now())
+  tester           Tester       @relation(fields: [testerId], references: [id], onDelete: Cascade)
+
+  @@index([testerId])
+  @@index([createdAt])
+}
+
+model GoogleGroupMembership {
+  id            String    @id @default(cuid())
+  groupId       String
+  testerId      String
+  email         String
+  status        String
+  verifiedAt    DateTime?
+  manual        Boolean   @default(false)
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  group         GoogleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  tester        Tester      @relation(fields: [testerId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, email])
+  @@index([testerId])
+}
+
+model Invitation {
+  id               String    @id @default(cuid())
+  userId           String
+  campaignId       String
+  testerId         String
+  testerCampaignId String?
+  channel          OutreachChannel @default(EMAIL)
+  subject          String?
+  body             String
+  testingLink      String?
+  sentAt           DateTime?
+  externalId       String?
+  status           String    @default("pending")
+  createdAt        DateTime  @default(now())
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign         Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  tester           Tester    @relation(fields: [testerId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([campaignId])
+  @@index([testerId])
+}
+
+model Feedback {
+  id              String   @id @default(cuid())
+  userId          String
+  campaignId      String
+  testerId        String
+  appId           String?
+  overall         Int?
+  bugs            String?
+  uiIssues        String?
+  performance     String?
+  suggestions     String?
+  device          String?
+  androidVersion  String?
+  screenshotUrl   String?
+  recordingUrl    String?
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign        Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  tester          Tester   @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  app             App?     @relation(fields: [appId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([campaignId])
+  @@index([testerId])
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  userId      String
+  campaignId  String?
+  testerId    String?
+  direction   String
+  channel     OutreachChannel
+  body        String
+  extractedEmail String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign    Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  tester      Tester?   @relation(fields: [testerId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([campaignId])
+  @@index([createdAt])
+}
+
+model EmailEvent {
+  id         String   @id @default(cuid())
+  userId     String
+  campaignId String?
+  testerId   String?
+  type       String
+  toAddress  String
+  subject    String?
+  status     String
+  error      String?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  tester     Tester?   @relation(fields: [testerId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model MessageTemplate {
+  id         String   @id @default(cuid())
+  userId     String
+  campaignId String?
+  key        String
+  name       String
+  subject    String?
+  body       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, campaignId, key])
+  @@index([userId])
+}
+
+model BlockListEntry {
+  id             String   @id @default(cuid())
+  userId         String
+  email          String?
+  facebookUserId String?
+  reason         String?
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([email])
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String
+  campaignId String?
+  testerId   String?
+  action     String
+  result     String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([campaignId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String
+  campaignId String?
+  type       String
+  title      String
+  body       String
+  href       String?
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([readAt])
+  @@index([createdAt])
+}
+
+model Job {
+  id          String    @id @default(cuid())
+  userId      String?
+  type        String
+  payload     Json
+  status      JobStatus @default(PENDING)
+  runAt       DateTime  @default(now())
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  timeoutMs   Int       @default(25000)
+  lastError   String?
+  idempotencyKey String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs        JobRun[]
+
+  @@unique([idempotencyKey])
+  @@index([status, runAt])
+  @@index([type])
+  @@index([userId])
+}
+
+model JobRun {
+  id         String    @id @default(cuid())
+  jobId      String
+  status     JobStatus
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  log        String?
+  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model OutreachUsage {
+  id        String          @id @default(cuid())
+  userId    String
+  channel   OutreachChannel
+  hourKey   String
+  dayKey    String
+  createdAt DateTime        @default(now())
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, channel, dayKey])
+  @@index([userId, channel, hourKey])
+}
+
+model TelemetryEvent {
+  id             String   @id @default(cuid())
+  userId         String?
+  campaignId     String
+  appId          String?
+  anonymousId    String
+  appVersion     String?
+  platform       String?
+  firstLaunchAt  DateTime?
+  lastActiveAt   DateTime?
+  payload        Json?
+  createdAt      DateTime @default(now())
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  app            App?     @relation(fields: [appId], references: [id], onDelete: SetNull)
+
+  @@unique([campaignId, anonymousId])
+  @@index([campaignId])
+}
+
+model DataExport {
+  id        String   @id @default(cuid())
+  userId    String
+  payload   Json
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

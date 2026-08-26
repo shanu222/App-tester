@@ -1,0 +1,44 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Next.js
+.next
+out
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Credentials — never commit
+*.pem
+*.p12
+service-account*.json
+google-service-account.json
+credentials.json
+
+# Debug / OS
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+
+# Test / coverage
+coverage
+.vitest
+
+# IDE / Vercel
+.idea
+.vscode
+*.swp
+.vercel

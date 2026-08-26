@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: testerbridge
+      POSTGRES_PASSWORD: testerbridge
+      POSTGRES_DB: testerbridge
+    ports:
+      - "5432:5432"
+    volumes:
+      - testerbridge_pg:/var/lib/postgresql/data
+
+volumes:
+  testerbridge_pg:

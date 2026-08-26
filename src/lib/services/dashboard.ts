@@ -1,86 +1,118 @@
 import { prisma } from "@/lib/db";
+import { countReceivedTesters } from "@/lib/services/network";
 
 export async function getDashboardStats(userId: string) {
   const [
+    apps,
     activeCampaigns,
-    opportunities,
-    emailsReceived,
-    testersAdded,
-    optedIn,
-    testing,
-    feedback,
-    testers,
+    publishedCampaigns,
+    testingForOthers,
+    pendingParticipations,
+    completedTests,
+    pendingReciprocal,
     campaigns,
   ] = await Promise.all([
+    prisma.app.count({ where: { userId } }),
     prisma.campaign.count({ where: { userId, status: "ACTIVE" } }),
-    prisma.opportunity.count({ where: { userId, skipped: false, ignored: false } }),
-    prisma.testerCampaign.count({ where: { userId, detectedEmail: { not: null } } }),
-    prisma.testerCampaign.count({ where: { userId, accessAdded: true } }),
-    prisma.testerCampaign.count({ where: { userId, optedIn: true } }),
-    prisma.testerCampaign.count({
-      where: {
-        userId,
-        status: { in: ["TESTING", "FEEDBACK_REQUESTED", "FEEDBACK_RECEIVED", "COMPLETED"] },
-      },
-    }),
-    prisma.feedback.count({ where: { userId } }),
-    prisma.tester.count({ where: { userId } }),
     prisma.campaign.findMany({
       where: { userId, status: { in: ["ACTIVE", "PAUSED"] } },
-      include: { app: true, _count: { select: { testerCampaigns: true } } },
-      take: 6,
+      include: { app: true },
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.testingParticipation.count({
+      where: { testerUserId: userId, status: { notIn: ["DECLINED", "COMPLETED"] } },
+    }),
+    prisma.testingParticipation.count({
+      where: { ownerUserId: userId, status: { in: ["ACCEPTED", "GMAIL_CONFIRMED", "ACCESS_PROCESSING", "MANUAL_REQUIRED"] } },
+    }),
+    prisma.testingParticipation.count({
+      where: { testerUserId: userId, status: "COMPLETED" },
+    }),
+    prisma.reciprocalTest.count({
+      where: { targetId: userId, status: "PENDING" },
+    }),
+    prisma.campaign.findMany({
+      where: { userId, status: { in: ["ACTIVE", "PAUSED"] } },
+      include: { app: true, _count: { select: { testerCampaigns: true, participations: true } } },
+      take: 8,
       orderBy: { updatedAt: "desc" },
     }),
   ]);
 
+  const campaignCards = await Promise.all(
+    campaigns.map(async (campaign) => {
+      const received = await countReceivedTesters(campaign.id);
+      return {
+        ...campaign,
+        testersReceived: received,
+        remaining: Math.max(0, campaign.targetTesters - received),
+        progress: campaign.targetTesters ? Math.round((received / campaign.targetTesters) * 100) : 0,
+      };
+    }),
+  );
+
+  let testersNeeded = 0;
+  let testersReceived = 0;
+  for (const campaign of publishedCampaigns) {
+    const received = await countReceivedTesters(campaign.id);
+    testersReceived += received;
+    testersNeeded += Math.max(0, campaign.targetTesters - received);
+  }
+
   return {
+    apps,
     activeCampaigns,
-    potentialTesters: opportunities,
-    emailsReceived,
-    testersAdded,
-    optedIn,
-    currentlyTesting: testing,
-    feedbackReceived: feedback,
-    testers,
-    campaigns,
+    testersNeeded,
+    testersReceived,
+    testingForOthers,
+    pendingParticipations,
+    completedTests,
+    pendingReciprocal,
+    campaigns: campaignCards,
   };
 }
 
 export async function getFunnel(userId: string, campaignId?: string) {
-  const where = campaignId ? { userId, campaignId } : { userId };
-  const posts = await prisma.facebookPost.count({ where: { userId } });
-  const relevant = await prisma.opportunity.count({
-    where: { userId, ...(campaignId ? { campaignId } : {}), relevanceScore: { gte: 55 } },
+  const where = campaignId ? { ownerUserId: userId, campaignId } : { ownerUserId: userId };
+  const requested = await prisma.testingParticipation.count({ where });
+  const accepted = await prisma.testingParticipation.count({
+    where: { ...where, status: { not: "DECLINED" } },
   });
-  const contacted = await prisma.testerCampaign.count({
-    where: { ...where, dateContacted: { not: null } },
-  });
-  const replied = await prisma.testerCampaign.count({
-    where: { ...where, dateReplied: { not: null } },
-  });
-  const gmail = await prisma.testerCampaign.count({
-    where: { ...where, detectedEmail: { not: null } },
-  });
-  const added = await prisma.testerCampaign.count({ where: { ...where, accessAdded: true } });
-  const optedIn = await prisma.testerCampaign.count({ where: { ...where, optedIn: true } });
-  const testing = await prisma.testerCampaign.count({
+  const configured = await prisma.testingParticipation.count({
     where: {
       ...where,
-      status: { in: ["TESTING", "FEEDBACK_REQUESTED", "FEEDBACK_RECEIVED", "COMPLETED"] },
+      status: { in: ["ADDED", "INVITATION_READY", "OPTED_IN", "ACTIVITY_DETECTED", "FEEDBACK_RECEIVED", "COMPLETED"] },
     },
   });
-  const feedback = await prisma.testerCampaign.count({
-    where: { ...where, dateFeedback: { not: null } },
+  const optedIn = await prisma.testingParticipation.count({
+    where: {
+      ...where,
+      status: { in: ["OPTED_IN", "ACTIVITY_DETECTED", "FEEDBACK_RECEIVED", "COMPLETED"] },
+    },
+  });
+  const activity = await prisma.testingParticipation.count({
+    where: { ...where, status: { in: ["ACTIVITY_DETECTED", "FEEDBACK_RECEIVED", "COMPLETED"] } },
+  });
+  const feedback = await prisma.testingParticipation.count({
+    where: { ...where, status: { in: ["FEEDBACK_RECEIVED", "COMPLETED"] } },
+  });
+  const completed = await prisma.testingParticipation.count({
+    where: { ...where, status: "COMPLETED" },
+  });
+  const reciprocal = await prisma.reciprocalTest.count({
+    where: {
+      OR: [{ requesterId: userId }, { targetId: userId }],
+      status: { in: ["ACCEPTED", "ACTIVE", "COMPLETED"] },
+    },
   });
   return [
-    { key: "POSTS FOUND", value: posts },
-    { key: "RELEVANT", value: relevant },
-    { key: "CONTACTED", value: contacted },
-    { key: "REPLIED", value: replied },
-    { key: "GMAIL RECEIVED", value: gmail },
-    { key: "ADDED", value: added },
+    { key: "REQUESTED", value: requested },
+    { key: "ACCEPTED", value: accepted },
+    { key: "CONFIGURED", value: configured },
     { key: "OPTED IN", value: optedIn },
-    { key: "TESTING", value: testing },
+    { key: "ACTIVITY", value: activity },
     { key: "FEEDBACK", value: feedback },
+    { key: "COMPLETED", value: completed },
+    { key: "RECIPROCAL", value: reciprocal },
   ];
 }

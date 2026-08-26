@@ -125,6 +125,19 @@ model User {
   onboardingStep       Int       @default(0)
   onboardingCompleted  Boolean   @default(false)
   demoMode             Boolean   @default(false)
+  github                 String?
+  linkedin               String?
+  website                String?
+  bio                    String?
+  country                String?
+  city                   String?
+  developerType          String?
+  yearsExperience        Int?
+  platforms              String[]  @default([])
+  technologies           String?
+  testingGmail           String?
+  profileCompleted       Boolean   @default(false)
+  suspendedAt            DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   deletedAt            DateTime?
@@ -156,6 +169,15 @@ model User {
   dataExports            DataExport[]
   telemetryEvents        TelemetryEvent[]
   outreachUsages         OutreachUsage[]
+  participationsAsOwner  TestingParticipation[] @relation("ParticipationOwner")
+  participationsAsTester TestingParticipation[] @relation("ParticipationTester")
+  reciprocalAsRequester  ReciprocalTest[] @relation("ReciprocalRequester")
+  reciprocalAsTarget     ReciprocalTest[] @relation("ReciprocalTarget")
+  reportsFiled           DeveloperReport[] @relation("ReportAuthor")
+  reportsReceived        DeveloperReport[] @relation("ReportTarget")
+  developerBlocks        DeveloperBlock[] @relation("Blocker")
+  messagesSent           DeveloperMessage[] @relation("MessageSender")
+  messagesReceived       DeveloperMessage[] @relation("MessageRecipient")
 
   @@index([createdAt])
   @@index([deletedAt])
@@ -470,6 +492,12 @@ model Campaign {
   telemetryToken       String         @unique @default(cuid())
   requiredTesters      Int            @default(12)
   requiredActiveDays   Int            @default(14)
+  durationDays         Int            @default(14)
+  published            Boolean        @default(false)
+  publishedAt          DateTime?
+  description          String?
+  testingInstructions  String?
+  reciprocalOpen       Boolean        @default(true)
   startedAt            DateTime?
   pausedAt             DateTime?
   completedAt          DateTime?
@@ -492,11 +520,13 @@ model Campaign {
   emailEvents          EmailEvent[]
   telemetryEvents      TelemetryEvent[]
   templates            MessageTemplate[]
+  participations       TestingParticipation[]
 
   @@index([userId])
   @@index([appId])
   @@index([status])
   @@index([createdAt])
+  @@index([published, status])
 }
 
 model Tester {
@@ -841,4 +871,111 @@ model DataExport {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+enum ParticipationStatus {
+  REQUESTED
+  ACCEPTED
+  GMAIL_CONFIRMED
+  ACCESS_PROCESSING
+  ADDED
+  INVITATION_READY
+  OPTED_IN
+  ACTIVITY_DETECTED
+  FEEDBACK_RECEIVED
+  COMPLETED
+  DECLINED
+  MANUAL_REQUIRED
+  FAILED
+}
+
+enum ReciprocalStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  ACTIVE
+  COMPLETED
+}
+
+model TestingParticipation {
+  id              String              @id @default(cuid())
+  campaignId      String
+  ownerUserId     String
+  testerUserId    String
+  testerCampaignId String?
+  gmail           String?
+  consentAt       DateTime?
+  status          ParticipationStatus @default(REQUESTED)
+  lastError       String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  campaign        Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  owner           User                @relation("ParticipationOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  tester          User                @relation("ParticipationTester", fields: [testerUserId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, testerUserId])
+  @@index([ownerUserId])
+  @@index([testerUserId])
+  @@index([status])
+}
+
+model ReciprocalTest {
+  id             String           @id @default(cuid())
+  requesterId    String
+  targetId       String
+  requesterAppId String?
+  targetCampaignId String?
+  status         ReciprocalStatus @default(PENDING)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  requester      User             @relation("ReciprocalRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  target         User             @relation("ReciprocalTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([requesterId])
+  @@index([targetId])
+  @@index([status])
+}
+
+model DeveloperReport {
+  id         String   @id @default(cuid())
+  authorId   String
+  targetId   String?
+  campaignId String?
+  reason     String
+  details    String?
+  status     String   @default("OPEN")
+  createdAt  DateTime @default(now())
+  author     User     @relation("ReportAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  target     User?    @relation("ReportTarget", fields: [targetId], references: [id], onDelete: SetNull)
+
+  @@index([authorId])
+  @@index([targetId])
+  @@index([status])
+}
+
+model DeveloperBlock {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  reason    String?
+  createdAt DateTime @default(now())
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+}
+
+model DeveloperMessage {
+  id          String   @id @default(cuid())
+  senderId    String
+  recipientId String
+  body        String
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+  sender      User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient   User     @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([createdAt])
 }

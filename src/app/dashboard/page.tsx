@@ -5,60 +5,73 @@ import { getDashboardStats } from "@/lib/services/dashboard";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { percent } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  if (!user.onboardingCompleted && user.onboardingStep < 6) {
-    // still show dashboard; wizard is linked
-  }
   const stats = await getDashboardStats(user.id);
-  const integrations = await prisma.integration.findMany({ where: { userId: user.id } });
-  const connected = integrations.filter((item) => item.status === "CONNECTED").length;
+  const [apps, play, published] = await Promise.all([
+    prisma.app.count({ where: { userId: user.id } }),
+    prisma.integration.findFirst({
+      where: { userId: user.id, provider: "GOOGLE_PLAY", status: "CONNECTED" },
+    }),
+    prisma.campaign.count({ where: { userId: user.id, published: true } }),
+  ]);
+  const steps = [
+    { n: 1, label: "Account", done: true },
+    { n: 2, label: "Profile", done: user.profileCompleted },
+    { n: 3, label: "App", done: apps > 0 },
+    { n: 4, label: "Google Play", done: Boolean(play) },
+    { n: 5, label: "Testing setup", done: Boolean(play) || apps > 0 },
+    { n: 6, label: "First campaign", done: published > 0 },
+  ];
 
   return (
     <AppShell
-      title="Dashboard"
+      title="Home"
       actions={
-        <Link href="/onboarding" className="text-sm text-teal-300">
-          Setup wizard
+        <Link href="/requests" className="text-sm text-teal-300">
+          Find testing requests
         </Link>
       }
     >
-      {!user.onboardingCompleted && connected === 0 ? (
+      {!user.onboardingCompleted || apps === 0 ? (
         <div className="mb-6 rounded-2xl border border-teal-500/30 bg-teal-500/10 p-5">
-          <h2 className="text-lg font-semibold">Welcome to TesterBridge</h2>
-          <p className="text-sm text-slate-300">Build your tester network faster.</p>
-          <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-slate-400">
-            <li>Connect Facebook (optional)</li>
-            <li>Connect Gmail (optional)</li>
-            <li>Connect Google Play (optional)</li>
-            <li>Add your Android app</li>
-            <li>Create your first testing campaign</li>
-            <li>Find tester opportunities</li>
-          </ol>
+          <h2 className="text-lg font-semibold">Onboarding</h2>
+          <div className="mt-3 flex flex-wrap gap-2 text-sm">
+            {steps.map((step) => (
+              <span
+                key={step.n}
+                className={`rounded-full border px-3 py-1 ${step.done ? "border-teal-500/40 text-teal-200" : "border-slate-700 text-slate-400"}`}
+              >
+                {step.n} {step.done ? "✓" : "○"} {step.label}
+              </span>
+            ))}
+          </div>
           <Link href="/onboarding" className="mt-3 inline-block text-sm text-teal-300">
-            Start guided setup →
+            Continue setup →
           </Link>
         </div>
       ) : null}
 
+      <h2 className="mb-3 text-sm uppercase tracking-wide text-slate-400">My testing overview</h2>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Active Campaigns" value={stats.activeCampaigns} />
-        <StatCard label="Potential Testers" value={stats.potentialTesters} />
-        <StatCard label="Emails Received" value={stats.emailsReceived} />
-        <StatCard label="Testers Added" value={stats.testersAdded} />
-        <StatCard label="Opted In" value={stats.optedIn} hint="Added ≠ opted in" />
-        <StatCard label="Currently Testing" value={stats.currentlyTesting} hint="Activity detected, not Play download confirmation" />
-        <StatCard label="Feedback Received" value={stats.feedbackReceived} />
-        <StatCard label="Tester database" value={stats.testers} />
+        <StatCard label="My apps" value={stats.apps} />
+        <StatCard label="Active campaigns" value={stats.activeCampaigns} />
+        <StatCard label="Testers needed" value={stats.testersNeeded} />
+        <StatCard label="Testers received" value={stats.testersReceived} />
+        <StatCard label="Testing for others" value={stats.testingForOthers} />
+        <StatCard label="Pending requests" value={stats.pendingParticipations} />
+        <StatCard label="Completed tests" value={stats.completedTests} />
+        <StatCard label="Reciprocal pending" value={stats.pendingReciprocal} />
       </div>
 
       <div className="mt-8">
-        <h2 className="mb-3 text-sm uppercase tracking-wide text-slate-400">Campaigns</h2>
+        <h2 className="mb-3 text-sm uppercase tracking-wide text-slate-400">Active testing campaigns</h2>
         {stats.campaigns.length === 0 ? (
           <EmptyState
             title="No active campaigns"
-            body="Create a campaign, attach a source, and run discovery."
+            body="Add an Android app, then publish a testing request for other developers."
             action={
               <Link href="/campaigns" className="text-sm text-teal-300">
                 Create campaign
@@ -66,22 +79,35 @@ export default async function DashboardPage() {
             }
           />
         ) : (
-          <div className="grid gap-3 md:grid-cols-2">
-            {stats.campaigns.map((campaign) => (
-              <Link
-                key={campaign.id}
-                href={`/campaigns/${campaign.id}`}
-                className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 hover:border-teal-500/40"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-medium">{campaign.name}</div>
-                  <Badge tone={campaign.status === "ACTIVE" ? "good" : "warn"}>{campaign.status}</Badge>
-                </div>
-                <p className="mt-2 text-sm text-slate-400">
-                  {campaign.app.name} · {campaign._count.testerCampaigns} testers · target {campaign.targetTesters}
-                </p>
-              </Link>
-            ))}
+          <div className="overflow-x-auto rounded-2xl border border-slate-800">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-950/80 text-left text-slate-400">
+                <tr>
+                  <th className="px-4 py-3 font-medium">App</th>
+                  <th className="px-4 py-3 font-medium">Testers needed</th>
+                  <th className="px-4 py-3 font-medium">Testers received</th>
+                  <th className="px-4 py-3 font-medium">Progress</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.campaigns.map((campaign) => (
+                  <tr key={campaign.id} className="border-t border-slate-800">
+                    <td className="px-4 py-3">
+                      <Link href={`/campaigns/${campaign.id}`} className="text-teal-300">
+                        {campaign.app.name}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">{campaign.targetTesters}</td>
+                    <td className="px-4 py-3">{campaign.testersReceived}</td>
+                    <td className="px-4 py-3">{percent(campaign.testersReceived, campaign.targetTesters)}%</td>
+                    <td className="px-4 py-3">
+                      <Badge tone={campaign.status === "ACTIVE" ? "good" : "warn"}>{campaign.status}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

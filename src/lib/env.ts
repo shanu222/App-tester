@@ -22,6 +22,7 @@ export const env = {
   databaseUrl: process.env.DATABASE_URL || "",
   encryptionKey: process.env.ENCRYPTION_KEY || "",
   cronSecret: process.env.CRON_SECRET || "",
+  authSecret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "dev-only-insecure-secret-change-me",
   googleClientId: process.env.GOOGLE_CLIENT_ID || "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
   facebookClientId: process.env.FACEBOOK_CLIENT_ID || "",
@@ -41,6 +42,9 @@ export function assertProductionSecrets() {
   requiredInProduction("DATABASE_URL", process.env.DATABASE_URL);
   requiredInProduction("ENCRYPTION_KEY", process.env.ENCRYPTION_KEY);
   requiredInProduction("CRON_SECRET", process.env.CRON_SECRET);
+  if (process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_SECRET) {
+    requiredInProduction("AUTH_SECRET", process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET);
+  }
 }
 
 export function isDemoMode() {

@@ -2,19 +2,21 @@ import Link from "next/link";
 import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
 import { isDemoMode } from "@/lib/env";
+import { signOutAction } from "@/app/actions/auth";
+import { redirect } from "next/navigation";
 
 const NAV = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/discovery", label: "Tester Discovery" },
-  { href: "/opportunities", label: "Opportunities" },
-  { href: "/campaigns", label: "Campaigns" },
-  { href: "/testers", label: "Testers" },
+  { href: "/dashboard", label: "Home" },
   { href: "/apps", label: "My Apps" },
-  { href: "/integrations", label: "Integrations" },
+  { href: "/requests", label: "Find Testing Requests" },
+  { href: "/campaigns", label: "My Testing Requests" },
+  { href: "/testing", label: "My Testing" },
+  { href: "/testers", label: "Testers" },
   { href: "/messages", label: "Messages" },
-  { href: "/feedback", label: "Feedback" },
-  { href: "/activity", label: "Activity" },
+  { href: "/play", label: "Google Play" },
   { href: "/analytics", label: "Analytics" },
+  { href: "/profile", label: "Developer Profile" },
+  { href: "/integrations", label: "Integrations" },
   { href: "/settings", label: "Settings" },
 ];
 
@@ -28,9 +30,11 @@ export async function AppShell({
   actions?: React.ReactNode;
 }) {
   const user = await requireUser();
+  if (!user.profileCompleted) redirect("/profile/complete");
   const unread = await prisma.notification.count({
     where: { userId: user.id, readAt: null },
   });
+  const items = user.role === "ADMIN" ? [...NAV, { href: "/admin", label: "Admin" }] : NAV;
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[240px_1fr]">
@@ -38,11 +42,11 @@ export async function AppShell({
         <div className="px-5 py-5">
           <Link href="/dashboard" className="block">
             <div className="text-lg font-semibold tracking-tight">TesterBridge</div>
-            <div className="text-[11px] text-slate-400">Find testers. Track every test.</div>
+            <div className="text-[11px] text-slate-400">Developer-to-developer app testing network</div>
           </Link>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col">
-          {NAV.map((item) => (
+          {items.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -66,7 +70,12 @@ export async function AppShell({
             <Link href="/activity" className="text-sm text-slate-300">
               Alerts{unread ? ` (${unread})` : ""}
             </Link>
-            <span className="text-sm text-slate-400">{user.name || "Owner"}</span>
+            <span className="text-sm text-slate-400">{user.developerName || user.name || "Developer"}</span>
+            <form action={signOutAction}>
+              <button type="submit" className="text-sm text-slate-400 hover:text-white">
+                Sign out
+              </button>
+            </form>
           </div>
         </header>
         <main className="px-4 py-6 sm:px-8">{children}</main>

@@ -36,7 +36,7 @@ export default async function IntegrationsPage() {
       title: "Google",
       item: byProvider("GOOGLE") || byProvider("GMAIL"),
       connectHref: googleOAuthConfigured() ? "/api/gmail/connect" : undefined,
-      note: "Optional Gmail send via official OAuth. No Google password is stored. There is no Google login.",
+      note: "Optional Gmail send via official OAuth. Sign-in uses Google OAuth and never stores a Google password.",
     },
     {
       provider: "GMAIL",

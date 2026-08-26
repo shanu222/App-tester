@@ -6,9 +6,9 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata: Metadata = {
-  title: "TesterBridge — Find Real Testers. Exchange Testing. Track Every Test.",
+  title: "TesterBridge — Developers Testing Developers' Apps",
   description:
-    "Professional reciprocal Android testing operations: discover opportunities, approve outreach, and track testers through Google Play closed testing.",
+    "Developer-to-developer Android testing network: publish campaigns, accept tests, share Gmail by consent, and track Google Play closed testing.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

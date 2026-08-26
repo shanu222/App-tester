@@ -2,14 +2,14 @@ import { z } from "zod";
 import { json, handleRouteError, parseJson } from "@/lib/http";
 import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
-import { completeProfile } from "@/lib/services/users";
+import { sanitizeUser } from "@/lib/services/users";
 
 export async function GET() {
   try {
     const user = await requireUser();
     const settings = await prisma.userSettings.findUnique({ where: { userId: user.id } });
     const templates = await prisma.messageTemplate.findMany({ where: { userId: user.id } });
-    return json({ user, settings, templates });
+    return json({ user: sanitizeUser(user), settings, templates });
   } catch (error) {
     return handleRouteError(error);
   }
@@ -41,10 +41,13 @@ export async function PATCH(request: Request) {
       }),
     );
     if (body.name || body.developerName || body.company) {
-      await completeProfile(user.id, {
-        name: body.name || user.name || "Developer",
-        developerName: body.developerName,
-        company: body.company,
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          name: body.name || user.name,
+          developerName: body.developerName || user.developerName,
+          company: body.company || user.company,
+        },
       });
     }
     const settings = await prisma.userSettings.upsert({

@@ -4,41 +4,65 @@ import { prisma } from "@/lib/db";
 import { EmptyState } from "@/components/ui/widgets";
 import { formatDateTime } from "@/lib/utils";
 import { PasteReplyForm } from "@/components/messages/paste-reply-form";
+import { publicDeveloper } from "@/lib/services/network";
 
 export default async function MessagesPage() {
   const user = await requireUser();
-  const messages = await prisma.message.findMany({
-    where: { userId: user.id },
-    include: { tester: true, campaign: true },
-    orderBy: { createdAt: "desc" },
-    take: 80,
-  });
-  const campaign = await prisma.campaign.findFirst({
-    where: { userId: user.id, status: "ACTIVE" },
-  });
+  const [developerMessages, messages, campaign] = await Promise.all([
+    prisma.developerMessage.findMany({
+      where: { OR: [{ senderId: user.id }, { recipientId: user.id }] },
+      include: { sender: true, recipient: true },
+      orderBy: { createdAt: "desc" },
+      take: 80,
+    }),
+    prisma.message.findMany({
+      where: { userId: user.id },
+      include: { tester: true, campaign: true },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+    }),
+    prisma.campaign.findFirst({
+      where: { userId: user.id, status: "ACTIVE" },
+    }),
+  ]);
   return (
     <AppShell title="Messages">
-      <div className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm">
-        Automatic reply monitoring is unavailable for Facebook Group connections. Paste replies below. Page comments
-        can sync when a Page access token is connected.
+      <h2 className="mb-3 font-medium">Developer inbox</h2>
+      <p className="mb-4 text-sm text-slate-400">
+        Direct messages between developers. TesterBridge does not auto-spam; notification preferences are in Settings.
+      </p>
+      {developerMessages.length === 0 ? (
+        <EmptyState title="No developer messages" body="When another developer messages you, it appears here." />
+      ) : (
+        <div className="space-y-3">
+          {developerMessages.map((item) => {
+            const other = item.senderId === user.id ? item.recipient : item.sender;
+            return (
+              <div key={item.id} className="rounded-2xl border border-slate-800 p-4 text-sm">
+                <div className="text-xs text-slate-500">
+                  {formatDateTime(item.createdAt)} · {item.senderId === user.id ? "You →" : "From"}{" "}
+                  {publicDeveloper(other).name}
+                </div>
+                <p className="mt-2 whitespace-pre-wrap">{item.body}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <h2 className="mb-3 mt-10 font-medium">Pasted tester replies</h2>
+      <div className="mb-5 rounded-2xl border border-slate-800 p-4 text-sm text-slate-400">
+        Optional: paste a tester reply if you still collect Gmail outside the developer network.
       </div>
       {campaign ? <PasteReplyForm campaignId={campaign.id} /> : null}
       <div className="mt-6 space-y-3">
-        {messages.length === 0 ? (
-          <EmptyState title="No messages stored" body="TesterBridge does not store entire Facebook conversations." />
-        ) : (
-          messages.map((message) => (
-            <div key={message.id} className="rounded-2xl border border-slate-800 p-4 text-sm">
-              <div className="text-xs text-slate-500">
-                {formatDateTime(message.createdAt)} · {message.channel} · {message.campaign?.name}
-              </div>
-              <p className="mt-2 whitespace-pre-wrap">{message.body}</p>
-              {message.extractedEmail ? (
-                <p className="mt-2 text-teal-300">Detected Gmail: {message.extractedEmail}</p>
-              ) : null}
+        {messages.map((message) => (
+          <div key={message.id} className="rounded-2xl border border-slate-800 p-4 text-sm">
+            <div className="text-xs text-slate-500">
+              {formatDateTime(message.createdAt)} · {message.channel} · {message.campaign?.name}
             </div>
-          ))
-        )}
+            <p className="mt-2 whitespace-pre-wrap">{message.body}</p>
+          </div>
+        ))}
       </div>
     </AppShell>
   );

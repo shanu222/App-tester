@@ -12,7 +12,6 @@ export default async function AppDetailPage({
   const user = await requireUser();
   const { id } = await params;
   const app = await getApp(user.id, id);
-  const campaign = app.campaigns.find((item) => item.status === "ACTIVE") || app.campaigns[0];
   return (
     <AppShell
       title={app.name}
@@ -29,10 +28,16 @@ export default async function AppDetailPage({
             </a>
           ) : null}
           <Link
-            href={campaign ? `/campaigns/${campaign.id}` : `/campaigns?appId=${app.id}`}
+            href={`/campaigns?appId=${app.id}`}
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm"
           >
-            Manage Testing
+            Create testing campaign
+          </Link>
+          <Link
+            href="/play"
+            className="rounded-lg border border-slate-700 px-3 py-2 text-sm"
+          >
+            Google Play
           </Link>
         </div>
       }

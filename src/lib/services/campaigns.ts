@@ -34,6 +34,13 @@ export async function getCampaign(userId: string, id: string) {
       source: true,
       googleGroup: true,
       testerCampaigns: { include: { tester: true } },
+      participations: {
+        include: {
+          tester: {
+            select: { id: true, name: true, developerName: true, image: true, country: true },
+          },
+        },
+      },
       opportunities: { orderBy: { createdAt: "desc" }, take: 50 },
     },
   });
@@ -54,11 +61,24 @@ export async function createCampaign(
     playStoreUrl?: string;
     webOptInUrl?: string;
     androidOptInUrl?: string;
+    durationDays?: number;
+    description?: string;
+    testingInstructions?: string;
+    reciprocalOpen?: boolean;
+    published?: boolean;
   },
 ) {
   const app = await prisma.app.findFirst({ where: { id: input.appId, userId } });
   if (!app) throw new NotFoundError("App not found.");
   const webOptInUrl = input.webOptInUrl || app.webOptInUrl || undefined;
+  if (input.published) {
+    const duplicate = await prisma.campaign.findFirst({
+      where: { userId, appId: app.id, published: true, status: "ACTIVE" },
+    });
+    if (duplicate) {
+      throw new AppError("An active published testing request already exists for this app.");
+    }
+  }
   const campaign = await prisma.campaign.create({
     data: {
       userId,
@@ -70,6 +90,15 @@ export async function createCampaign(
       testingType: input.testingType || app.testingType,
       targetTesters: input.targetTesters ?? 12,
       requiredTesters: input.targetTesters ?? 12,
+      durationDays: input.durationDays ?? 14,
+      requiredActiveDays: input.durationDays ?? 14,
+      description: input.description,
+      testingInstructions: input.testingInstructions,
+      reciprocalOpen: input.reciprocalOpen ?? true,
+      published: Boolean(input.published),
+      publishedAt: input.published ? new Date() : null,
+      status: input.published ? "ACTIVE" : "DRAFT",
+      startedAt: input.published ? new Date() : null,
       playStoreUrl: input.playStoreUrl || app.playStoreUrl,
       webOptInUrl,
       androidOptInUrl: input.androidOptInUrl || app.androidOptInUrl,
@@ -83,6 +112,31 @@ export async function createCampaign(
     result: campaign.name,
   });
   return campaign;
+}
+
+export async function publishCampaign(userId: string, id: string) {
+  const campaign = await prisma.campaign.findFirst({ where: { id, userId } });
+  if (!campaign) throw new NotFoundError("Campaign not found.");
+  if (campaign.status === "ARCHIVED" || campaign.status === "COMPLETED") {
+    throw new AppError("This campaign cannot be published.");
+  }
+  const duplicate = await prisma.campaign.findFirst({
+    where: { userId, appId: campaign.appId, published: true, status: "ACTIVE", id: { not: id } },
+  });
+  if (duplicate) {
+    throw new AppError("An active published testing request already exists for this app.");
+  }
+  const updated = await prisma.campaign.update({
+    where: { id },
+    data: {
+      published: true,
+      publishedAt: campaign.publishedAt ?? new Date(),
+      status: campaign.status === "DRAFT" || campaign.status === "PAUSED" ? "ACTIVE" : campaign.status,
+      startedAt: campaign.startedAt ?? new Date(),
+    },
+  });
+  await logActivity({ userId, campaignId: id, action: "CAMPAIGN_PUBLISHED", result: updated.name });
+  return updated;
 }
 
 export async function transitionCampaign(

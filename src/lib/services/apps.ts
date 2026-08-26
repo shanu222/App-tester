@@ -9,7 +9,11 @@ import { campaignStats } from "@/lib/services/campaigns";
 
 const seededWorkspaces = new Set<string>();
 
-export async function ensureCatalogApps(userId: string) {
+export async function ensureCatalogApps(userId: string, email?: string) {
+  const allowed = (process.env.SEED_CATALOG_EMAIL || "").trim().toLowerCase();
+  if (!allowed) return;
+  const userEmail = (email || (await prisma.user.findUnique({ where: { id: userId }, select: { email: true } }))?.email || "").toLowerCase();
+  if (userEmail !== allowed) return;
   if (seededWorkspaces.has(userId)) return;
   for (const item of RESILIENCE_APPS) {
     const existing = await prisma.app.findUnique({
@@ -161,7 +165,6 @@ export async function getApp(userId: string, id: string) {
 }
 
 export async function listAppsWithStats(userId: string) {
-  await ensureCatalogApps(userId);
   const apps = await prisma.app.findMany({
     where: { userId },
     include: {

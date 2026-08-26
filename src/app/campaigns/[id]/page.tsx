@@ -27,6 +27,9 @@ export default async function CampaignDetailPage({
       title={campaign.name}
       actions={
         <div className="flex gap-2">
+          {!campaign.published ? (
+            <JsonButton url="/api/campaigns" method="PATCH" body={{ id, publish: true }} label="Publish request" />
+          ) : null}
           {campaign.status === "DRAFT" || campaign.status === "PAUSED" ? (
             <JsonButton url="/api/campaigns" method="PATCH" body={{ id, status: "ACTIVE" }} label="Start" />
           ) : null}
@@ -40,7 +43,7 @@ export default async function CampaignDetailPage({
       }
     >
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <Badge tone={campaign.status === "ACTIVE" ? "good" : "neutral"}>{campaign.status}</Badge>
+        <Badge tone={campaign.published ? "good" : "neutral"}>{campaign.published ? "PUBLISHED" : "UNPUBLISHED"}</Badge>
         <span className="text-sm text-slate-400">
           {campaign.app.name} · {campaign.app.packageName} · {campaign.testingType} · Target {campaign.targetTesters}
         </span>
@@ -106,6 +109,51 @@ export default async function CampaignDetailPage({
           appName={campaign.app.name}
           playStoreUrl={campaign.playStoreUrl || campaign.app.playStoreUrl}
         />
+      </div>
+
+      <h2 className="mt-10 mb-3 font-medium">Developer testers</h2>
+      <p className="mb-3 text-xs text-slate-500">
+        Gmail is visible here only after the developer explicitly consented. Never shown on the public request page.
+      </p>
+      <div className="mb-8 space-y-3">
+        {campaign.participations.map((row) => (
+          <div key={row.id} className="rounded-2xl border border-slate-800 p-4 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <Link href={`/developers/${row.tester.id}`} className="text-teal-300">
+                  {row.tester.developerName || row.tester.name}
+                </Link>
+                <div className="text-slate-400">{row.status}</div>
+              </div>
+              <div>{row.consentAt ? row.gmail : "Gmail hidden until consent"}</div>
+            </div>
+            {row.lastError ? <p className="mt-2 text-amber-200">{row.lastError}</p> : null}
+            {row.status === "MANUAL_REQUIRED" || row.status === "FAILED" ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {row.gmail ? (
+                  <button
+                    type="button"
+                    className="rounded-lg border border-slate-700 px-3 py-2 text-xs"
+                    data-email={row.gmail}
+                  >
+                    Copy tester email: {row.gmail}
+                  </button>
+                ) : null}
+                <JsonButton
+                  url="/api/network"
+                  body={{ action: "retry-access", participationId: row.id }}
+                  label="Retry"
+                  variant="secondary"
+                />
+                <JsonButton
+                  url="/api/network"
+                  body={{ action: "manual-added", participationId: row.id }}
+                  label="Mark manually added"
+                />
+              </div>
+            ) : null}
+          </div>
+        ))}
       </div>
 
       <h2 className="mt-10 mb-3 font-medium">Testers</h2>

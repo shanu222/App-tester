@@ -49,6 +49,11 @@ export function CreateCampaignForm({
         testingType: form.get("testingType") || selected?.testingType,
         playStoreUrl: selected?.playStoreUrl || undefined,
         webOptInUrl: form.get("webOptInUrl") || selected?.webOptInUrl || undefined,
+        durationDays: Number(form.get("durationDays") || 14),
+        description: form.get("description") || undefined,
+        testingInstructions: form.get("testingInstructions") || undefined,
+        reciprocalOpen: form.get("reciprocalOpen") === "on",
+        published: form.get("published") === "on",
       }),
     });
     const data = await response.json();
@@ -148,10 +153,30 @@ export function CreateCampaignForm({
             placeholder="Leave empty unless a real testing link is configured"
           />
         </div>
+        <div>
+          <Label>Testing duration (days)</Label>
+          <Input name="durationDays" type="number" min={1} max={90} defaultValue={14} />
+        </div>
+        <div className="md:col-span-2">
+          <Label>Description</Label>
+          <Input name="description" placeholder="We are looking for Android developers to help test this app." />
+        </div>
+        <div className="md:col-span-2">
+          <Label>Testing instructions</Label>
+          <Input name="testingInstructions" placeholder="Install the app and use it regularly." />
+        </div>
+        <label className="flex items-center gap-2 text-sm text-slate-300">
+          <input type="checkbox" name="reciprocalOpen" defaultChecked />
+          Reciprocal testing welcome
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-300">
+          <input type="checkbox" name="published" defaultChecked />
+          Publish testing request
+        </label>
         {error ? <p className="md:col-span-2 text-sm text-rose-300">{error}</p> : null}
         <div className="md:col-span-2">
           <Button type="submit" disabled={!apps.length}>
-            Create campaign
+            Publish testing request
           </Button>
         </div>
       </form>

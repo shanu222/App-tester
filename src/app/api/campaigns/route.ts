@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { json, handleRouteError, parseJson } from "@/lib/http";
-import { requireUser } from "@/auth";
-import { createCampaign, listCampaigns, transitionCampaign } from "@/lib/services/campaigns";
+import { requireCompleteProfile, requireUser } from "@/auth";
+import { createCampaign, listCampaigns, publishCampaign, transitionCampaign } from "@/lib/services/campaigns";
 import type { CampaignStatus } from "@prisma/client";
 
 const createSchema = z.object({
@@ -15,6 +15,11 @@ const createSchema = z.object({
   playStoreUrl: z.string().optional(),
   webOptInUrl: z.string().optional(),
   androidOptInUrl: z.string().optional(),
+  durationDays: z.number().int().min(1).max(90).optional(),
+  description: z.string().max(4000).optional(),
+  testingInstructions: z.string().max(4000).optional(),
+  reciprocalOpen: z.boolean().optional(),
+  published: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -29,7 +34,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser();
+    const user = await requireCompleteProfile();
     const body = await parseJson(request, createSchema);
     const campaign = await createCampaign(user.id, body);
     return json({ campaign }, 201);
@@ -45,9 +50,15 @@ export async function PATCH(request: Request) {
       request,
       z.object({
         id: z.string(),
-        status: z.enum(["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"]),
+        status: z.enum(["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"]).optional(),
+        publish: z.boolean().optional(),
       }),
     );
+    if (body.publish) {
+      const campaign = await publishCampaign(user.id, body.id);
+      return json({ campaign });
+    }
+    if (!body.status) return json({ error: "status or publish is required." }, 400);
     const campaign = await transitionCampaign(user.id, body.id, body.status as CampaignStatus);
     return json({ campaign });
   } catch (error) {

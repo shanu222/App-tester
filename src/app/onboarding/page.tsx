@@ -1,7 +1,6 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
-import { facebookConfigured } from "@/lib/integrations/facebook";
 import { googleOAuthConfigured } from "@/lib/env";
 import { JsonButton } from "@/components/ui/json-button";
 import Link from "next/link";
@@ -11,25 +10,25 @@ export default async function OnboardingPage() {
   const integrations = await prisma.integration.findMany({ where: { userId: user.id } });
   const apps = await prisma.app.count({ where: { userId: user.id } });
   const campaigns = await prisma.campaign.count({ where: { userId: user.id } });
+  const published = await prisma.campaign.count({ where: { userId: user.id, published: true } });
+  const groups = await prisma.googleGroup.count({ where: { userId: user.id } });
   const status = (provider: string) =>
     integrations.find((item) => item.provider === provider)?.status || "NOT_CONNECTED";
 
   const steps = [
-    { n: 1, title: "Create profile", done: Boolean(user.name && user.developerName), href: "/settings" },
-    { n: 2, title: "Connect Facebook", done: status("FACEBOOK") === "CONNECTED", href: "/integrations" },
-    { n: 3, title: "Connect Gmail (optional)", done: status("GOOGLE") === "CONNECTED" || status("GMAIL") === "CONNECTED", href: "/integrations" },
-    { n: 4, title: "Connect Google Play", done: status("GOOGLE_PLAY") === "CONNECTED", href: "/integrations" },
-    { n: 5, title: "Add your Android app", done: apps > 0, href: "/apps" },
-    { n: 6, title: "Create a campaign", done: campaigns > 0, href: "/campaigns" },
-    { n: 7, title: "Select a testing source", done: false, href: "/discovery" },
-    { n: 8, title: "Run first discovery", done: false, href: "/discovery" },
+    { n: 1, title: "Account", done: true, href: "/dashboard" },
+    { n: 2, title: "Developer profile", done: user.profileCompleted, href: "/profile/complete" },
+    { n: 3, title: "Add first Android app", done: apps > 0, href: "/apps" },
+    { n: 4, title: "Connect Google Play", done: status("GOOGLE_PLAY") === "CONNECTED", href: "/play" },
+    { n: 5, title: "Configure testing track / Google Group", done: groups > 0 || status("GOOGLE_PLAY") === "CONNECTED", href: "/play" },
+    { n: 6, title: "Create first testing campaign", done: campaigns > 0 || published > 0, href: "/campaigns" },
   ];
 
   return (
-    <AppShell title="Welcome to TesterBridge">
+    <AppShell title="Developer onboarding">
       <p className="mb-6 max-w-2xl text-slate-400">
-        Build your tester network faster. Official OAuth only — never passwords. Facebook Groups cannot be crawled;
-        import posts or connect Pages you manage.
+        TesterBridge is a developer-to-developer testing network. Official Google OAuth and Play APIs only — never
+        passwords, and never fake success states.
       </p>
       <div className="space-y-3">
         {steps.map((step) => (
@@ -43,15 +42,14 @@ export default async function OnboardingPage() {
               <div className="font-medium">{step.title}</div>
             </div>
             <span className={step.done ? "text-teal-300" : "text-slate-500"}>
-              {step.done ? "Done" : "Continue"}
+              {step.done ? "✓ Done" : "○ Continue"}
             </span>
           </Link>
         ))}
       </div>
-      <div className="mt-6 flex flex-wrap gap-3 text-sm text-slate-400">
-        <span>Facebook app configured: {facebookConfigured() ? "yes" : "no"}</span>
-        <span>Gmail OAuth configured: {googleOAuthConfigured() ? "yes" : "no"}</span>
-      </div>
+      <p className="mt-6 text-sm text-slate-400">
+        Google login configured: {googleOAuthConfigured() ? "yes" : "no"}
+      </p>
       <div className="mt-4">
         <JsonButton
           url="/api/onboarding"

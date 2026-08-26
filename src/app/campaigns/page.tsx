@@ -6,7 +6,6 @@ import { EmptyState } from "@/components/ui/widgets";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { CreateCampaignForm } from "@/components/campaigns/create-campaign-form";
-import { ensureCatalogApps } from "@/lib/services/apps";
 
 export default async function CampaignsPage({
   searchParams,
@@ -15,7 +14,6 @@ export default async function CampaignsPage({
 }) {
   const user = await requireUser();
   const params = await searchParams;
-  await ensureCatalogApps(user.id);
   const campaigns = await listCampaigns(user.id);
   const apps = await prisma.app.findMany({
     where: { userId: user.id },
@@ -26,7 +24,7 @@ export default async function CampaignsPage({
   const groups = await prisma.googleGroup.findMany({ where: { userId: user.id } });
 
   return (
-    <AppShell title="Campaigns">
+    <AppShell title="My testing requests">
       <CreateCampaignForm
         initialAppId={params.appId}
         apps={apps.map((app) => ({

@@ -294,11 +294,11 @@ export default function TermsPage() {
             content: (
               <p>
                 Questions about these Terms:{" "}
-                <a className="text-teal-300" href={`mailto:${CONTACT_EMAIL}`}>
+                <a className="text-emerald-300" href={`mailto:${CONTACT_EMAIL}`}>
                   {CONTACT_EMAIL}
                 </a>
                 . The main {SITE_NAME} website is{" "}
-                <a className="text-teal-300" href={SITE_ORIGIN}>
+                <a className="text-emerald-300" href={SITE_ORIGIN}>
                   {SITE_ORIGIN}
                 </a>
                 .

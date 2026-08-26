@@ -137,11 +137,11 @@ export function DiscoveryForm({
           <Button type="submit">Run discovery</Button>
         </form>
         {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
-        {result ? <p className="mt-3 text-sm text-teal-300">{result}</p> : null}
+        {result ? <p className="mt-3 text-sm text-emerald-300">{result}</p> : null}
       </Card>
       <Card className="p-6">
         <h2 className="font-medium">Add manual group source</h2>
-        <p className="mt-1 text-sm text-slate-400">Label only. TesterBridge will not log into Facebook as you.</p>
+        <p className="mt-1 text-sm text-slate-400">Label only. TestLoop will not log into Facebook as you.</p>
         <form onSubmit={addManualSource} className="mt-4 space-y-3">
           <div>
             <Label>Name</Label>

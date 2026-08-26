@@ -38,7 +38,7 @@ export default function PrivacyPage() {
                 </p>
                 <p>
                   For privacy questions, contact{" "}
-                  <a className="text-teal-300" href={`mailto:${CONTACT_EMAIL}`}>
+                  <a className="text-emerald-300" href={`mailto:${CONTACT_EMAIL}`}>
                     {CONTACT_EMAIL}
                   </a>
                   .
@@ -202,7 +202,7 @@ export default function PrivacyPage() {
                 </p>
                 <p>
                   To request deletion of your {SITE_NAME} account and associated personal data, email{" "}
-                  <a className="text-teal-300" href={`mailto:${CONTACT_EMAIL}`}>
+                  <a className="text-emerald-300" href={`mailto:${CONTACT_EMAIL}`}>
                     {CONTACT_EMAIL}
                   </a>
                   . We may retain limited records where we have a legitimate need, such as security, dispute
@@ -309,11 +309,11 @@ export default function PrivacyPage() {
             content: (
               <p>
                 Privacy requests, including access or deletion requests, can be sent to{" "}
-                <a className="text-teal-300" href={`mailto:${CONTACT_EMAIL}`}>
+                <a className="text-emerald-300" href={`mailto:${CONTACT_EMAIL}`}>
                   {CONTACT_EMAIL}
                 </a>
                 . You can also return to the main {SITE_NAME} website at{" "}
-                <a className="text-teal-300" href={SITE_ORIGIN}>
+                <a className="text-emerald-300" href={SITE_ORIGIN}>
                   {SITE_ORIGIN}
                 </a>
                 .

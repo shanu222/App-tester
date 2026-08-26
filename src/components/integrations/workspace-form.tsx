@@ -1,48 +1,64 @@
 "use client";
 
-import { FormEvent } from "react";
+import { FormEvent, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/fields";
 
 export function WorkspaceForm() {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setPending(true);
+    setError(null);
     const form = new FormData(event.currentTarget);
-    await fetch("/api/google/groups", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: form.get("email"),
-        name: form.get("name"),
-        adminEmail: form.get("adminEmail") || undefined,
-        serviceAccountJson: form.get("serviceAccountJson") || undefined,
-      }),
-    });
-    window.location.reload();
+    try {
+      const response = await fetch("/api/google/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.get("email"),
+          name: form.get("name"),
+          adminEmail: form.get("adminEmail") || undefined,
+          serviceAccountJson: form.get("serviceAccountJson") || undefined,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Could not save this Google Group.");
+      }
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save this Google Group.");
+      setPending(false);
+    }
   }
+
   return (
     <Card className="p-5">
       <h2 className="font-medium">Google Group</h2>
       <form onSubmit={onSubmit} className="mt-4 space-y-3">
         <div>
-          <Label>Group email</Label>
-          <Input name="email" placeholder="net360-testers@googlegroups.com" required />
+          <Label htmlFor="groupEmail">Group email</Label>
+          <Input id="groupEmail" name="email" placeholder="testers@googlegroups.com" required />
         </div>
         <div>
-          <Label>Name</Label>
-          <Input name="name" />
+          <Label htmlFor="groupName">Name</Label>
+          <Input id="groupName" name="name" />
         </div>
         <div>
-          <Label>Workspace admin email (optional)</Label>
-          <Input name="adminEmail" />
+          <Label htmlFor="adminEmail">Workspace admin email (optional)</Label>
+          <Input id="adminEmail" name="adminEmail" />
         </div>
         <div>
-          <Label>Workspace service account JSON (optional)</Label>
-          <Textarea name="serviceAccountJson" />
+          <Label htmlFor="workspaceJson">Workspace service account JSON (optional)</Label>
+          <Textarea id="workspaceJson" name="serviceAccountJson" />
         </div>
-        <Button type="submit" variant="secondary">
-          Save group
+        {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+        <Button type="submit" variant="secondary" disabled={pending}>
+          {pending ? "Saving…" : "Save group"}
         </Button>
       </form>
     </Card>

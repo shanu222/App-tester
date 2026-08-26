@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/ui/widgets";
 import { Badge } from "@/components/ui/badge";
 import { JsonButton } from "@/components/ui/json-button";
 import { publicDeveloper } from "@/lib/services/network";
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
 export default async function MyTestingPage() {
@@ -27,15 +28,15 @@ export default async function MyTestingPage() {
     <AppShell title="My testing">
       <p className="mb-6 max-w-2xl text-sm text-slate-400">
         Status changes only after a real event: your consent, a Google API result, owner confirmation, your opt-in,
-        or submitted feedback. TesterBridge does not invent downloads.
+        or submitted feedback. TestLoop does not invent downloads.
       </p>
       {mine.length === 0 ? (
         <EmptyState
           title="You are not testing any apps yet"
           body="Accept a published testing request from another developer."
           action={
-            <Link href="/requests" className="text-sm text-teal-300">
-              Find testing requests
+            <Link href="/requests">
+              <Button variant="secondary">Find testing requests</Button>
             </Link>
           }
         />
@@ -47,7 +48,7 @@ export default async function MyTestingPage() {
             );
             const owner = publicDeveloper(row.owner);
             return (
-              <div key={row.id} className="rounded-2xl border border-slate-800 p-5">
+              <div key={row.id} className="rounded-xl border border-slate-800 bg-card p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="font-medium">{row.campaign.app.name}</div>
@@ -61,7 +62,7 @@ export default async function MyTestingPage() {
                 </div>
                 {row.lastError ? <p className="mt-2 text-sm text-amber-200">{row.lastError}</p> : null}
                 {ready && row.campaign.webOptInUrl ? (
-                  <div className="mt-4 rounded-xl border border-teal-500/30 bg-teal-500/10 p-4 text-sm">
+                  <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm">
                     <div className="font-medium">You&apos;re ready to test</div>
                     <ol className="mt-2 list-decimal space-y-1 pl-5 text-slate-300">
                       <li>Open the testing link.</li>
@@ -71,7 +72,7 @@ export default async function MyTestingPage() {
                       <li>Submit feedback.</li>
                     </ol>
                     <a
-                      className="mt-3 inline-block text-teal-300"
+                      className="mt-3 inline-block text-emerald-300 hover:underline"
                       href={row.campaign.webOptInUrl}
                       target="_blank"
                       rel="noreferrer"
@@ -81,7 +82,7 @@ export default async function MyTestingPage() {
                   </div>
                 ) : ready && !row.campaign.webOptInUrl ? (
                   <p className="mt-3 text-sm text-slate-400">
-                    Access is configured. A testing/opt-in URL has not been stored for this campaign, so TesterBridge
+                    Access is configured. A testing/opt-in URL has not been stored for this campaign, so TestLoop
                     will not show a join link yet.
                   </p>
                 ) : null}
@@ -136,7 +137,7 @@ export default async function MyTestingPage() {
           {incoming.map((row) => {
             const other = row.requesterId === user.id ? row.target : row.requester;
             return (
-              <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 p-4">
+              <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 p-4">
                 <div className="text-sm">
                   <div className="font-medium">{publicDeveloper(other).name}</div>
                   <div className="text-slate-400">{row.status}</div>

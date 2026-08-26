@@ -29,7 +29,7 @@ export default async function MessagesPage() {
     <AppShell title="Messages">
       <h2 className="mb-3 font-medium">Developer inbox</h2>
       <p className="mb-4 text-sm text-slate-400">
-        Direct messages between developers. TesterBridge does not auto-spam; notification preferences are in Settings.
+        Direct messages between developers. TestLoop does not auto-spam; notification preferences are in Settings.
       </p>
       {developerMessages.length === 0 ? (
         <EmptyState title="No developer messages" body="When another developer messages you, it appears here." />
@@ -54,16 +54,20 @@ export default async function MessagesPage() {
         Optional: paste a tester reply if you still collect Gmail outside the developer network.
       </div>
       {campaign ? <PasteReplyForm campaignId={campaign.id} /> : null}
-      <div className="mt-6 space-y-3">
-        {messages.map((message) => (
-          <div key={message.id} className="rounded-2xl border border-slate-800 p-4 text-sm">
-            <div className="text-xs text-slate-500">
-              {formatDateTime(message.createdAt)} · {message.channel} · {message.campaign?.name}
+      {messages.length === 0 ? (
+        <p className="mt-4 text-sm text-slate-500">No pasted tester replies yet.</p>
+      ) : (
+        <div className="mt-6 space-y-3">
+          {messages.map((message) => (
+            <div key={message.id} className="rounded-xl border border-slate-800 p-4 text-sm">
+              <div className="text-xs text-slate-500">
+                {formatDateTime(message.createdAt)} · {message.channel} · {message.campaign?.name}
+              </div>
+              <p className="mt-2 whitespace-pre-wrap">{message.body}</p>
             </div>
-            <p className="mt-2 whitespace-pre-wrap">{message.body}</p>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </AppShell>
   );
 }

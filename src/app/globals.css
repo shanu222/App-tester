@@ -1,14 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0b1220;
+  --background: #0a1018;
   --foreground: #e8eef8;
-  --muted: #94a3b8;
-  --card: #121a2c;
-  --card-border: #1e2a44;
-  --accent: #14b8a6;
-  --accent-2: #38bdf8;
-  --danger: #fb7185;
+  --muted: #8fa0b5;
+  --card: #121a26;
+  --card-border: #243044;
+  --accent: #12b981;
+  --accent-2: #2f6fed;
+  --danger: #f87171;
   --warn: #fbbf24;
 }
 
@@ -20,15 +20,13 @@
   --color-line: var(--card-border);
   --color-accent: var(--accent);
   --color-sky: var(--accent-2);
-  --font-sans: "Segoe UI", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Source Sans 3", "Segoe UI", Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
 html,
 body {
   min-height: 100%;
-  background: radial-gradient(1200px 600px at 10% -10%, rgba(20, 184, 166, 0.12), transparent 50%),
-    radial-gradient(900px 500px at 100% 0%, rgba(56, 189, 248, 0.08), transparent 45%),
-    var(--background);
+  background: var(--background);
   color: var(--foreground);
 }
 
@@ -43,4 +41,16 @@ textarea:focus-visible,
 select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

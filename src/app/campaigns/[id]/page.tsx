@@ -2,10 +2,9 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
 import { campaignStats, getCampaign } from "@/lib/services/campaigns";
 import { Badge } from "@/components/ui/badge";
-import { StatCard } from "@/components/ui/widgets";
+import { EmptyState, StatusBadge, StatCard } from "@/components/ui/widgets";
 import { JsonButton } from "@/components/ui/json-button";
 import { percent } from "@/lib/utils";
-import { StatusBadge } from "@/components/ui/widgets";
 import Link from "next/link";
 import { PasteReplyForm } from "@/components/messages/paste-reply-form";
 import { ManualTesterForm } from "@/components/testers/manual-tester-form";
@@ -48,7 +47,7 @@ export default async function CampaignDetailPage({
           {campaign.app.name} · {campaign.app.packageName} · {campaign.testingType} · Target {campaign.targetTesters}
         </span>
         {campaign.app.playStoreUrl ? (
-          <a className="text-sm text-teal-300" href={campaign.app.playStoreUrl} target="_blank" rel="noreferrer">
+          <a className="text-sm text-emerald-300 hover:underline" href={campaign.app.playStoreUrl} target="_blank" rel="noreferrer">
             Open Google Play
           </a>
         ) : null}
@@ -60,7 +59,7 @@ export default async function CampaignDetailPage({
       <div className="mb-6 rounded-2xl border border-slate-800 p-4 text-sm text-slate-300">
         Required testers: {campaign.requiredTesters} · Opted in: {stats.optedIn} · Remaining: {remaining} ·
         Days active window: {campaign.requiredActiveDays} (configurable). Based on recorded tester activity —
-        verify official Play Console status before applying for production access. TesterBridge does not determine
+        verify official Play Console status before applying for production access. TestLoop does not determine
         Google&apos;s eligibility.
       </div>
 
@@ -86,7 +85,7 @@ export default async function CampaignDetailPage({
           </p>
           {campaign.webOptInUrl ? (
             <div className="mt-3 flex gap-3 text-sm">
-              <a className="text-teal-300" href={campaign.webOptInUrl} target="_blank" rel="noreferrer">
+              <a className="text-emerald-300 hover:underline" href={campaign.webOptInUrl} target="_blank" rel="noreferrer">
                 Open testing link
               </a>
             </div>
@@ -116,11 +115,17 @@ export default async function CampaignDetailPage({
         Gmail is visible here only after the developer explicitly consented. Never shown on the public request page.
       </p>
       <div className="mb-8 space-y-3">
-        {campaign.participations.map((row) => (
-          <div key={row.id} className="rounded-2xl border border-slate-800 p-4 text-sm">
+        {campaign.participations.length === 0 ? (
+          <EmptyState
+            title="No testers yet"
+            body="When another developer accepts this request and consents to share Gmail, they appear here."
+          />
+        ) : (
+          campaign.participations.map((row) => (
+          <div key={row.id} className="rounded-xl border border-slate-800 p-4 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <Link href={`/developers/${row.tester.id}`} className="text-teal-300">
+                <Link href={`/developers/${row.tester.id}`} className="text-emerald-300 hover:underline">
                   {row.tester.developerName || row.tester.name}
                 </Link>
                 <div className="text-slate-400">{row.status}</div>
@@ -153,7 +158,8 @@ export default async function CampaignDetailPage({
               </div>
             ) : null}
           </div>
-        ))}
+        ))
+        )}
       </div>
 
       <h2 className="mt-10 mb-3 font-medium">Testers</h2>

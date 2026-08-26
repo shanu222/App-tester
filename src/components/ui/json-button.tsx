@@ -25,6 +25,7 @@ export function JsonButton({
       <Button
         type="button"
         variant={variant}
+        aria-busy={pending}
         disabled={pending}
         onClick={async () => {
           setPending(true);

@@ -423,7 +423,7 @@ export async function processTesterAccess(participationId: string) {
         userId: participation.ownerUserId,
         type: "tester",
         title: "Manual Google Group action required",
-        body: "A tester is waiting to be added. TesterBridge did not change Google Group membership.",
+        body: "A tester is waiting to be added. TestLoop did not change Google Group membership.",
         href: `/campaigns/${participation.campaignId}`,
         campaignId: participation.campaignId,
       });

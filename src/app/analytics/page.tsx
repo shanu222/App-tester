@@ -4,6 +4,7 @@ import { getFunnel } from "@/lib/services/dashboard";
 import { campaignStats } from "@/lib/services/campaigns";
 import { prisma } from "@/lib/db";
 import { percent } from "@/lib/utils";
+import { EmptyState } from "@/components/ui/widgets";
 
 export default async function AnalyticsPage() {
   const user = await requireUser();
@@ -18,7 +19,7 @@ export default async function AnalyticsPage() {
             <div className="w-40 text-xs uppercase text-slate-400">{step.key}</div>
             <div className="h-8 flex-1 rounded-lg bg-slate-900">
               <div
-                className="h-8 rounded-lg bg-teal-500/40"
+                className="h-8 rounded-lg bg-emerald-500/40"
                 style={{ width: `${Math.max(8, percent(step.value, funnel[0]?.value || 1))}%` }}
               />
             </div>
@@ -27,23 +28,30 @@ export default async function AnalyticsPage() {
           </div>
         ))}
       </div>
-      <h2 className="mb-3 mt-10 font-medium">Campaign analytics</h2>
-      <div className="space-y-3">
-        {await Promise.all(
-          campaigns.map(async (campaign) => {
-            const stats = await campaignStats(user.id, campaign.id);
-            return (
-              <div key={campaign.id} className="rounded-2xl border border-slate-800 p-4 text-sm">
-                <div className="font-medium">{campaign.name}</div>
-                <p className="text-slate-400">
-                  {campaign.targetTesters} target · {stats.optedIn} opted in ·{" "}
-                  {percent(stats.optedIn, campaign.targetTesters)}% · {Math.max(0, campaign.targetTesters - stats.optedIn)} remaining
-                </p>
-              </div>
-            );
-          }),
-        )}
-      </div>
+      <h2 className="mb-3 mt-10 text-sm font-medium uppercase tracking-wide text-slate-500">Campaign analytics</h2>
+      {campaigns.length === 0 ? (
+        <EmptyState
+          title="No campaign analytics yet"
+          body="Publish a testing request to start recording tester activity for that campaign."
+        />
+      ) : (
+        <div className="space-y-3">
+          {await Promise.all(
+            campaigns.map(async (campaign) => {
+              const stats = await campaignStats(user.id, campaign.id);
+              return (
+                <div key={campaign.id} className="rounded-xl border border-slate-800 p-4 text-sm">
+                  <div className="font-medium">{campaign.name}</div>
+                  <p className="text-slate-400">
+                    {campaign.targetTesters} target · {stats.optedIn} opted in ·{" "}
+                    {percent(stats.optedIn, campaign.targetTesters)}% · {Math.max(0, campaign.targetTesters - stats.optedIn)} remaining
+                  </p>
+                </div>
+              );
+            }),
+          )}
+        </div>
+      )}
     </AppShell>
   );
 }

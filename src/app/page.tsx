@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { BrandLogo } from "@/components/brand/brand-logo";
 import { PublicChrome } from "@/components/layout/public-chrome";
 import { googleOAuthConfigured } from "@/lib/env";
 import { prisma } from "@/lib/db";
@@ -26,27 +27,34 @@ export default async function LandingPage() {
 
   return (
     <PublicChrome>
-      <main className="mx-auto max-w-5xl px-6 py-16">
-        <p className="text-sm uppercase tracking-[0.2em] text-teal-300">{SITE_NAME}</p>
-        <h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
-          Developers testing developers&apos; apps
-        </h1>
-        <p className="mt-4 max-w-2xl text-lg text-slate-400">
-          A developer-only reciprocal testing network for Android closed testing. Post a campaign, accept a test,
-          share Gmail by consent, then track access, feedback, and reputation — without Facebook groups or
-          spreadsheets.
-        </p>
-        <div className="mt-8 flex flex-wrap items-center gap-4">
-          {googleOAuthConfigured() ? (
-            <GoogleSignInButton label="Join as developer" />
-          ) : (
-            <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-              Google login is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and AUTH_SECRET.
-            </p>
-          )}
+      <main className="mx-auto max-w-6xl px-6 py-14 sm:py-20">
+        <div className="max-w-2xl">
+          <BrandLogo size="lg" priority />
+          <h1 className="mt-8 text-4xl font-semibold tracking-tight sm:text-5xl">
+            Developers testing developers&apos; apps
+          </h1>
+          <p className="mt-4 text-lg leading-7 text-slate-400">
+            A professional network for Android closed testing. Publish a request, accept a test, share Gmail only after
+            consent, and track real campaign progress.
+          </p>
+          <div className="mt-8">
+            {googleOAuthConfigured() ? (
+              <GoogleSignInButton label="Continue with Google" />
+            ) : (
+              <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                Google login is not configured on this deployment.
+              </p>
+            )}
+          </div>
         </div>
 
-        <div className="mt-16 grid gap-5 md:grid-cols-3">
+        <ul className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-500">
+          <li>Google OAuth only</li>
+          <li>Consent-based Gmail sharing</li>
+          <li>Live Google Play API checks</li>
+        </ul>
+
+        <div className="mt-16 grid gap-4 md:grid-cols-3">
           {[
             {
               title: "Need Android testers?",
@@ -54,47 +62,31 @@ export default async function LandingPage() {
             },
             {
               title: "Need testers for your app?",
-              body: "Create a testing campaign with a real target, duration, and testing instructions.",
+              body: "Create a testing campaign with a real target, duration, and instructions.",
             },
             {
               title: "Want reciprocal testing?",
               body: "Test another developer’s app and request testers for yours in return.",
             },
           ].map((item) => (
-            <section key={item.title} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+            <section key={item.title} className="rounded-xl border border-slate-800 bg-card p-5">
               <h2 className="font-medium">{item.title}</h2>
-              <p className="mt-2 text-sm text-slate-400">{item.body}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-400">{item.body}</p>
             </section>
           ))}
         </div>
 
-        <section className="mt-12 rounded-2xl border border-slate-800 p-6">
+        <section className="mt-10 rounded-xl border border-slate-800 p-6">
           <h2 className="text-lg font-semibold">How it works</h2>
-          <ol className="mt-4 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
+          <ol className="mt-4 grid gap-3 text-sm leading-6 text-slate-300 md:grid-cols-2">
             <li>1. Continue with Google — official OAuth, never a password form.</li>
             <li>2. Complete your developer profile.</li>
             <li>3. Add an Android app and optional Google Play integration.</li>
             <li>4. Publish a testing request.</li>
             <li>5. Another developer accepts and consents to share Gmail.</li>
             <li>6. {SITE_NAME} processes Play / Google Group access when configured, or shows a manual fallback.</li>
-            <li>7. Feedback and reciprocal tests build a real reputation score.</li>
+            <li>7. Feedback and reciprocal tests build a reputation score from real activity.</li>
           </ol>
-          <ul className="mt-6 flex flex-wrap gap-2 text-xs text-slate-400">
-            {[
-              "Developer-only network",
-              "Google Play integration",
-              "Automated tester management",
-              "Reciprocal testing",
-              "Testing campaigns",
-              "Tester reputation",
-              "Feedback",
-              "Analytics",
-            ].map((item) => (
-              <li key={item} className="rounded-full border border-slate-800 px-3 py-1">
-                {item}
-              </li>
-            ))}
-          </ul>
         </section>
       </main>
     </PublicChrome>

@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input, Label, Select } from "@/components/ui/fields";
+import { EmptyState } from "@/components/ui/widgets";
 import { parsePlayStoreUrl } from "@/lib/play-url";
 
 export type AppCardModel = {
@@ -165,7 +166,7 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
         <div>
           <p className="text-sm text-slate-400">
             Store listing URLs and closed-testing opt-in URLs are stored separately. Tester counts come from recorded
-            TesterBridge activity, not invented Play Console numbers.
+            TestLoop activity, not invented Play Console numbers.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -195,7 +196,7 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
       </div>
 
       {error ? <p className="text-sm text-rose-300">{error}</p> : null}
-      {syncMessage ? <p className="text-sm text-teal-300">{syncMessage}</p> : null}
+      {syncMessage ? <p className="text-sm text-emerald-300">{syncMessage}</p> : null}
 
       {newPlayApps.length > 0 ? (
         <Card className="space-y-3 p-5">
@@ -261,8 +262,18 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
         </Card>
       ) : null}
 
-      {visible.length === 0 ? (
-        <Card className="p-10 text-center text-sm text-slate-400">No apps match this search.</Card>
+      {apps.length === 0 && !showForm ? (
+        <EmptyState
+          title="No apps yet"
+          body="Add your first Android app to publish a testing request and connect Google Play tracks."
+          action={
+            <Button type="button" onClick={() => setShowForm(true)}>
+              Add an app
+            </Button>
+          }
+        />
+      ) : visible.length === 0 ? (
+        <EmptyState title="No apps match this search" body="Try a different name, package, or filter." />
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {visible.map((app) => {
@@ -279,9 +290,9 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
                 <div className="flex gap-4">
                   {app.iconUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={app.iconUrl} alt="" className="h-14 w-14 rounded-2xl object-cover" />
+                    <img src={app.iconUrl} alt="" className="h-14 w-14 rounded-xl object-cover" />
                   ) : (
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-500/15 text-sm font-semibold text-teal-200">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-500/15 text-sm font-semibold text-emerald-200">
                       {initials(app.name)}
                     </div>
                   )}
@@ -312,7 +323,7 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
                     <span>{progress}%</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-                    <div className="h-2 rounded-full bg-teal-400" style={{ width: `${Math.max(progress, 4)}%` }} />
+                    <div className="h-2 rounded-full bg-emerald-400" style={{ width: `${Math.max(progress, 4)}%` }} />
                   </div>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs text-slate-400">
                     <div>
@@ -342,7 +353,7 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
                       href={app.playStoreUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center rounded-lg bg-teal-500 px-3.5 py-2 text-sm font-medium text-slate-950"
+                      className="inline-flex items-center rounded-lg bg-emerald-500 px-3.5 py-2 text-sm font-medium text-slate-950"
                     >
                       Open Google Play
                     </a>

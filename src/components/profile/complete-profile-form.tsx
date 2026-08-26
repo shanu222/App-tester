@@ -38,6 +38,7 @@ export function CompleteProfileForm({
   };
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   const [platforms, setPlatforms] = useState<string[]>(
     defaults.platforms.length ? defaults.platforms : ["Android"],
   );
@@ -45,33 +46,38 @@ export function CompleteProfileForm({
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setPending(true);
     const form = new FormData(event.currentTarget);
-    const response = await fetch("/api/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: form.get("name"),
-        developerName: form.get("developerName"),
-        company: form.get("company") || undefined,
-        country: form.get("country"),
-        city: form.get("city") || undefined,
-        developerType: form.get("developerType"),
-        yearsExperience: form.get("yearsExperience") ? Number(form.get("yearsExperience")) : undefined,
-        platforms,
-        technologies: form.get("technologies") || undefined,
-        website: form.get("website") || undefined,
-        github: form.get("github") || undefined,
-        linkedin: form.get("linkedin") || undefined,
-        bio: form.get("bio") || undefined,
-        testingGmail: form.get("testingGmail") || undefined,
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setError(data.error || "Could not save profile");
-      return;
+    try {
+      const response = await fetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.get("name"),
+          developerName: form.get("developerName"),
+          company: form.get("company") || undefined,
+          country: form.get("country"),
+          city: form.get("city") || undefined,
+          developerType: form.get("developerType"),
+          yearsExperience: form.get("yearsExperience") ? Number(form.get("yearsExperience")) : undefined,
+          platforms,
+          technologies: form.get("technologies") || undefined,
+          website: form.get("website") || undefined,
+          github: form.get("github") || undefined,
+          linkedin: form.get("linkedin") || undefined,
+          bio: form.get("bio") || undefined,
+          testingGmail: form.get("testingGmail") || undefined,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Could not save profile");
+      }
+      window.location.href = defaults.completed ? "/profile" : "/onboarding";
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save profile");
+      setPending(false);
     }
-    window.location.href = defaults.completed ? "/profile" : "/onboarding";
   }
 
   return (
@@ -80,7 +86,7 @@ export function CompleteProfileForm({
         <div className="md:col-span-2 flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={defaults.image} alt="" className="h-14 w-14 rounded-full object-cover" />
-          <p className="text-sm text-slate-400">Profile photo from Google. TesterBridge does not store Google passwords.</p>
+          <p className="text-sm text-slate-400">Profile photo from Google. TestLoop does not store Google passwords.</p>
         </div>
       ) : null}
       <div>
@@ -165,7 +171,9 @@ export function CompleteProfileForm({
       </div>
       {error ? <p className="md:col-span-2 text-sm text-rose-300">{error}</p> : null}
       <div className="md:col-span-2">
-        <Button type="submit">Complete profile</Button>
+        <Button type="submit" disabled={pending}>
+          {pending ? "Saving…" : defaults.completed ? "Save profile" : "Complete profile"}
+        </Button>
       </div>
     </form>
   );

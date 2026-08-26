@@ -4,6 +4,8 @@ import { FormEvent, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/fields";
+import { EmptyState } from "@/components/ui/widgets";
+import Link from "next/link";
 
 type AppOption = {
   id: string;
@@ -31,37 +33,57 @@ export function CreateCampaignForm({
   const [appId, setAppId] = useState(initialAppId || apps[0]?.id || "");
   const selected = useMemo(() => apps.find((app) => app.id === appId), [apps, appId]);
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setPending(true);
     const form = new FormData(event.currentTarget);
-    const response = await fetch("/api/campaigns", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: form.get("name"),
-        appId,
-        trackId: form.get("trackId") || undefined,
-        sourceId: form.get("sourceId") || undefined,
-        googleGroupId: form.get("googleGroupId") || undefined,
-        targetTesters: Number(form.get("targetTesters") || selected?.testerTarget || 12),
-        testingType: form.get("testingType") || selected?.testingType,
-        playStoreUrl: selected?.playStoreUrl || undefined,
-        webOptInUrl: form.get("webOptInUrl") || selected?.webOptInUrl || undefined,
-        durationDays: Number(form.get("durationDays") || 14),
-        description: form.get("description") || undefined,
-        testingInstructions: form.get("testingInstructions") || undefined,
-        reciprocalOpen: form.get("reciprocalOpen") === "on",
-        published: form.get("published") === "on",
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setError(data.error || "Could not create campaign");
-      return;
+    try {
+      const response = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.get("name"),
+          appId,
+          trackId: form.get("trackId") || undefined,
+          sourceId: form.get("sourceId") || undefined,
+          googleGroupId: form.get("googleGroupId") || undefined,
+          targetTesters: Number(form.get("targetTesters") || selected?.testerTarget || 12),
+          testingType: form.get("testingType") || selected?.testingType,
+          playStoreUrl: selected?.playStoreUrl || undefined,
+          webOptInUrl: form.get("webOptInUrl") || selected?.webOptInUrl || undefined,
+          durationDays: Number(form.get("durationDays") || 14),
+          description: form.get("description") || undefined,
+          testingInstructions: form.get("testingInstructions") || undefined,
+          reciprocalOpen: form.get("reciprocalOpen") === "on",
+          published: form.get("published") === "on",
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Could not create campaign");
+      }
+      window.location.href = `/campaigns/${data.campaign.id}`;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create campaign");
+      setPending(false);
     }
-    window.location.href = `/campaigns/${data.campaign.id}`;
+  }
+
+  if (!apps.length) {
+    return (
+      <EmptyState
+        title="Add an app first"
+        body="Create an Android app before publishing a testing request."
+        action={
+          <Link href="/apps">
+            <Button>Go to My Apps</Button>
+          </Link>
+        }
+      />
+    );
   }
 
   return (
@@ -175,8 +197,8 @@ export function CreateCampaignForm({
         </label>
         {error ? <p className="md:col-span-2 text-sm text-rose-300">{error}</p> : null}
         <div className="md:col-span-2">
-          <Button type="submit" disabled={!apps.length}>
-            Publish testing request
+          <Button type="submit" disabled={pending}>
+            {pending ? "Publishing…" : "Publish testing request"}
           </Button>
         </div>
       </form>

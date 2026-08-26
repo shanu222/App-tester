@@ -10,6 +10,14 @@ import { WorkspaceForm } from "@/components/integrations/workspace-form";
 import { JsonButton } from "@/components/ui/json-button";
 import { FACEBOOK_GROUP_LIMITATION, PLAY_EMAIL_LIST_LIMITATION, GROUPS_API_LIMITATION } from "@/lib/integrations/capabilities";
 
+function statusLabel(status?: string) {
+  if (status === "CONNECTED") return "Connected";
+  if (status === "ERROR") return "Error";
+  if (status === "EXPIRED") return "Expired";
+  if (status === "CONNECTING") return "Connecting";
+  return "Not connected";
+}
+
 function tone(status: string) {
   if (status === "CONNECTED") return "good" as const;
   if (status === "ERROR" || status === "EXPIRED") return "bad" as const;
@@ -63,11 +71,11 @@ export default async function IntegrationsPage() {
     <AppShell title="Integrations">
       <div className="grid gap-4 lg:grid-cols-2">
         {cards.map((card) => (
-          <div key={card.provider} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-            <div className="flex items-center justify-between">
+          <div key={card.provider} className="rounded-xl border border-slate-800 bg-card p-5">
+            <div className="flex items-center justify-between gap-3">
               <h2 className="font-medium">{card.title}</h2>
               <Badge tone={tone(card.item?.status || "NOT_CONNECTED")}>
-                {card.item?.status === "CONNECTED" ? "🟢 Connected" : card.item?.status || "🟡 Not connected"}
+                {statusLabel(card.item?.status)}
               </Badge>
             </div>
             <p className="mt-2 text-xs text-slate-500">
@@ -77,7 +85,7 @@ export default async function IntegrationsPage() {
             <p className="mt-3 text-sm text-slate-400">{card.note}</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {card.connectHref ? (
-                <a className="rounded-lg bg-teal-500 px-3 py-2 text-sm font-medium text-slate-950" href={card.connectHref}>
+                <a className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-slate-950" href={card.connectHref}>
                   Connect / Reconnect
                 </a>
               ) : null}

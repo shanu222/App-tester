@@ -3,7 +3,10 @@ import { requireUser } from "@/auth";
 import { listPublishedRequests } from "@/lib/services/network";
 import { EmptyState } from "@/components/ui/widgets";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
+import { requestFillStatus } from "@/lib/request-status";
+import { AppMark } from "@/components/brand/app-mark";
 import Link from "next/link";
 
 export default async function RequestsPage({
@@ -20,10 +23,10 @@ export default async function RequestsPage({
   const recommended = [...requests].sort((a, b) => b.match.score - a.match.score).slice(0, 3);
 
   return (
-    <AppShell title="Find testing requests">
-      <p className="mb-5 max-w-2xl text-sm text-slate-400">
-        Only registered developers can see this list. Match scores are calculated from reciprocal availability,
-        country, testing type, remaining testers, Play connection, and your current testing load.
+    <AppShell title="Testing Requests">
+      <p className="mb-5 max-w-2xl text-sm leading-6 text-slate-400">
+        Only registered developers can see this list. Match scores come from reciprocal availability, country, testing
+        type, remaining testers, Play connection, and your current testing load.
       </p>
       <div className="mb-6 flex flex-wrap gap-2 text-sm">
         {[
@@ -33,17 +36,21 @@ export default async function RequestsPage({
           { href: "/requests?testingType=OPEN", label: "Open" },
           { href: "/requests?reciprocal=1", label: "Reciprocal" },
         ].map((item) => (
-          <Link key={item.href} href={item.href} className="rounded-full border border-slate-800 px-3 py-1 text-slate-300">
+          <Link
+            key={item.href}
+            href={item.href}
+            className="rounded-full border border-slate-800 px-3 py-1 text-slate-300 hover:border-slate-600"
+          >
             {item.label}
           </Link>
         ))}
       </div>
       {recommended.length ? (
         <div className="mb-8">
-          <h2 className="mb-3 text-sm uppercase tracking-wide text-slate-400">Recommended for you</h2>
+          <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-slate-500">Recommended for you</h2>
           <div className="grid gap-3 md:grid-cols-3">
             {recommended.map((item) => (
-              <Link key={item.id} href={`/requests/${item.id}`} className="rounded-2xl border border-slate-800 p-4">
+              <Link key={item.id} href={`/requests/${item.id}`} className="rounded-xl border border-slate-800 p-4 hover:border-slate-700">
                 <div className="font-medium">{item.app.name}</div>
                 <p className="mt-1 text-sm text-slate-400">
                   {item.remaining} testers needed · {item.match.score}% match
@@ -54,49 +61,51 @@ export default async function RequestsPage({
         </div>
       ) : null}
       {requests.length === 0 ? (
-        <EmptyState title="No published requests" body="When other developers publish campaigns, they appear here." />
+        <EmptyState
+          title="No testing requests yet"
+          body="When other developers publish campaigns, they appear here. You can publish your own request from My Testing Requests."
+          action={
+            <Link href="/campaigns">
+              <Button>Publish a testing request</Button>
+            </Link>
+          }
+        />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-800">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-950/80 text-left text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">App</th>
-                <th className="px-4 py-3 font-medium">Developer</th>
-                <th className="px-4 py-3 font-medium">Needed</th>
-                <th className="px-4 py-3 font-medium">Type</th>
-                <th className="px-4 py-3 font-medium">Duration</th>
-                <th className="px-4 py-3 font-medium">Country</th>
-                <th className="px-4 py-3 font-medium">Reciprocal</th>
-                <th className="px-4 py-3 font-medium">Posted</th>
-                <th className="px-4 py-3 font-medium">Match</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requests.map((item) => (
-                <tr key={item.id} className="border-t border-slate-800">
-                  <td className="px-4 py-3">
-                    <Link href={`/requests/${item.id}`} className="text-teal-300">
-                      {item.app.name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">{item.owner.name}</td>
-                  <td className="px-4 py-3">
-                    {item.testersReceived} / {item.targetTesters}
-                  </td>
-                  <td className="px-4 py-3">{item.testingType}</td>
-                  <td className="px-4 py-3">{item.durationDays}d</td>
-                  <td className="px-4 py-3">{item.country || "—"}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone={item.reciprocalOpen ? "good" : "neutral"}>
-                      {item.reciprocalOpen ? "Open" : "No"}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">{formatDate(item.publishedAt)}</td>
-                  <td className="px-4 py-3">{item.match.score}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-3">
+          {requests.map((item) => {
+            const fill = requestFillStatus(item.testersReceived, item.targetTesters);
+            return (
+              <article
+                key={item.id}
+                className="rounded-xl border border-slate-800 bg-card p-4 sm:p-5"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                  <AppMark src={item.app.iconUrl} name={item.app.name} size={48} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="font-medium">{item.app.name}</h2>
+                      <Badge tone={fill.tone}>{fill.label}</Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-slate-400">
+                      {item.owner.name}
+                      {item.country ? ` · ${item.country}` : ""} · Android · {item.testingType} testing
+                    </p>
+                    <p className="mt-2 text-sm text-slate-300">
+                      Testers {item.testersReceived} / {item.targetTesters} · Duration {item.durationDays} days
+                      {item.reciprocalOpen ? " · Reciprocal open" : ""}
+                    </p>
+                    {item.description ? (
+                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">{item.description}</p>
+                    ) : null}
+                  </div>
+                  <Link href={`/requests/${item.id}`} className="sm:self-center">
+                    <Button>View request</Button>
+                  </Link>
+                </div>
+                <p className="mt-3 text-xs text-slate-500">Posted {formatDate(item.publishedAt)} · {item.match.score}% match</p>
+              </article>
+            );
+          })}
         </div>
       )}
     </AppShell>

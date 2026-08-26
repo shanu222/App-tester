@@ -1,8 +1,8 @@
-# TesterBridge
+# TestLoop
 
 **Find Real Testers. Exchange Testing. Track Every Test.**
 
-TesterBridge is a production web app for Android developers who need genuine Google Play testers. It finds authorized testing opportunities, prepares human-approved replies, tracks Gmail confirmation, and records the closed-testing workflow without inventing unsupported platform APIs.
+TestLoop is a production web app for Android developers who need genuine Google Play testers. It finds authorized testing opportunities, prepares human-approved replies, tracks Gmail confirmation, and records the closed-testing workflow without inventing unsupported platform APIs.
 
 ## What this product does
 
@@ -57,7 +57,7 @@ Full Vercel/Neon checklist: [VERCEL_SETUP.md](VERCEL_SETUP.md)
 
 ## Honest API limitations
 
-| Capability | Official support in TesterBridge |
+| Capability | Official support in TestLoop |
 |---|---|
 | Facebook Group feed/search/comment/inbox | **Unavailable.** Meta deprecated the Groups API in Graph v19 (removed April 2024). Import posts and paste replies. |
 | Facebook Page feed + comments | Available with Page tokens (`pages_show_list`, `pages_read_engagement`, `pages_manage_engagement`). |

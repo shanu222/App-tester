@@ -43,13 +43,16 @@ export default async function CampaignsPage({
       />
       <div className="mt-8 space-y-3">
         {campaigns.length === 0 ? (
-          <EmptyState title="No campaigns" body="Create a closed testing campaign with a target tester count." />
+          <EmptyState
+            title="No testing requests yet"
+            body="Publish your first testing request to start finding developers who can test your app."
+          />
         ) : (
           campaigns.map((campaign) => (
             <Link
               key={campaign.id}
               href={`/campaigns/${campaign.id}`}
-              className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/70 p-5"
+              className="flex items-center justify-between rounded-xl border border-slate-800 bg-card p-5 hover:border-slate-700"
             >
               <div>
                 <div className="font-medium">{campaign.name}</div>

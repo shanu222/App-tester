@@ -32,7 +32,7 @@ export const env = {
     `${publicAppUrl()}/api/integrations/facebook/callback`,
   facebookGraphVersion: process.env.FACEBOOK_GRAPH_VERSION || "v21.0",
   resendApiKey: process.env.RESEND_API_KEY || "",
-  emailFrom: process.env.EMAIL_FROM || "TesterBridge <noreply@localhost>",
+  emailFrom: process.env.EMAIL_FROM || "TestLoop <noreply@localhost>",
   googleCloudProject: process.env.GOOGLE_CLOUD_PROJECT || "",
   googleWorkspaceAdminEmail: process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL || "",
 };

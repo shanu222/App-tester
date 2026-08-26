@@ -37,7 +37,7 @@ export function PasteReplyForm({ campaignId }: { campaignId: string }) {
       <Button type="submit" variant="secondary">
         Extract email
       </Button>
-      {result ? <p className="text-sm text-teal-300">{result}</p> : null}
+      {result ? <p className="text-sm text-emerald-300">{result}</p> : null}
     </form>
   );
 }

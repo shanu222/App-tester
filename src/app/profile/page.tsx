@@ -19,7 +19,7 @@ export default async function ProfilePage() {
     <AppShell
       title="Developer profile"
       actions={
-        <Link href="/profile/complete" className="text-sm text-teal-300">
+        <Link href="/profile/complete" className="text-sm text-emerald-300 hover:underline">
           Edit profile
         </Link>
       }
@@ -47,37 +47,41 @@ export default async function ProfilePage() {
         </div>
       </div>
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-2xl border border-slate-800 p-4">
-          <div className="text-xs uppercase text-slate-500">Testing score</div>
-          <div className="mt-1 text-2xl">{score.score ?? "—"}{score.score ? " / 5" : ""}</div>
+        <div className="rounded-xl border border-slate-800 bg-card p-4">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Testing score</div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums">{score.score ?? "—"}{score.score ? " / 5" : ""}</div>
           <p className="mt-1 text-xs text-slate-500">{score.label}</p>
         </div>
-        <div className="rounded-2xl border border-slate-800 p-4">
-          <div className="text-xs uppercase text-slate-500">Tests completed</div>
-          <div className="mt-1 text-2xl">{score.completed}</div>
+        <div className="rounded-xl border border-slate-800 bg-card p-4">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Tests completed</div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums">{score.completed}</div>
         </div>
-        <div className="rounded-2xl border border-slate-800 p-4">
-          <div className="text-xs uppercase text-slate-500">Tests accepted</div>
-          <div className="mt-1 text-2xl">{score.accepted}</div>
+        <div className="rounded-xl border border-slate-800 bg-card p-4">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Tests participated in</div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums">{score.accepted}</div>
         </div>
-        <div className="rounded-2xl border border-slate-800 p-4">
-          <div className="text-xs uppercase text-slate-500">Tests received</div>
-          <div className="mt-1 text-2xl">{score.received}</div>
+        <div className="rounded-xl border border-slate-800 bg-card p-4">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Tests received</div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums">{score.received}</div>
         </div>
       </div>
       <p className="mt-3 text-xs text-slate-500">
         Google Play connected: {playConnected ? "yes" : "no"}. This is not a Google Play verification badge.
       </p>
       {user.bio ? <p className="mt-6 max-w-2xl text-slate-300">{user.bio}</p> : null}
-      <h2 className="mb-3 mt-10 text-sm uppercase tracking-wide text-slate-400">Apps ({apps})</h2>
-      <div className="space-y-2">
-        {appRows.map((app) => (
-          <Link key={app.id} href={`/apps/${app.id}`} className="block rounded-xl border border-slate-800 px-4 py-3 text-sm">
-            {app.name}
-            <span className="ml-2 text-slate-500">{app.packageName}</span>
-          </Link>
-        ))}
-      </div>
+      <h2 className="mb-3 mt-10 text-sm font-medium uppercase tracking-wide text-slate-500">Apps ({apps})</h2>
+      {appRows.length === 0 ? (
+        <p className="text-sm text-slate-500">No apps added yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {appRows.map((app) => (
+            <Link key={app.id} href={`/apps/${app.id}`} className="block rounded-xl border border-slate-800 px-4 py-3 text-sm hover:border-slate-700">
+              {app.name}
+              <span className="ml-2 text-slate-500">{app.packageName}</span>
+            </Link>
+          ))}
+        </div>
+      )}
     </AppShell>
   );
 }

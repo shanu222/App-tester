@@ -88,7 +88,7 @@ export default async function TesterDetailPage({
               const hit = tester.statusHistory.find((item) => item.toStatus === step);
               return (
                 <li key={step} className="flex items-center justify-between text-sm">
-                  <span className={hit ? "text-teal-200" : "text-slate-500"}>{step.replaceAll("_", " ")}</span>
+                  <span className={hit ? "text-emerald-200" : "text-slate-500"}>{step.replaceAll("_", " ")}</span>
                   <span className="text-slate-500">{hit ? formatDateTime(hit.createdAt) : "—"}</span>
                 </li>
               );

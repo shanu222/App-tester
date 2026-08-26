@@ -37,18 +37,33 @@ export default async function DeveloperPublicPage({
         ))}
       </div>
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-slate-800 p-4 text-sm">Apps: {apps}</div>
-        <div className="rounded-2xl border border-slate-800 p-4 text-sm">Score: {score.score ?? "—"}</div>
-        <div className="rounded-2xl border border-slate-800 p-4 text-sm">Completed tests: {score.completed}</div>
+        <div className="rounded-xl border border-slate-800 bg-card p-4 text-sm">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Apps</div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums">{apps}</div>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-card p-4 text-sm">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Testing score</div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums">{score.score ?? "—"}{score.score ? " / 5" : ""}</div>
+          <p className="mt-1 text-xs text-slate-500">{score.label}</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-card p-4 text-sm">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Tests completed</div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums">{score.completed}</div>
+        </div>
       </div>
       {profile.bio ? <p className="mt-6 max-w-2xl text-slate-300">{profile.bio}</p> : null}
-      <div className="mt-6 space-y-2 text-sm">
-        {appRows.map((app) => (
-          <div key={app.packageName} className="rounded-xl border border-slate-800 px-4 py-3">
-            {app.name}
-          </div>
-        ))}
-      </div>
+      <h2 className="mb-3 mt-8 text-sm font-medium uppercase tracking-wide text-slate-500">Apps</h2>
+      {appRows.length === 0 ? (
+        <p className="text-sm text-slate-500">This developer has not added any apps yet.</p>
+      ) : (
+        <div className="space-y-2 text-sm">
+          {appRows.map((app) => (
+            <div key={app.packageName} className="rounded-xl border border-slate-800 px-4 py-3">
+              {app.name}
+            </div>
+          ))}
+        </div>
+      )}
       {viewer.id !== user.id ? (
         <div className="mt-6 flex flex-wrap gap-2">
           <JsonButton url="/api/network/safety" body={{ action: "report", targetId: user.id, reason: "abuse" }} label="Report developer" variant="ghost" />

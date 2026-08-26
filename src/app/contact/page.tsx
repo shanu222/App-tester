@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { PublicChrome } from "@/components/layout/public-chrome";
-import { CONTACT_EMAIL, SITE_NAME, SITE_ORIGIN } from "@/lib/site";
+import { CONTACT_EMAIL, CONTACT_PHONE, SITE_NAME, SITE_ORIGIN } from "@/lib/site";
 import Link from "next/link";
 
 export const metadata: Metadata = {
@@ -20,20 +20,25 @@ export default function ContactPage() {
   return (
     <PublicChrome>
       <main className="mx-auto max-w-3xl px-6 py-16">
-        <p className="text-sm uppercase tracking-[0.2em] text-teal-300">{SITE_NAME}</p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight">Contact</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Contact</h1>
         <p className="mt-4 text-slate-300">
           For privacy requests, legal questions, trust and safety reports, or account deletion requests, email{" "}
-          <a className="text-teal-300" href={`mailto:${CONTACT_EMAIL}`}>
+          <a className="text-emerald-300 hover:underline" href={`mailto:${CONTACT_EMAIL}`}>
             {CONTACT_EMAIL}
           </a>
           .
         </p>
-        <p className="mt-4 text-sm leading-7 text-slate-400">
-          Signed-in developers can also use in-app Messages and report/block tools. {SITE_NAME} does not provide phone
-          support from this page. Do not send Google passwords or private service-account keys by email.
+        <p className="mt-3 text-slate-300">
+          Phone:{" "}
+          <a className="text-emerald-300 hover:underline" href={`tel:${CONTACT_PHONE}`}>
+            {CONTACT_PHONE}
+          </a>
         </p>
-        <Link href="/" className="mt-8 inline-block text-sm text-teal-300">
+        <p className="mt-6 text-sm leading-7 text-slate-400">
+          Signed-in developers can also use in-app Messages and report/block tools. Do not send Google passwords or
+          private service-account keys by email.
+        </p>
+        <Link href="/" className="mt-8 inline-block text-sm text-emerald-300">
           Back to {SITE_NAME}
         </Link>
       </main>

@@ -22,7 +22,7 @@ export default async function AppDetailPage({
               href={app.playStoreUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-lg bg-teal-500 px-3 py-2 text-sm font-medium text-slate-950"
+              className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-slate-950"
             >
               Open Google Play
             </a>

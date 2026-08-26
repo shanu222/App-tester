@@ -27,7 +27,7 @@ export default async function OnboardingPage() {
   return (
     <AppShell title="Developer onboarding">
       <p className="mb-6 max-w-2xl text-slate-400">
-        TesterBridge is a developer-to-developer testing network. Official Google OAuth and Play APIs only — never
+        TestLoop is a developer-to-developer testing network. Official Google OAuth and Play APIs only — never
         passwords, and never fake success states.
       </p>
       <div className="space-y-3">
@@ -35,13 +35,13 @@ export default async function OnboardingPage() {
           <Link
             key={step.n}
             href={step.href}
-            className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/70 px-5 py-4"
+            className="flex items-center justify-between rounded-xl border border-slate-800 bg-card px-5 py-4 hover:border-slate-700"
           >
             <div>
               <div className="text-xs text-slate-500">Step {step.n}</div>
               <div className="font-medium">{step.title}</div>
             </div>
-            <span className={step.done ? "text-teal-300" : "text-slate-500"}>
+            <span className={step.done ? "text-emerald-300" : "text-slate-500"}>
               {step.done ? "✓ Done" : "○ Continue"}
             </span>
           </Link>

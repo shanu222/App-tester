@@ -89,7 +89,7 @@ export async function addGroupMember(input: {
 
 export function manualGroupInstructions(groupEmail: string, memberEmail: string) {
   return [
-    "Manual action required — TesterBridge cannot add this member automatically.",
+    "Manual action required — TestLoop cannot add this member automatically.",
     `1. Open https://groups.google.com and sign in as the group owner.`,
     `2. Open group ${groupEmail}.`,
     `3. Members → Add members.`,

@@ -2,6 +2,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
 import { EmptyState, StatusBadge } from "@/components/ui/widgets";
+import { Input } from "@/components/ui/fields";
 import { formatDate } from "@/lib/utils";
 import Link from "next/link";
 
@@ -33,18 +34,25 @@ export default async function TestersPage({
 
   return (
     <AppShell title="Testers">
-      <form className="mb-4">
-        <input
+      <form className="mb-4" role="search">
+        <label htmlFor="tester-search" className="sr-only">
+          Search testers
+        </label>
+        <Input
+          id="tester-search"
           name="q"
           defaultValue={params.q}
           placeholder="Search name or email"
-          className="w-full max-w-md rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+          className="max-w-md"
         />
       </form>
       {testers.length === 0 ? (
-        <EmptyState title="No testers yet" body="Confirm a Gmail from a reply or add a tester manually." />
+        <EmptyState
+          title="No testers yet"
+          body="Testers appear after a developer consents to share Gmail, or after you add one from a campaign."
+        />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-800">
+        <div className="overflow-x-auto rounded-xl border border-slate-800">
           <table className="min-w-full text-sm">
             <thead className="bg-slate-950 text-left text-xs uppercase text-slate-400">
               <tr>
@@ -66,7 +74,7 @@ export default async function TestersPage({
                 return (
                   <tr key={tester.id} className="border-t border-slate-800">
                     <td className="px-3 py-3">
-                      <Link className="text-sky-300" href={`/testers/${tester.id}`}>
+                      <Link className="text-emerald-300 hover:underline" href={`/testers/${tester.id}`}>
                         {tester.name || "Unnamed"}
                       </Link>
                     </td>

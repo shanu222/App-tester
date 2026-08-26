@@ -9,6 +9,7 @@ const PUBLIC_PREFIXES = [
   "/privacy",
   "/terms",
   "/contact",
+  "/about",
   "/sitemap.xml",
   "/robots.txt",
   "/api/auth",

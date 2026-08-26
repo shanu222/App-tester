@@ -1,8 +1,8 @@
 {
-  "name": "testerbridge",
+  "name": "testloop",
   "version": "1.0.0",
   "private": true,
-  "description": "Find real testers. Exchange testing. Track every test.",
+  "description": "TestLoop — developer-to-developer app testing network",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",

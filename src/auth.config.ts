@@ -2,6 +2,7 @@ import "@/lib/apply-auth-url";
 import type { NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
+import { recordAuthError } from "@/lib/auth-error";
 import { env, googleOAuthConfigured } from "@/lib/env";
 import { firebaseAuthConfigured } from "@/lib/firebase/config";
 import { verifyFirebaseIdToken } from "@/lib/firebase/verify";
@@ -36,6 +37,12 @@ export const authConfig = {
   secret: env.authSecret,
   session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 14 },
   pages: { signIn: "/", error: "/login-error" },
+  logger: {
+    error: recordAuthError,
+    warn(code) {
+      console.warn("[testloop][auth]", code);
+    },
+  },
   providers: [
     ...(googleOAuthConfigured()
       ? [

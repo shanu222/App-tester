@@ -11,29 +11,41 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+const REASONS: Record<string, string> = {
+  CallbackRouteError: "Google signed you in, but TestLoop could not finish creating your account.",
+  InvalidCheck: "The sign-in security check expired. Start again from this same address.",
+  OAuthCallbackError: "Google rejected the sign-in request.",
+  OAuthSignInError: "The Google sign-in request could not be started.",
+  UntrustedHost: "This hostname is not trusted by the sign-in configuration.",
+  MissingSecret: "The deployment is missing AUTH_SECRET.",
+  AccessDenied: "This account is not allowed to sign in.",
+};
+
 export default async function LoginErrorPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; reason?: string }>;
 }) {
-  const { error } = await searchParams;
-  const configuration = !error || error === "Configuration";
+  const { error, reason } = await searchParams;
+  const detail = reason ? REASONS[reason] : null;
 
   return (
     <PublicChrome>
-      <main className="mx-auto max-w-lg px-6 py-16 text-center">
+      <main className="mx-auto max-w-lg px-6 py-16">
         <h1 className="text-2xl font-semibold">Google sign-in could not start</h1>
         <p className="mt-3 text-sm leading-6 text-slate-400">
-          {configuration
-            ? `${SITE_NAME} could not build a Google callback for this hostname. Open https://www.testloop.org or https://app-tester-three.vercel.app and try again.`
-            : `Google returned ${error}. Try signing in again from this same address.`}
+          {detail ||
+            `${SITE_NAME} could not complete Google sign-in on this hostname. Open https://www.testloop.org and try again.`}
         </p>
-        <div className="mt-8 space-y-4 text-left">
-          {googleOAuthConfigured() ? (
-            <div className="flex justify-center">
-              <GoogleSignInButton label="Try Google again" />
-            </div>
-          ) : null}
+        {reason ? (
+          <p className="mt-2 text-xs text-slate-500">
+            Reference: {reason}
+            {error && error !== reason ? ` (${error})` : ""}
+          </p>
+        ) : null}
+
+        <div className="mt-8 space-y-4">
+          {googleOAuthConfigured() ? <GoogleSignInButton label="Try Google again" /> : null}
           {firebaseAuthConfigured() ? <FirebaseLogin /> : null}
         </div>
       </main>

@@ -2,7 +2,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
 import { facebookConfigured } from "@/lib/integrations/facebook";
-import { googleLoginConfigured } from "@/lib/env";
+import { googleOAuthConfigured } from "@/lib/env";
 import { JsonButton } from "@/components/ui/json-button";
 import Link from "next/link";
 
@@ -17,7 +17,7 @@ export default async function OnboardingPage() {
   const steps = [
     { n: 1, title: "Create profile", done: Boolean(user.name && user.developerName), href: "/settings" },
     { n: 2, title: "Connect Facebook", done: status("FACEBOOK") === "CONNECTED", href: "/integrations" },
-    { n: 3, title: "Connect Google / Gmail", done: status("GOOGLE") === "CONNECTED" || status("GMAIL") === "CONNECTED", href: "/integrations" },
+    { n: 3, title: "Connect Gmail (optional)", done: status("GOOGLE") === "CONNECTED" || status("GMAIL") === "CONNECTED", href: "/integrations" },
     { n: 4, title: "Connect Google Play", done: status("GOOGLE_PLAY") === "CONNECTED", href: "/integrations" },
     { n: 5, title: "Add your Android app", done: apps > 0, href: "/apps" },
     { n: 6, title: "Create a campaign", done: campaigns > 0, href: "/campaigns" },
@@ -50,7 +50,7 @@ export default async function OnboardingPage() {
       </div>
       <div className="mt-6 flex flex-wrap gap-3 text-sm text-slate-400">
         <span>Facebook app configured: {facebookConfigured() ? "yes" : "no"}</span>
-        <span>Google OAuth configured: {googleLoginConfigured() ? "yes" : "no"}</span>
+        <span>Gmail OAuth configured: {googleOAuthConfigured() ? "yes" : "no"}</span>
       </div>
       <div className="mt-4">
         <JsonButton

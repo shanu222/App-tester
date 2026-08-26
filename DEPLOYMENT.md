@@ -32,21 +32,18 @@ Set these in Vercel → Settings → Environment Variables for **Production** (a
 
 ```
 DEMO_MODE=false
-APP_URL=https://YOUR-PROJECT.vercel.app
-AUTH_URL=https://YOUR-PROJECT.vercel.app
-AUTH_SECRET=<openssl rand -base64 32>
+APP_URL=https://app-tester-three.vercel.app
 ENCRYPTION_KEY=<64 hex chars: openssl rand -hex 32>
 CRON_SECRET=<openssl rand -hex 32>
-DATABASE_URL=<pooled>
-DIRECT_URL=<direct>
+DATABASE_URL=<pooled — keep Neon value>
+DIRECT_URL=<direct — keep Neon value>
 ```
 
-Optional OAuth:
+Optional OAuth (not a login):
 
 ```
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=https://YOUR-PROJECT.vercel.app/api/auth/callback/google
 FACEBOOK_CLIENT_ID=
 FACEBOOK_CLIENT_SECRET=
 FACEBOOK_REDIRECT_URI=https://YOUR-PROJECT.vercel.app/api/integrations/facebook/callback
@@ -64,7 +61,6 @@ Push to `main`. The first build applies `prisma/migrations`. After deploy, confi
 
 Add the production origin in Google Cloud and Meta:
 
-- `https://YOUR-PROJECT.vercel.app/api/auth/callback/google`
 - `https://YOUR-PROJECT.vercel.app/api/integrations/gmail/callback`
 - `https://YOUR-PROJECT.vercel.app/api/integrations/facebook/callback`
 

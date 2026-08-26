@@ -3,7 +3,7 @@ import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
 import { facebookConfigured } from "@/lib/integrations/facebook";
-import { googleLoginConfigured } from "@/lib/env";
+import { googleOAuthConfigured } from "@/lib/env";
 import { timeAgo } from "@/lib/utils";
 import { PlayConnectForm } from "@/components/integrations/play-connect-form";
 import { WorkspaceForm } from "@/components/integrations/workspace-form";
@@ -35,14 +35,14 @@ export default async function IntegrationsPage() {
       provider: "GOOGLE",
       title: "Google",
       item: byProvider("GOOGLE") || byProvider("GMAIL"),
-      connectHref: googleLoginConfigured() ? "/api/gmail/connect" : undefined,
-      note: "Google login and Gmail send use official OAuth. No Google password is stored.",
+      connectHref: googleOAuthConfigured() ? "/api/gmail/connect" : undefined,
+      note: "Optional Gmail send via official OAuth. No Google password is stored. There is no Google login.",
     },
     {
       provider: "GMAIL",
       title: "Gmail",
       item: byProvider("GMAIL"),
-      connectHref: googleLoginConfigured() ? "/api/gmail/connect" : undefined,
+      connectHref: googleOAuthConfigured() ? "/api/gmail/connect" : undefined,
       note: "Gmail API send requires the user to enable automated email in Settings.",
     },
     {

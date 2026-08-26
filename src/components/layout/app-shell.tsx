@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { signOut } from "@/auth";
 import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
 import { isDemoMode } from "@/lib/env";
@@ -67,15 +66,7 @@ export async function AppShell({
             <Link href="/activity" className="text-sm text-slate-300">
               Alerts{unread ? ` (${unread})` : ""}
             </Link>
-            <span className="text-sm text-slate-400">{user.email}</span>
-            <form
-              action={async () => {
-                "use server";
-                await signOut({ redirectTo: "/login" });
-              }}
-            >
-              <button className="text-sm text-slate-400 hover:text-white">Logout</button>
-            </form>
+            <span className="text-sm text-slate-400">{user.name || "Owner"}</span>
           </div>
         </header>
         <main className="px-4 py-6 sm:px-8">{children}</main>

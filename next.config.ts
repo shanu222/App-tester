@@ -4,6 +4,15 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   serverExternalPackages: ["googleapis", "google-auth-library"],
+  async redirects() {
+    return [
+      { source: "/login", destination: "/dashboard", permanent: false },
+      { source: "/register", destination: "/dashboard", permanent: false },
+      { source: "/forgot-password", destination: "/dashboard", permanent: false },
+      { source: "/reset-password", destination: "/dashboard", permanent: false },
+      { source: "/verify-email", destination: "/dashboard", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

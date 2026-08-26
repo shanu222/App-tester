@@ -28,7 +28,6 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 Set:
 
-- `AUTH_SECRET` — 32+ characters
 - `ENCRYPTION_KEY` — 64 hex characters
 - `CRON_SECRET` — random string
 - `DATABASE_URL` — already set for Compose
@@ -47,22 +46,21 @@ npx prisma db seed
 npm run dev
 ```
 
-Create an account at `/register`, or use the seed user `demo@testerbridge.dev` / `Demo12345!`.
+Open http://localhost:3000. There is no login — the dashboard opens immediately.
 
-## First real campaign (after OAuth)
+## First real campaign (after optional OAuth)
 
-1. Sign in.
-2. `/onboarding` — complete profile.
-3. `/integrations` — Facebook Page OAuth, Gmail OAuth, Play service account (verified before Connected).
-4. `/apps` — Sync My Apps or add `com.example.net360` manually.
-5. Add Google Group `net360-testers@googlegroups.com`.
-6. `/campaigns` — create **NET360 Closed Testing**, target 12, closed track, source, opt-in URL.
-7. `/discovery` — last 24 hours. For a Facebook Group, **import the post text** (Groups API is gone).
-8. `/opportunities` — Generate reply → edit if needed → **Approve & Post** (or copy if Group).
-9. When they reply, paste the message. Confirm Gmail.
-10. Add to Google Group (API or manual confirm).
-11. Generate/send invitation with the **configured** testing link.
-12. Record opt-in when they actually opt in in Play. Do not mark opted-in just because they were added.
+1. `/onboarding` — complete profile.
+2. `/integrations` — Facebook Page OAuth, Gmail OAuth, Play service account (verified before Connected).
+3. `/apps` — Sync My Apps or add `com.example.net360` manually.
+4. Add Google Group `net360-testers@googlegroups.com`.
+5. `/campaigns` — create **NET360 Closed Testing**, target 12, closed track, source, opt-in URL.
+6. `/discovery` — last 24 hours. For a Facebook Group, **import the post text** (Groups API is gone).
+7. `/opportunities` — Generate reply → edit if needed → **Approve & Post** (or copy if Group).
+8. When they reply, paste the message. Confirm Gmail.
+9. Add to Google Group (API or manual confirm).
+10. Generate/send invitation with the **configured** testing link.
+11. Record opt-in when they actually opt in in Play. Do not mark opted-in just because they were added.
 
 ## Production
 

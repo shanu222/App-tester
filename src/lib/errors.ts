@@ -12,7 +12,7 @@ export class AppError extends Error {
 }
 
 export class UnauthorizedError extends AppError {
-  constructor(message = "Sign in required.") {
+  constructor(message = "Workspace is not available.") {
     super(message, 401, "UNAUTHORIZED");
   }
 }

@@ -1,80 +1,53 @@
-import NextAuth from "next-auth";
-import Credentials from "next-auth/providers/credentials";
-import Google from "next-auth/providers/google";
-import type { Provider } from "next-auth/providers";
-import { compare } from "bcryptjs";
 import { prisma } from "@/lib/db";
-import { env, googleLoginConfigured } from "@/lib/env";
-import { UnauthorizedError } from "@/lib/errors";
+import { env } from "@/lib/env";
+import { DEFAULT_TEMPLATES } from "@/lib/templates";
 
-const providers: Provider[] = [
-  Credentials({
-    name: "Email",
-    credentials: {
-      email: { label: "Email", type: "email" },
-      password: { label: "Password", type: "password" },
-    },
-    async authorize(credentials) {
-      const email = String(credentials?.email || "")
-        .trim()
-        .toLowerCase();
-      const password = String(credentials?.password || "");
-      if (!email || !password) return null;
-      const user = await prisma.user.findUnique({ where: { email } });
-      if (!user?.passwordHash || user.deletedAt) return null;
-      const valid = await compare(password, user.passwordHash);
-      if (!valid) return null;
-      return {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        image: user.image,
-      };
-    },
-  }),
-];
-
-if (googleLoginConfigured()) {
-  providers.push(
-    Google({
-      clientId: env.googleClientId,
-      clientSecret: env.googleClientSecret,
-      allowDangerousEmailAccountLinking: true,
-    }),
-  );
-}
-
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true,
-  secret: env.authSecret,
-  session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 14 },
-  pages: {
-    signIn: "/login",
-  },
-  providers,
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user?.id) token.sub = user.id;
-      if (user?.email) token.email = user.email;
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user && token.sub) {
-        session.user.id = token.sub;
-        session.user.email = token.email as string;
-      }
-      return session;
-    },
-  },
-});
+const DEFAULT_EMAIL = (process.env.DEFAULT_USER_EMAIL || "owner@local").trim().toLowerCase();
 
 export async function requireUser() {
-  const session = await auth();
-  if (!session?.user?.id) throw new UnauthorizedError();
-  const user = await prisma.user.findFirst({
-    where: { id: session.user.id, deletedAt: null },
+  const user = await prisma.user.upsert({
+    where: { email: DEFAULT_EMAIL },
+    update: {
+      deletedAt: null,
+    },
+    create: {
+      email: DEFAULT_EMAIL,
+      name: "Owner",
+      developerName: "My Studio",
+      emailVerified: new Date(),
+      demoMode: env.demoMode,
+      settings: { create: {} },
+      templates: {
+        create: Object.entries(DEFAULT_TEMPLATES).map(([key, value]) => ({
+          key,
+          name: value.name,
+          subject: value.subject,
+          body: value.body,
+        })),
+      },
+    },
   });
-  if (!user) throw new UnauthorizedError();
+
+  const settings = await prisma.userSettings.findUnique({ where: { userId: user.id } });
+  if (!settings) {
+    await prisma.userSettings.create({ data: { userId: user.id } });
+  }
+
+  const templateCount = await prisma.messageTemplate.count({
+    where: { userId: user.id, campaignId: null },
+  });
+  if (templateCount === 0) {
+    await prisma.messageTemplate.createMany({
+      data: Object.entries(DEFAULT_TEMPLATES).map(([key, value]) => ({
+        userId: user.id,
+        key,
+        name: value.name,
+        subject: value.subject,
+        body: value.body,
+      })),
+    });
+  }
+
   return user;
 }
 

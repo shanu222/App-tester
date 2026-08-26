@@ -22,16 +22,14 @@ TesterBridge is a production web app for Android developers who need genuine Goo
 ```bash
 docker compose up -d
 copy .env.example .env.local
-# set AUTH_SECRET, ENCRYPTION_KEY, CRON_SECRET, DATABASE_URL
+# set ENCRYPTION_KEY, CRON_SECRET, DATABASE_URL
 npm install
 npx prisma migrate deploy
 npx prisma db seed
 npm run dev
 ```
 
-Open http://localhost:3000
-
-Demo login after seed: `demo@testerbridge.dev` / `Demo12345!`
+Open http://localhost:3000 — there is no login. The app opens on the dashboard.
 
 `DEMO_MODE=true` uses mock Facebook posts and will not call production Google/Facebook APIs. Production **must** set `DEMO_MODE=false` and real credentials.
 
@@ -40,7 +38,7 @@ Demo login after seed: `demo@testerbridge.dev` / `Demo12345!`
 1. Push this repo to GitHub (`https://github.com/shanu222/App-tester.git`).
 2. Import the repo at [vercel.com/new](https://vercel.com/new).
 3. Create a Vercel Postgres (or Neon) database.
-4. Set `DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET`, `ENCRYPTION_KEY`, `CRON_SECRET`, `APP_URL`, `AUTH_URL`, and `DEMO_MODE=false`.
+4. Set `DATABASE_URL`, `DIRECT_URL`, `ENCRYPTION_KEY`, `CRON_SECRET`, `APP_URL`, and `DEMO_MODE=false`. There is no login.
 5. Deploy. Vercel runs `prisma migrate deploy` then `next build`.
 
 Full steps: [DEPLOYMENT.md](DEPLOYMENT.md)

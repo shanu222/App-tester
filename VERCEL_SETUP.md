@@ -1,116 +1,72 @@
-# Vercel + Neon setup (do these in the dashboards)
+# Vercel + Neon setup
 
-The GitHub repo is already wired. After this push, complete these external steps once.
+The GitHub repo is already wired. There is **no login** and **no Google login**. Opening the site uses the app immediately.
 
-## 1. Neon database (already started)
+Live URL: `https://app-tester-three.vercel.app`
 
-You attached Neon. Confirm it is connected to the `app-tester` Vercel project.
+## 1. Keep Neon database vars (already created)
 
-1. Vercel → your project → **Storage**
-2. Neon should be listed and **Connected**
-3. Open **Settings → Environment Variables**
-4. Confirm these exist (Neon usually creates them automatically):
-   - `DATABASE_URL` or `POSTGRES_URL` or `POSTGRES_PRISMA_URL`
-   - `POSTGRES_URL_NON_POOLING` or `DIRECT_URL` (direct / unpooled)
-5. Each URL must be enabled for **Production**, **Preview**, and **Build**
-   - If Build is off, migrations fail even though the app would work at runtime
+Do **not** delete these if Vercel/Neon already added them:
 
-No need to invent extra names. TesterBridge maps Neon’s names automatically.
+- `DATABASE_URL`
+- `POSTGRES_URL`
+- `POSTGRES_PRISMA_URL`
+- `POSTGRES_URL_NON_POOLING`
+- `DIRECT_URL`
 
-## 2. Required Vercel environment variables
+Each must be enabled for **Production**, **Preview**, and **Build**.
 
-Vercel → **Settings → Environment Variables**. Set all of these for Production + Preview:
+You can **delete** these if they exist (login is gone):
 
-| Name | How to create | Example |
-|---|---|---|
-| `DEMO_MODE` | type `false` | `false` |
-| `APP_URL` | your Vercel domain | `https://app-tester.vercel.app` |
-| `AUTH_URL` | same as APP_URL | `https://app-tester.vercel.app` |
-| `AUTH_SECRET` | random 32+ chars | generate below |
-| `ENCRYPTION_KEY` | 64 hex chars | generate below |
-| `CRON_SECRET` | random hex | generate below |
-| `EMAIL_FROM` | optional | `TesterBridge <noreply@yourdomain>` |
+- `AUTH_SECRET`
+- `AUTH_URL`
+- `GOOGLE_REDIRECT_URI`
 
-Generate secrets in a terminal:
+## 2. Required env vars — copy into Vercel
 
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+Vercel → **Settings → Environment Variables** → Production + Preview + Development.
+
+```
+APP_URL=https://app-tester-three.vercel.app
+DEMO_MODE=false
+ENCRYPTION_KEY=<paste the 64-char hex from the chat>
+CRON_SECRET=<paste the hex from the chat>
 ```
 
-Use the **base64** value for `AUTH_SECRET`. Use a **hex** value for `ENCRYPTION_KEY` and another hex value for `CRON_SECRET`.
-
-Do **not** set Facebook or Google passwords.
+If you already set `ENCRYPTION_KEY` earlier, keep that old value. Changing it breaks stored OAuth tokens.
 
 ## 3. Redeploy
 
-After env vars are saved:
+1. Vercel → **Deployments** → wait for the latest `main` push, or **Redeploy**
+2. Open `https://app-tester-three.vercel.app/api/health` — should show `"ok": true`
+3. Open `https://app-tester-three.vercel.app/` — you should land on the dashboard with no sign-in
 
-1. Vercel → **Deployments**
-2. **Redeploy** the latest `main` commit (or wait for the auto-deploy from this push)
+## 4. Optional: Gmail send (not login)
 
-The build now strips the bad character from the SQL migration and retries the failed Neon migration automatically.
-
-When it works, open:
-
-`https://YOUR-APP.vercel.app/api/health`
-
-You should see `"ok": true`.
-
-## 4. Google login / Gmail (optional, for real sending)
-
-1. [Google Cloud Console](https://console.cloud.google.com/) → create or pick a project
+1. [Google Cloud Console](https://console.cloud.google.com/) → project
 2. Enable **Gmail API**
-3. APIs & Services → **Credentials** → Create **OAuth client ID** → Web application
-4. Authorized redirect URIs:
-   - `https://YOUR-APP.vercel.app/api/auth/callback/google`
-   - `https://YOUR-APP.vercel.app/api/integrations/gmail/callback`
-5. Authorized JavaScript origins: `https://YOUR-APP.vercel.app`
-6. Put into Vercel:
+3. Credentials → OAuth client ID → Web application
+4. Redirect: `https://app-tester-three.vercel.app/api/integrations/gmail/callback`
+5. Origin: `https://app-tester-three.vercel.app`
+6. Vercel:
    - `GOOGLE_CLIENT_ID`
    - `GOOGLE_CLIENT_SECRET`
-   - `GOOGLE_REDIRECT_URI=https://YOUR-APP.vercel.app/api/auth/callback/google`
-7. OAuth consent screen: add your Gmail as a test user while the app is in Testing
 
-## 5. Facebook / Meta (optional, for Pages you manage)
+## 5. Optional: Facebook Pages
 
-Facebook Groups cannot be automated (Meta removed that API). Pages still can.
-
-1. [Meta for Developers](https://developers.facebook.com/) → Create app
-2. Add **Facebook Login**
-3. Valid OAuth Redirect URI:
-   - `https://YOUR-APP.vercel.app/api/integrations/facebook/callback`
-4. Privacy Policy URL: `https://YOUR-APP.vercel.app/privacy`
-5. Put into Vercel:
+1. [Meta for Developers](https://developers.facebook.com/) → Create app → Facebook Login
+2. Redirect: `https://app-tester-three.vercel.app/api/integrations/facebook/callback`
+3. Privacy: `https://app-tester-three.vercel.app/privacy`
+4. Vercel:
    - `FACEBOOK_CLIENT_ID`
    - `FACEBOOK_CLIENT_SECRET`
-   - `FACEBOOK_REDIRECT_URI=https://YOUR-APP.vercel.app/api/integrations/facebook/callback`
-6. Permissions to request later: `pages_show_list`, `pages_read_engagement`, `pages_manage_engagement`
+   - `FACEBOOK_REDIRECT_URI=https://app-tester-three.vercel.app/api/integrations/facebook/callback`
 
-## 6. Google Play (optional, inside the app after login)
+## 6. Optional: Google Play (inside the app)
 
-1. Google Cloud → enable **Google Play Android Developer API** and **Play Developer Reporting API**
-2. Create a **service account** → download JSON
-3. [Play Console](https://play.google.com/console) → Users and permissions → invite that service account
-4. In TesterBridge → **Integrations** → paste the JSON → Test & connect  
-   Do not put the JSON in Vercel env unless you want a platform-wide default.
+1. Enable Play Android Publisher API + Play Developer Reporting API
+2. Create a service account JSON
+3. Invite it in Play Console
+4. TesterBridge → **Integrations** → paste JSON → Test & connect
 
-## 7. Google Workspace Groups (optional)
-
-Only if you have Workspace and want automatic tester group adds.
-
-1. Enable **Admin SDK**
-2. Domain-wide delegation for `https://www.googleapis.com/auth/admin.directory.group.member`
-3. In TesterBridge Integrations, paste the Workspace service account JSON and admin email
-
-Without Workspace: add testers in [Google Groups](https://groups.google.com) by hand, then click **Confirm membership** in TesterBridge.
-
-## 8. First login after a green deploy
-
-1. Open `https://YOUR-APP.vercel.app/register`
-2. Create an account
-3. Follow **Onboarding**
-4. Add app + campaign (package name like `com.example.net360`)
-5. Use **Discovery → Import post** for Facebook Groups (API posting to groups is not available)
-
-OAuth apps can stay disconnected. The rest of the product still works with manual import, paste-reply, and manual tester add.
+OAuth can stay disconnected. Manual import, paste-reply, and manual testers still work.

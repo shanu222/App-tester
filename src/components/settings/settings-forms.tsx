@@ -159,7 +159,6 @@ export function SettingsForms({
         <h2 className="font-medium">Privacy & data</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           <JsonButton url="/api/export" label="Export tester data" />
-          <JsonButton url="/api/account" method="DELETE" label="Delete account" variant="danger" />
         </div>
       </Card>
     </div>

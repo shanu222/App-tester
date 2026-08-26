@@ -1,15 +1,10 @@
 # API
 
-All private routes require an Auth.js session cookie. Data is always filtered by the signed-in `userId`.
+There is no login. Routes use a single workspace user. Cron still requires `CRON_SECRET`.
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/api/health` | Liveness |
-| GET | `/api/auth/*` | Auth.js |
-| POST | `/api/register` | Sign up |
-| POST | `/api/forgot-password` | Reset token |
-| POST | `/api/reset-password` | Set password |
-| GET | `/api/verify-email` | Confirm email |
 | GET/POST/PATCH | `/api/campaigns` | Campaigns |
 | GET | `/api/campaigns/:id` | Campaign + stats |
 | GET/POST | `/api/apps` | Apps |
@@ -39,6 +34,5 @@ All private routes require an Auth.js session cookie. Data is always filtered by
 | GET/PATCH | `/api/settings` | Profile, limits, notifications |
 | GET | `/api/cron/tick` | Scheduled worker |
 | POST | `/api/export` | Data export |
-| DELETE | `/api/account` | Delete account |
 
-Unauthorized requests return `401`. Validation errors return `400`. Rate limits return `429` with `Daily outreach limit reached.` when applicable.
+Validation errors return `400`. Rate limits return `429` with `Daily outreach limit reached.` when applicable.

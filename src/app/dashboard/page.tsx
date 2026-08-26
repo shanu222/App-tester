@@ -29,9 +29,9 @@ export default async function DashboardPage() {
           <h2 className="text-lg font-semibold">Welcome to TesterBridge</h2>
           <p className="text-sm text-slate-300">Build your tester network faster.</p>
           <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-slate-400">
-            <li>Connect Facebook</li>
-            <li>Connect Google</li>
-            <li>Connect Google Play</li>
+            <li>Connect Facebook (optional)</li>
+            <li>Connect Gmail (optional)</li>
+            <li>Connect Google Play (optional)</li>
             <li>Add your Android app</li>
             <li>Create your first testing campaign</li>
             <li>Find tester opportunities</li>

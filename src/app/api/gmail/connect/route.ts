@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/auth";
 import { gmailAuthUrl } from "@/lib/integrations/gmail";
-import { googleLoginConfigured } from "@/lib/env";
+import { googleOAuthConfigured } from "@/lib/env";
 import { encryptJson } from "@/lib/encryption";
 import { AppError } from "@/lib/errors";
 import { handleRouteError } from "@/lib/http";
@@ -10,8 +10,8 @@ import { handleRouteError } from "@/lib/http";
 export async function GET() {
   try {
     const user = await requireUser();
-    if (!googleLoginConfigured()) {
-      throw new AppError("Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.");
+    if (!googleOAuthConfigured()) {
+      throw new AppError("Gmail OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.");
     }
     const state = encryptJson({ userId: user.id, exp: Date.now() + 10 * 60 * 1000 });
     const jar = await cookies();

@@ -25,14 +25,13 @@ Meta deprecated the **Groups API** in Graph API v19 and removed it for all versi
 
 **Fallback:** add a manual source named e.g. “Android App Testing”, paste post content you are allowed to see, generate a reply, copy it into Facebook yourself, paste replies back.
 
-## Google login + Gmail
+## Gmail send (optional, not a login)
 
-Create a Google Cloud OAuth client (Web application).
+There is no Google login. Create a Google Cloud OAuth client only if you want TesterBridge to send Gmail.
 
-Authorized redirect URIs:
+Authorized redirect URI:
 
-- `{APP_URL}/api/auth/callback/google` (sign-in)
-- `{APP_URL}/api/integrations/gmail/callback` (Gmail send)
+- `{APP_URL}/api/integrations/gmail/callback`
 
 Enable **Gmail API**. Scope: `gmail.send`, `userinfo.email`.
 

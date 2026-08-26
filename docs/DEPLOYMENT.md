@@ -7,7 +7,7 @@ TesterBridge is a Next.js App Router app. Vercel runs `vercel-build`, which gene
 1. Open [vercel.com/new](https://vercel.com/new)
 2. Import `shanu222/App-tester`
 3. Framework Preset: **Next.js** (auto-detected)
-4. Node.js: **20.x**
+4. Node.js: **24.x**
 
 Do not override the build command. Vercel will run:
 
@@ -26,7 +26,7 @@ Set both:
 | `DATABASE_URL` | Pooled connection string (add `?pgbouncer=true` if the host is a pooler) |
 | `DIRECT_URL` | Direct / unpooled connection string (required for `prisma migrate deploy`) |
 
-If your host has only one URL, set **both** variables to the same value.
+If `DIRECT_URL` is missing or empty, the Vercel build copies `DATABASE_URL` into it so Prisma can migrate. For Neon/Supabase poolers, still set a real unpooled `DIRECT_URL` when you can.
 
 ## 3. Production environment variables
 

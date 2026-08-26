@@ -1,13 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { applyDatabaseEnvAliases } from "./load-db-env.mjs";
 
-if (!process.env.DIRECT_URL?.trim()) {
-  process.env.DIRECT_URL = process.env.DATABASE_URL || "";
-}
-
-if (!process.env.DATABASE_URL?.trim()) {
-  console.error("DATABASE_URL is required for Vercel builds (Prisma migrate deploy).");
-  process.exit(1);
-}
+const { databaseUrl } = applyDatabaseEnvAliases();
 
 function run(command, args) {
   const result = spawnSync(command, args, {
@@ -21,5 +15,13 @@ function run(command, args) {
 }
 
 run("npx", ["prisma", "generate"]);
-run("npx", ["prisma", "migrate", "deploy"]);
+
+if (databaseUrl) {
+  run("npx", ["prisma", "migrate", "deploy"]);
+} else {
+  console.warn(
+    "No DATABASE_URL / POSTGRES_URL found at build time. Skipping prisma migrate deploy. Set a Postgres URL for Production + Build, or connect Vercel Postgres / Neon.",
+  );
+}
+
 run("npx", ["next", "build"]);

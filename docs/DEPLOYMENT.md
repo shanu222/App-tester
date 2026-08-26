@@ -19,14 +19,12 @@ prisma generate && prisma migrate deploy && next build
 
 In the Vercel project: **Storage → Create Database → Postgres** (or attach [Neon](https://neon.tech) / Supabase).
 
-Set both:
+TesterBridge accepts any of these names (no extra rename required):
 
-| Variable | Value |
-|---|---|
-| `DATABASE_URL` | Pooled connection string (add `?pgbouncer=true` if the host is a pooler) |
-| `DIRECT_URL` | Direct / unpooled connection string (required for `prisma migrate deploy`) |
+- `DATABASE_URL` / `POSTGRES_PRISMA_URL` / `POSTGRES_URL`
+- Unpooled: `DIRECT_URL` / `POSTGRES_URL_NON_POOLING` / `DATABASE_URL_UNPOOLED`
 
-If `DIRECT_URL` is missing or empty, the Vercel build copies `DATABASE_URL` into it so Prisma can migrate. For Neon/Supabase poolers, still set a real unpooled `DIRECT_URL` when you can.
+Mark the variable **Available for Production, Preview, and Build**. Runtime-only vars are invisible to `prisma migrate deploy`.
 
 ## 3. Production environment variables
 

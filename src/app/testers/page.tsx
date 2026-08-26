@@ -56,6 +56,8 @@ export default async function TestersPage({
                 <th className="px-3 py-3">Status</th>
                 <th className="px-3 py-3">Contacted</th>
                 <th className="px-3 py-3">Opt-in</th>
+                <th className="px-3 py-3">Added</th>
+                <th className="px-3 py-3">Testing</th>
               </tr>
             </thead>
             <tbody>
@@ -75,6 +77,12 @@ export default async function TestersPage({
                     <td className="px-3 py-3">{row ? <StatusBadge status={row.status} /> : "—"}</td>
                     <td className="px-3 py-3">{formatDate(row?.dateContacted)}</td>
                     <td className="px-3 py-3">{row?.optedIn ? "Yes" : "Pending"}</td>
+                    <td className="px-3 py-3">{formatDate(row?.dateAdded || tester.createdAt)}</td>
+                    <td className="px-3 py-3">
+                      {row && ["TESTING", "FEEDBACK_REQUESTED", "FEEDBACK_RECEIVED", "COMPLETED"].includes(row.status)
+                        ? "Activity detected"
+                        : "—"}
+                    </td>
                   </tr>
                 );
               })}

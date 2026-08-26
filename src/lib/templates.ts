@@ -39,3 +39,30 @@ export function renderTemplate(
 export function generateReply(tone: string = "professional") {
   return TONE_PRESETS[tone] || TONE_PRESETS.professional;
 }
+
+export function generateRecruitmentPost(input: {
+  appName: string;
+  playStoreUrl?: string | null;
+}) {
+  const playLine = input.playStoreUrl
+    ? `Google Play:\n${input.playStoreUrl}`
+    : "Google Play:\n[not configured]";
+  return `🚀 ${input.appName} — Android Testing
+
+I'm currently looking for Android testers for ${input.appName} through Google Play closed testing.
+
+If you'd like to participate, please comment with the Gmail address you use for Google Play testing.
+
+I'm also happy to test your Android application in return.
+
+Once your tester access is confirmed, I'll send you the Google Play testing link.
+
+App:
+${input.appName}
+
+${playLine}`;
+}
+
+export function gmailRequestReply(appName: string) {
+  return `Thanks for offering to test ${appName}! Please reply with the Gmail address you use for Google Play testing so I can add you.`;
+}

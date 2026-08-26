@@ -50,6 +50,15 @@ enum TestingType {
   OPEN
 }
 
+enum GooglePlayStatus {
+  PRODUCTION
+  CLOSED_TESTING
+  INTERNAL_TESTING
+  OPEN_TESTING
+  PRODUCTION_REVIEW
+  NOT_CONFIGURED
+}
+
 enum TesterStatus {
   DISCOVERED
   CONTACTED
@@ -377,22 +386,25 @@ model CommentDraft {
 }
 
 model App {
-  id                String       @id @default(cuid())
+  id                String           @id @default(cuid())
   userId            String
   name              String
   packageName       String
-  platform          String       @default("Android")
-  testingType       TestingType  @default(CLOSED)
+  platform          String           @default("Android")
+  testingType       TestingType      @default(CLOSED)
+  googlePlayStatus  GooglePlayStatus @default(NOT_CONFIGURED)
   playStoreUrl      String?
   webOptInUrl       String?
   androidOptInUrl   String?
   iconUrl           String?
-  syncedFromPlay    Boolean      @default(false)
+  testerTarget      Int              @default(12)
+  playConflictNote  String?
+  syncedFromPlay    Boolean          @default(false)
   lastSyncedAt      DateTime?
-  isDemo            Boolean      @default(false)
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isDemo            Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   tracks            TestingTrack[]
   campaigns         Campaign[]
   feedback          Feedback[]
@@ -401,6 +413,7 @@ model App {
   @@unique([userId, packageName])
   @@index([userId])
   @@index([packageName])
+  @@index([googlePlayStatus])
 }
 
 model TestingTrack {

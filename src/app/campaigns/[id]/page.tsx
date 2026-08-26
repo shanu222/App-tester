@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/ui/widgets";
 import Link from "next/link";
 import { PasteReplyForm } from "@/components/messages/paste-reply-form";
 import { ManualTesterForm } from "@/components/testers/manual-tester-form";
+import { RecruitmentPostEditor } from "@/components/campaigns/recruitment-post-editor";
 
 export default async function CampaignDetailPage({
   params,
@@ -41,8 +42,13 @@ export default async function CampaignDetailPage({
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <Badge tone={campaign.status === "ACTIVE" ? "good" : "neutral"}>{campaign.status}</Badge>
         <span className="text-sm text-slate-400">
-          {campaign.app.name} · {campaign.testingType} · Target {campaign.targetTesters}
+          {campaign.app.name} · {campaign.app.packageName} · {campaign.testingType} · Target {campaign.targetTesters}
         </span>
+        {campaign.app.playStoreUrl ? (
+          <a className="text-sm text-teal-300" href={campaign.app.playStoreUrl} target="_blank" rel="noreferrer">
+            Open Google Play
+          </a>
+        ) : null}
         <span className="text-sm text-slate-300">
           Progress {stats.optedIn} / {campaign.targetTesters} ({percent(stats.optedIn, campaign.targetTesters)}%)
         </span>
@@ -70,7 +76,10 @@ export default async function CampaignDetailPage({
         <div className="rounded-2xl border border-slate-800 p-5">
           <h2 className="font-medium">Testing links</h2>
           <p className="mt-2 text-sm text-slate-400">
-            {campaign.webOptInUrl || "No testing link configured — do not invent one."}
+            Store URL: {campaign.playStoreUrl || campaign.app.playStoreUrl || "Not stored"}
+          </p>
+          <p className="mt-2 text-sm text-slate-400">
+            Testing / opt-in: {campaign.webOptInUrl || "No testing link configured — do not invent one."}
           </p>
           {campaign.webOptInUrl ? (
             <div className="mt-3 flex gap-3 text-sm">
@@ -90,6 +99,13 @@ export default async function CampaignDetailPage({
             <PasteReplyForm campaignId={campaign.id} />
           </div>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <RecruitmentPostEditor
+          appName={campaign.app.name}
+          playStoreUrl={campaign.playStoreUrl || campaign.app.playStoreUrl}
+        />
       </div>
 
       <h2 className="mt-10 mb-3 font-medium">Testers</h2>

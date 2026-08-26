@@ -6,20 +6,38 @@ import { EmptyState } from "@/components/ui/widgets";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { CreateCampaignForm } from "@/components/campaigns/create-campaign-form";
+import { ensureCatalogApps } from "@/lib/services/apps";
 
-export default async function CampaignsPage() {
+export default async function CampaignsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ appId?: string }>;
+}) {
   const user = await requireUser();
+  const params = await searchParams;
+  await ensureCatalogApps(user.id);
   const campaigns = await listCampaigns(user.id);
-  const apps = await prisma.app.findMany({ where: { userId: user.id }, include: { tracks: true } });
+  const apps = await prisma.app.findMany({
+    where: { userId: user.id },
+    include: { tracks: true },
+    orderBy: { name: "asc" },
+  });
   const sources = await prisma.facebookSource.findMany({ where: { userId: user.id } });
   const groups = await prisma.googleGroup.findMany({ where: { userId: user.id } });
 
   return (
     <AppShell title="Campaigns">
       <CreateCampaignForm
+        initialAppId={params.appId}
         apps={apps.map((app) => ({
           id: app.id,
           name: app.name,
+          packageName: app.packageName,
+          playStoreUrl: app.playStoreUrl,
+          webOptInUrl: app.webOptInUrl,
+          iconUrl: app.iconUrl,
+          testingType: app.testingType,
+          testerTarget: app.testerTarget,
           tracks: app.tracks.map((track) => ({ id: track.id, name: track.name })),
         }))}
         sources={sources.map((item) => ({ id: item.id, name: item.name }))}

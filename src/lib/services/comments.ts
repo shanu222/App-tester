@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { AppError, NotFoundError } from "@/lib/errors";
-import { generateReply } from "@/lib/templates";
+import { generateReply, generateRecruitmentPost } from "@/lib/templates";
 import { logActivity } from "@/lib/audit";
 import { assertOutreachAllowed, recordOutreach } from "@/lib/rate-limit";
 import { decryptSecret } from "@/lib/encryption";
@@ -16,7 +16,7 @@ export async function generateOpportunityReply(input: {
 }) {
   const opportunity = await prisma.opportunity.findFirst({
     where: { id: input.opportunityId, userId: input.userId },
-    include: { campaign: true },
+    include: { campaign: { include: { app: true } } },
   });
   if (!opportunity) throw new NotFoundError("Opportunity not found.");
   if (opportunity.personExternalId && (await isBlocked(input.userId, null, opportunity.personExternalId))) {
@@ -32,7 +32,20 @@ export async function generateOpportunityReply(input: {
   if (existingPosted) {
     throw new AppError("A comment was already recorded for this post.");
   }
-  const body = generateReply(input.tone);
+  const campaign =
+    opportunity.campaign ||
+    (input.campaignId
+      ? await prisma.campaign.findFirst({
+          where: { id: input.campaignId, userId: input.userId },
+          include: { app: true },
+        })
+      : null);
+  const body = campaign?.app
+    ? generateRecruitmentPost({
+        appName: campaign.app.name,
+        playStoreUrl: campaign.playStoreUrl || campaign.app.playStoreUrl,
+      })
+    : generateReply(input.tone);
   const draft = await prisma.commentDraft.create({
     data: {
       userId: input.userId,

@@ -19,9 +19,13 @@ export function PasteReplyForm({ campaignId }: { campaignId: string }) {
       }),
     });
     const data = await response.json();
+    if (data.needsGmail) {
+      setResult(`No Gmail found. Suggested reply:\n\n${data.suggestedReply}`);
+      return;
+    }
     setResult(
       data.preferred
-        ? `Detected: ${data.preferred.normalized} · ${data.preferred.label}`
+        ? `Detected: ${data.preferred.normalized} · ${data.preferred.label} · added to ${data.message?.campaignId ? "campaign" : "workspace"}`
         : data.error || "No email detected.",
     );
   }

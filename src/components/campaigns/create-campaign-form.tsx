@@ -1,49 +1,71 @@
 "use client";
 
-import { FormEvent } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/fields";
+
+type AppOption = {
+  id: string;
+  name: string;
+  packageName: string;
+  playStoreUrl: string | null;
+  webOptInUrl: string | null;
+  iconUrl: string | null;
+  testingType: string;
+  testerTarget: number;
+  tracks: Array<{ id: string; name: string }>;
+};
 
 export function CreateCampaignForm({
   apps,
   sources,
   groups,
+  initialAppId,
 }: {
-  apps: Array<{ id: string; name: string; tracks: Array<{ id: string; name: string }> }>;
+  apps: AppOption[];
   sources: Array<{ id: string; name: string }>;
   groups: Array<{ id: string; email: string }>;
+  initialAppId?: string;
 }) {
+  const [appId, setAppId] = useState(initialAppId || apps[0]?.id || "");
+  const selected = useMemo(() => apps.find((app) => app.id === appId), [apps, appId]);
+  const [error, setError] = useState<string | null>(null);
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setError(null);
     const form = new FormData(event.currentTarget);
-    await fetch("/api/campaigns", {
+    const response = await fetch("/api/campaigns", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: form.get("name"),
-        appId: form.get("appId"),
+        appId,
         trackId: form.get("trackId") || undefined,
         sourceId: form.get("sourceId") || undefined,
         googleGroupId: form.get("googleGroupId") || undefined,
-        targetTesters: Number(form.get("targetTesters") || 12),
-        testingType: form.get("testingType"),
-        webOptInUrl: form.get("webOptInUrl") || undefined,
+        targetTesters: Number(form.get("targetTesters") || selected?.testerTarget || 12),
+        testingType: form.get("testingType") || selected?.testingType,
+        playStoreUrl: selected?.playStoreUrl || undefined,
+        webOptInUrl: form.get("webOptInUrl") || selected?.webOptInUrl || undefined,
       }),
     });
-    window.location.reload();
+    const data = await response.json();
+    if (!response.ok) {
+      setError(data.error || "Could not create campaign");
+      return;
+    }
+    window.location.href = `/campaigns/${data.campaign.id}`;
   }
+
   return (
     <Card className="p-5">
       <h2 className="font-medium">New campaign</h2>
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
         <div className="md:col-span-2">
-          <Label>Name</Label>
-          <Input name="name" placeholder="NET360 Closed Testing — August 2026" required />
-        </div>
-        <div>
-          <Label>App</Label>
-          <Select name="appId" required>
+          <Label>Select app</Label>
+          <Select name="appId" value={appId} onChange={(event) => setAppId(event.target.value)} required>
             {apps.map((app) => (
               <option key={app.id} value={app.id}>
                 {app.name}
@@ -51,12 +73,39 @@ export function CreateCampaignForm({
             ))}
           </Select>
         </div>
+        {selected ? (
+          <div className="md:col-span-2 rounded-xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-300">
+            <div className="font-medium">{selected.name}</div>
+            <div className="text-slate-400">{selected.packageName}</div>
+            <div className="mt-2 break-all text-xs text-sky-300">{selected.playStoreUrl || "No Play Store URL stored"}</div>
+          </div>
+        ) : null}
+        <div className="md:col-span-2">
+          <Label>Name</Label>
+          <Input
+            name="name"
+            key={selected?.id}
+            defaultValue={selected ? `${selected.name} — Closed Testing` : ""}
+            required
+          />
+        </div>
         <div>
           <Label>Testing type</Label>
-          <Select name="testingType" defaultValue="CLOSED">
+          <Select name="testingType" key={selected?.id} defaultValue={selected?.testingType || "CLOSED"}>
             <option value="INTERNAL">Internal</option>
             <option value="CLOSED">Closed</option>
             <option value="OPEN">Open</option>
+          </Select>
+        </div>
+        <div>
+          <Label>Testing track</Label>
+          <Select name="trackId">
+            <option value="">None</option>
+            {(selected?.tracks || []).map((track) => (
+              <option key={track.id} value={track.id}>
+                {track.name}
+              </option>
+            ))}
           </Select>
         </div>
         <div>
@@ -83,14 +132,27 @@ export function CreateCampaignForm({
         </div>
         <div>
           <Label>Target testers</Label>
-          <Input name="targetTesters" type="number" defaultValue={12} />
+          <Input
+            name="targetTesters"
+            type="number"
+            key={selected?.id}
+            defaultValue={selected?.testerTarget || 12}
+          />
         </div>
         <div>
-          <Label>Web opt-in URL</Label>
-          <Input name="webOptInUrl" placeholder="https://play.google.com/apps/testing/com.example.app" />
+          <Label>Testing / opt-in URL</Label>
+          <Input
+            name="webOptInUrl"
+            key={selected?.id}
+            defaultValue={selected?.webOptInUrl || ""}
+            placeholder="Leave empty unless a real testing link is configured"
+          />
         </div>
+        {error ? <p className="md:col-span-2 text-sm text-rose-300">{error}</p> : null}
         <div className="md:col-span-2">
-          <Button type="submit">Create campaign</Button>
+          <Button type="submit" disabled={!apps.length}>
+            Create campaign
+          </Button>
         </div>
       </form>
     </Card>

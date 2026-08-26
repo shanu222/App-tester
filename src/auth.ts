@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import { DEFAULT_TEMPLATES } from "@/lib/templates";
+import { ensureCatalogApps } from "@/lib/services/apps";
 
 const DEFAULT_EMAIL = (process.env.DEFAULT_USER_EMAIL || "owner@local").trim().toLowerCase();
 
@@ -49,6 +50,7 @@ async function loadOrCreateDefaultUser() {
         })
       : existing;
     await ensureSettingsAndTemplates(user.id);
+    await ensureCatalogApps(user.id);
     return user;
   }
 
@@ -64,12 +66,14 @@ async function loadOrCreateDefaultUser() {
         templates: { create: templateRows() },
       },
     });
+    await ensureCatalogApps(created.id);
     return created;
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const user = await prisma.user.findUnique({ where: { email: DEFAULT_EMAIL } });
       if (user) {
         await ensureSettingsAndTemplates(user.id);
+        await ensureCatalogApps(user.id);
         return user;
       }
     }

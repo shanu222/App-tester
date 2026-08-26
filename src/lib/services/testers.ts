@@ -6,6 +6,14 @@ import { logActivity, notify } from "@/lib/audit";
 import { describeEmail, normalizeEmail } from "@/lib/email-extract";
 import { isDemoMode } from "@/lib/env";
 
+async function appIdForCampaign(campaignId: string) {
+  const campaign = await prisma.campaign.findFirst({
+    where: { id: campaignId },
+    select: { appId: true },
+  });
+  return campaign?.appId;
+}
+
 export async function findDuplicateTester(
   userId: string,
   email: string,
@@ -73,6 +81,7 @@ export async function createOrGetTester(input: {
         userId: input.userId,
         testerId: tester.id,
         campaignId: input.campaignId,
+        appId: await appIdForCampaign(input.campaignId),
         status: "EMAIL_RECEIVED",
         detectedEmail: described.normalized,
         dateEmailReceived: new Date(),
@@ -106,6 +115,7 @@ export async function createOrGetTester(input: {
         userId: input.userId,
         testerId: tester.id,
         campaignId: input.campaignId,
+        appId: await appIdForCampaign(input.campaignId),
         status: "DISCOVERED",
       },
     });
@@ -128,6 +138,7 @@ export async function createOrGetTester(input: {
       userId: input.userId,
       testerId: record.id,
       campaignId: input.campaignId,
+      appId: await appIdForCampaign(input.campaignId),
       status: "DISCOVERED",
     },
   });

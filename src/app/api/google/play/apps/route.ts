@@ -2,88 +2,144 @@ import { json, handleRouteError } from "@/lib/http";
 import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
 import { readCredentials } from "@/lib/integrations/store";
-import { searchPlayApps, listPlayTracks, testingLinkForPackage } from "@/lib/integrations/play";
+import { searchPlayApps, listPlayTracks } from "@/lib/integrations/play";
 import type { ServiceAccountJson } from "@/lib/integrations/play";
 import { AppError } from "@/lib/errors";
 import { isDemoMode } from "@/lib/env";
+import { canonicalPlayStoreUrl } from "@/lib/play-url";
+import { statusFromPlayTracks } from "@/lib/services/apps";
 
-export async function POST() {
+async function playClient(userId: string) {
+  const integration = await prisma.integration.findUnique({
+    where: { userId_provider: { userId, provider: "GOOGLE_PLAY" } },
+  });
+  const creds = readCredentials(integration?.encryptedCredentials);
+  if (!creds?.serviceAccountJson || integration?.status !== "CONNECTED") {
+    throw new AppError(
+      "Google Play is not connected. Upload a service account and grant it Play Console access first.",
+    );
+  }
+  return JSON.parse(creds.serviceAccountJson) as ServiceAccountJson;
+}
+
+export async function GET() {
   try {
     const user = await requireUser();
-    const integration = await prisma.integration.findUnique({
-      where: { userId_provider: { userId: user.id, provider: "GOOGLE_PLAY" } },
+    if (isDemoMode()) {
+      return json({ apps: [], newApps: [], demo: true, message: "DEMO MODE does not call Google Play." });
+    }
+    const sa = await playClient(user.id);
+    const result = await searchPlayApps(sa);
+    if (!result.ok) {
+      return json({ error: result.error, manualFallback: result.manualFallback, apps: [], newApps: [] }, 409);
+    }
+    const existing = await prisma.app.findMany({
+      where: { userId: user.id },
+      select: { packageName: true, name: true, googlePlayStatus: true },
     });
+    const known = new Map(existing.map((app) => [app.packageName, app]));
+    const newApps = result.data.filter((app) => !known.has(app.packageName));
+    return json({ apps: result.data, newApps, existing: existing.length });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const user = await requireUser();
     if (isDemoMode()) {
       return json({
         apps: [],
+        newApps: [],
         demo: true,
         message: "DEMO MODE does not call Google Play. Add apps manually.",
       });
     }
-    const creds = readCredentials(integration?.encryptedCredentials);
-    if (!creds?.serviceAccountJson || integration?.status !== "CONNECTED") {
-      throw new AppError(
-        "Google Play is not connected. Upload a service account and grant it Play Console access first.",
-      );
-    }
-    const sa = JSON.parse(creds.serviceAccountJson) as ServiceAccountJson;
+    const body = await request.json().catch(() => ({}));
+    const addPackageNames = Array.isArray((body as { addPackageNames?: unknown }).addPackageNames)
+      ? ((body as { addPackageNames: string[] }).addPackageNames)
+      : [];
+    const sa = await playClient(user.id);
     const result = await searchPlayApps(sa);
     if (!result.ok) {
-      return json({
-        error: result.error,
-        manualFallback: result.manualFallback,
-        apps: [],
-      }, 409);
+      return json({ error: result.error, manualFallback: result.manualFallback, apps: [], newApps: [] }, 409);
     }
-    const upserted = [];
+
+    const existing = await prisma.app.findMany({ where: { userId: user.id } });
+    const byPackage = new Map(existing.map((app) => [app.packageName, app]));
+    const addSet = new Set(addPackageNames.map((item) => item.trim()));
+    const updated = [];
+    const imported = [];
+    const newApps = [];
+    const conflicts = [];
+
     for (const playApp of result.data) {
-      const app = await prisma.app.upsert({
-        where: {
-          userId_packageName: { userId: user.id, packageName: playApp.packageName },
-        },
-        update: {
-          name: playApp.displayName,
-          syncedFromPlay: true,
-          lastSyncedAt: new Date(),
-          webOptInUrl: testingLinkForPackage(playApp.packageName) || undefined,
-        },
-        create: {
-          userId: user.id,
-          name: playApp.displayName,
-          packageName: playApp.packageName,
-          syncedFromPlay: true,
-          lastSyncedAt: new Date(),
-          webOptInUrl: testingLinkForPackage(playApp.packageName) || undefined,
-          playStoreUrl: `https://play.google.com/store/apps/details?id=${playApp.packageName}`,
-        },
-      });
+      const local = byPackage.get(playApp.packageName);
       const tracks = await listPlayTracks(sa, playApp.packageName);
-      if (tracks.ok) {
-        for (const track of tracks.data) {
-          if (track.typeGuess === "PRODUCTION") continue;
-          await prisma.testingTrack.upsert({
-            where: { id: `${app.id}-${track.track}` },
-            update: { name: track.track },
-            create: {
-              id: `${app.id}-${track.track}`.slice(0, 64),
-              appId: app.id,
-              name: track.track,
-              trackId: track.track,
+      const derived = tracks.ok ? statusFromPlayTracks(tracks.data) : null;
+
+      if (!local) {
+        if (addSet.has(playApp.packageName)) {
+          const app = await prisma.app.create({
+            data: {
+              userId: user.id,
+              name: playApp.displayName,
+              packageName: playApp.packageName,
+              playStoreUrl: canonicalPlayStoreUrl(playApp.packageName),
+              googlePlayStatus: derived || "NOT_CONFIGURED",
               testingType:
-                track.typeGuess === "OPEN"
-                  ? "OPEN"
-                  : track.typeGuess === "INTERNAL"
-                    ? "INTERNAL"
-                    : "CLOSED",
+                derived === "INTERNAL_TESTING" ? "INTERNAL" : derived === "OPEN_TESTING" ? "OPEN" : "CLOSED",
               syncedFromPlay: true,
-              testingLink: testingLinkForPackage(playApp.packageName) || undefined,
+              lastSyncedAt: new Date(),
             },
           });
+          imported.push(app);
+          byPackage.set(app.packageName, app);
+        } else {
+          newApps.push({
+            name: playApp.displayName,
+            packageName: playApp.packageName,
+            playStoreUrl: canonicalPlayStoreUrl(playApp.packageName),
+            googlePlayStatus: derived,
+            label: "New app available",
+          });
         }
+        continue;
       }
-      upserted.push(app);
+
+      const data: {
+        lastSyncedAt: Date;
+        syncedFromPlay: boolean;
+        playConflictNote?: string | null;
+      } = {
+        lastSyncedAt: new Date(),
+        syncedFromPlay: true,
+      };
+      if (derived && derived !== local.googlePlayStatus) {
+        data.playConflictNote = `Google Play currently lists this as ${derived.replaceAll("_", " ").toLowerCase()}. My Apps still shows ${local.googlePlayStatus.replaceAll("_", " ").toLowerCase()}. Review before changing.`;
+        conflicts.push({
+          packageName: local.packageName,
+          stored: local.googlePlayStatus,
+          play: derived,
+        });
+      } else {
+        data.playConflictNote = null;
+      }
+      const app = await prisma.app.update({ where: { id: local.id }, data });
+      updated.push(app);
     }
-    return json({ apps: upserted });
+
+    return json({
+      apps: updated,
+      imported,
+      newApps,
+      conflicts,
+      message:
+        newApps.length > 0
+          ? `${newApps.length} Google Play app(s) are not in My Apps yet.`
+          : "My Apps is in sync with accessible Google Play apps.",
+    });
   } catch (error) {
     return handleRouteError(error);
   }

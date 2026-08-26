@@ -2,7 +2,6 @@ import { CampaignStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { NotFoundError, AppError } from "@/lib/errors";
 import { logActivity } from "@/lib/audit";
-import { testingLinkForPackage } from "@/lib/integrations/play";
 import { isDemoMode } from "@/lib/env";
 
 const ALLOWED_CAMPAIGN: Record<CampaignStatus, CampaignStatus[]> = {
@@ -59,8 +58,7 @@ export async function createCampaign(
 ) {
   const app = await prisma.app.findFirst({ where: { id: input.appId, userId } });
   if (!app) throw new NotFoundError("App not found.");
-  const webOptInUrl =
-    input.webOptInUrl || app.webOptInUrl || testingLinkForPackage(app.packageName) || undefined;
+  const webOptInUrl = input.webOptInUrl || app.webOptInUrl || undefined;
   const campaign = await prisma.campaign.create({
     data: {
       userId,

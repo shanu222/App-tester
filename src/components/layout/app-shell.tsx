@@ -79,6 +79,23 @@ export async function AppShell({
           </div>
         </header>
         <main className="px-4 py-6 sm:px-8">{children}</main>
+        <footer className="border-t border-slate-800 px-4 py-4 text-xs text-slate-500 sm:px-8">
+          <nav className="flex flex-wrap gap-x-4 gap-y-2">
+            <span className="text-slate-400">TestLoop</span>
+            <Link href="/" className="hover:text-white">
+              Home
+            </Link>
+            <Link href="/privacy" className="hover:text-white">
+              Privacy Policy
+            </Link>
+            <Link href="/terms" className="hover:text-white">
+              Terms of Service
+            </Link>
+            <Link href="/contact" className="hover:text-white">
+              Contact
+            </Link>
+          </nav>
+        </footer>
       </div>
     </div>
   );

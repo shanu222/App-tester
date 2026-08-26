@@ -1,17 +1,23 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import "./globals.css";
 import { isDemoMode } from "@/lib/env";
+import { SITE_NAME, SITE_ORIGIN, SITE_TAGLINE } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata: Metadata = {
-  title: "TesterBridge — Developers Testing Developers' Apps",
-  description:
-    "Developer-to-developer Android testing network: publish campaigns, accept tests, share Gmail by consent, and track Google Play closed testing.",
+  metadataBase: new URL(SITE_ORIGIN),
+  title: `${SITE_NAME} — Developers Testing Developers' Apps`,
+  description: `${SITE_TAGLINE}. Publish campaigns, accept tests, share Gmail by consent, and track Google Play closed testing.`,
+  openGraph: {
+    siteName: SITE_NAME,
+    type: "website",
+  },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className="min-h-screen font-sans antialiased">

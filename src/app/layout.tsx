@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { isDemoMode } from "@/lib/env";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata: Metadata = {
   title: "TesterBridge — Find Real Testers. Exchange Testing. Track Every Test.",
   description:

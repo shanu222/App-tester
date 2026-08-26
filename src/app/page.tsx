@@ -4,7 +4,7 @@ import { BrandLogo } from "@/components/brand/brand-logo";
 import { PublicChrome } from "@/components/layout/public-chrome";
 import { googleOAuthConfigured } from "@/lib/env";
 import { prisma } from "@/lib/db";
-import { SITE_NAME } from "@/lib/site";
+import { SITE_NAME, SITE_ORIGIN } from "@/lib/site";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   title: `${SITE_NAME} — Developers Testing Developers' Apps`,
   description:
     "A developer-only reciprocal testing network for Android closed testing. Post a campaign, accept a test, share Gmail by consent, then track access and feedback.",
-  alternates: { canonical: "https://testloop.org/" },
+  alternates: { canonical: `${SITE_ORIGIN}/` },
 };
 
 export default async function LandingPage() {

@@ -1,3 +1,5 @@
+import { CANONICAL_ORIGIN, isVercelProduction } from "@/lib/canonical";
+
 function requiredInProduction(name: string, value: string | undefined) {
   if (process.env.NODE_ENV === "production" && !value) {
     throw new Error(`Missing required environment variable: ${name}`);
@@ -6,6 +8,7 @@ function requiredInProduction(name: string, value: string | undefined) {
 }
 
 function publicAppUrl() {
+  if (isVercelProduction()) return CANONICAL_ORIGIN;
   const configured = process.env.APP_URL;
   if (configured) return configured.replace(/\/$/, "");
   if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {

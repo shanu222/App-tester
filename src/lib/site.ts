@@ -1,6 +1,6 @@
 export const SITE_NAME = "TestLoop";
 export const SITE_TAGLINE = "Developer-to-developer app testing network";
-export const SITE_ORIGIN = "https://testloop.org";
+export const SITE_ORIGIN = "https://www.testloop.org";
 export const CONTACT_EMAIL = "shahnawaz@sustainablesolution360.com";
 export const CONTACT_PHONE = "03403318127";
 export const LEGAL_UPDATED = "27 August 2026";

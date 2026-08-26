@@ -4,26 +4,45 @@ import { firebaseAuthConfigured } from "@/lib/firebase/config";
 import { googleLoginCallbackUrl } from "@/lib/canonical";
 import { prisma } from "@/lib/db";
 
-/** Reads the exact columns the Google/Firebase login path needs before creating a session. */
+/** Tables written while a Google or Firebase login bootstraps its developer record. */
+const LOGIN_TABLES = ["User", "UserSettings", "MessageTemplate"];
+
 async function databaseStatus() {
   try {
     await prisma.user.findFirst({ select: { id: true, role: true, profileCompleted: true } });
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Database check failed." };
   }
+
+  const status: {
+    ok: boolean;
+    missingLoginTables?: string[] | null;
+    pendingMigrations?: string[] | null;
+  } = { ok: true };
+
+  try {
+    const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
+      SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()
+    `;
+    const present = new Set(tables.map((row) => row.table_name));
+    status.missingLoginTables = LOGIN_TABLES.filter((table) => !present.has(table));
+  } catch {
+    status.missingLoginTables = null;
+  }
+
   try {
     const migrations = await prisma.$queryRaw<Array<{ migration_name: string; applied: boolean }>>`
       SELECT migration_name, (finished_at IS NOT NULL AND rolled_back_at IS NULL) AS applied
       FROM _prisma_migrations
       ORDER BY started_at
     `;
-    return {
-      ok: true,
-      pendingMigrations: migrations.filter((row) => !row.applied).map((row) => row.migration_name),
-    };
+    status.pendingMigrations = migrations.filter((row) => !row.applied).map((row) => row.migration_name);
   } catch {
-    return { ok: true, pendingMigrations: null };
+    status.pendingMigrations = null;
   }
+
+  status.ok = !status.missingLoginTables?.length;
+  return status;
 }
 
 export async function GET(request: Request) {

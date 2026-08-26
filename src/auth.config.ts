@@ -1,12 +1,14 @@
+import "@/lib/apply-auth-url";
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 import { env, googleOAuthConfigured } from "@/lib/env";
 
 export const authConfig = {
   trustHost: true,
+  basePath: "/api/auth",
   secret: env.authSecret,
   session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 14 },
-  pages: { signIn: "/" },
+  pages: { signIn: "/", error: "/login-error" },
   providers: googleOAuthConfigured()
     ? [
         Google({

@@ -1,6 +1,9 @@
+import { clearPinnedAuthUrl } from "@/lib/apply-auth-url";
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/auth.config";
+
+clearPinnedAuthUrl();
 
 const { auth } = NextAuth(authConfig);
 
@@ -10,6 +13,7 @@ const PUBLIC_PREFIXES = [
   "/terms",
   "/contact",
   "/about",
+  "/login-error",
   "/sitemap.xml",
   "/robots.txt",
   "/api/auth",

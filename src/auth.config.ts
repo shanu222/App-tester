@@ -1,4 +1,3 @@
-import "@/lib/apply-auth-url";
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 import { env, googleOAuthConfigured } from "@/lib/env";

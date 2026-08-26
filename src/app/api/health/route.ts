@@ -1,8 +1,9 @@
 import { json } from "@/lib/http";
-import { env, googleOAuthConfigured, isDemoMode } from "@/lib/env";
+import { googleOAuthConfigured, isDemoMode } from "@/lib/env";
 import { googleLoginCallbackUrl } from "@/lib/canonical";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const origin = new URL(request.url).origin;
   return json({
     ok: true,
     service: "testloop",
@@ -10,7 +11,7 @@ export async function GET() {
     time: new Date().toISOString(),
     googleOAuth: {
       configured: googleOAuthConfigured(),
-      callbackUrl: googleLoginCallbackUrl(env.appUrl),
+      callbackUrl: googleLoginCallbackUrl(origin),
     },
   });
 }

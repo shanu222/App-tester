@@ -1,6 +1,8 @@
 import { google } from "googleapis";
 import type { AdapterResult, PlayAppRecord, PlayTrackRecord } from "@/lib/integrations/types";
 import { PLAY_EMAIL_LIST_LIMITATION } from "@/lib/integrations/capabilities";
+import { parseGoogleApiError, readJsonBody, redactSecrets } from "@/lib/integrations/google-api-error";
+import { ANDROID_PUBLISHER_SCOPE } from "@/lib/integrations/play-diagnostics";
 
 export type ServiceAccountJson = {
   client_email: string;
@@ -8,75 +10,56 @@ export type ServiceAccountJson = {
   project_id?: string;
 };
 
+/** Play reporting is a separate API from Android Publisher and needs its own scope. */
+const PLAY_REPORTING_SCOPE = "https://www.googleapis.com/auth/playdeveloperreporting";
+
+function credentials(sa: ServiceAccountJson) {
+  return {
+    client_email: sa.client_email,
+    // A key pasted through a form can arrive with escaped newlines.
+    private_key: (sa.private_key || "").replace(/\\n/g, "\n"),
+  };
+}
+
 function publisherClient(sa: ServiceAccountJson) {
   const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: sa.client_email,
-      private_key: sa.private_key,
-    },
-    scopes: ["https://www.googleapis.com/auth/androidpublisher"],
+    credentials: credentials(sa),
+    scopes: [ANDROID_PUBLISHER_SCOPE],
   });
   return google.androidpublisher({ version: "v3", auth });
 }
 
 function reportingAuth(sa: ServiceAccountJson) {
   return new google.auth.GoogleAuth({
-    credentials: {
-      client_email: sa.client_email,
-      private_key: sa.private_key,
-    },
-    scopes: ["https://www.googleapis.com/auth/playdeveloperreporting"],
+    credentials: credentials(sa),
+    scopes: [PLAY_REPORTING_SCOPE],
   });
 }
 
-export async function testPlayAccess(
-  sa: ServiceAccountJson,
-  packageName?: string,
-): Promise<AdapterResult<{ method: string; detail: string }>> {
-  try {
-    const apps = await searchPlayApps(sa);
-    if (apps.ok && apps.data.length) {
-      return {
-        ok: true,
-        data: {
-          method: "playdeveloperreporting.apps.search",
-          detail: `Verified. ${apps.data.length} accessible app(s) found.`,
-        },
-      };
-    }
-    if (packageName) {
-      const publisher = publisherClient(sa);
-      const edit = await publisher.edits.insert({ packageName });
-      const editId = edit.data.id;
-      if (editId) {
-        await publisher.edits.delete({ packageName, editId });
-      }
-      return {
-        ok: true,
-        data: {
-          method: "androidpublisher.edits.insert",
-          detail: `Verified access to ${packageName}.`,
-        },
-      };
-    }
-    return {
-      ok: false,
-      error:
-        apps.ok
-          ? "Service account authenticated, but no apps were returned. Grant this service account access in Play Console → Users and permissions, then add an app package name to test edits."
-          : apps.error,
-      code: "PLAY_NO_APPS",
-      manualFallback: "Add the app package name manually on My Apps.",
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Google Play authorization failed.",
-      code: "PLAY_AUTH_ERROR",
-    };
+/**
+ * googleapis wraps failures in a GaxiosError whose body still holds Google's
+ * error envelope. Pull the real message out instead of reporting a bare stack.
+ */
+function describeGoogleError(error: unknown, fallback: string) {
+  const gaxios = error as {
+    response?: { status?: number; data?: unknown };
+    message?: string;
+  };
+  if (gaxios?.response?.data) {
+    const parsed = parseGoogleApiError(gaxios.response.status ?? 0, gaxios.response.data);
+    const suffix = parsed.status ? ` (${parsed.status})` : "";
+    return `${parsed.message}${suffix}`;
   }
+  if (typeof gaxios?.message === "string" && gaxios.message) return redactSecrets(gaxios.message);
+  return fallback;
 }
 
+/**
+ * Android Publisher v3 has no endpoint that lists the apps in a developer
+ * account, so app discovery uses the Play Developer Reporting API. That is a
+ * different API with its own scope and its own enablement switch, which is why
+ * it can fail while the Android Publisher connection is healthy.
+ */
 export async function searchPlayApps(
   sa: ServiceAccountJson,
 ): Promise<AdapterResult<PlayAppRecord[]>> {
@@ -84,27 +67,35 @@ export async function searchPlayApps(
     const auth = await reportingAuth(sa).getClient();
     const token = await auth.getAccessToken();
     if (!token.token) {
-      return { ok: false, error: "Could not obtain Play Reporting access token.", code: "PLAY_TOKEN" };
+      return {
+        ok: false,
+        error: "Could not obtain a Play Developer Reporting access token for this service account.",
+        code: "PLAY_TOKEN",
+        manualFallback: "Add apps manually by package name.",
+      };
     }
     const response = await fetch(
       "https://playdeveloperreporting.googleapis.com/v1beta1/apps:search?pageSize=100",
-      { headers: { Authorization: `Bearer ${token.token}` } },
+      { headers: { Authorization: `Bearer ${token.token}` }, cache: "no-store" },
     );
-    const json = (await response.json()) as {
-      apps?: Array<{ packageName?: string; displayName?: string }>;
-      error?: { message?: string };
-    };
+    const body = await readJsonBody(response);
     if (!response.ok) {
+      const parsed = parseGoogleApiError(response.status, body);
+      const notEnabled =
+        parsed.reason === "SERVICE_DISABLED" || /has not been used in project|is disabled/i.test(parsed.message);
       return {
         ok: false,
-        error: json.error?.message || `Play Reporting apps.search failed (${response.status}).`,
-        code: "PLAY_APPS_SEARCH",
-        manualFallback: "The Android Publisher API cannot list apps. Add package names manually.",
+        error: notEnabled
+          ? `The Google Play Developer Reporting API is not enabled for this service account's project, so apps cannot be listed automatically. ${parsed.message}`
+          : `${parsed.message}${parsed.status ? ` (${parsed.status})` : ""}`,
+        code: notEnabled ? "PLAY_REPORTING_NOT_ENABLED" : "PLAY_APPS_SEARCH",
+        manualFallback: "Add package names manually on My Apps. Android Publisher cannot list apps.",
       };
     }
+    const payload = body as { apps?: Array<{ packageName?: string; displayName?: string }> };
     return {
       ok: true,
-      data: (json.apps || [])
+      data: (payload.apps || [])
         .filter((app) => app.packageName)
         .map((app) => ({
           packageName: app.packageName as string,
@@ -114,7 +105,7 @@ export async function searchPlayApps(
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Play app search failed.",
+      error: describeGoogleError(error, "Play app search failed."),
       code: "PLAY_APPS_SEARCH",
       manualFallback: "Add apps manually by package name.",
     };
@@ -147,7 +138,7 @@ export async function listPlayTracks(
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Could not list tracks.",
+      error: describeGoogleError(error, "Could not list tracks."),
       code: "PLAY_TRACKS",
       manualFallback: "Enter the track name from Play Console (for closed tests, use the custom track name).",
     };
@@ -174,9 +165,7 @@ export async function getPlayTesterGroups(
   } catch (error) {
     return {
       ok: false,
-      error:
-        (error instanceof Error ? error.message : "Could not read testers.") +
-        ` ${PLAY_EMAIL_LIST_LIMITATION}`,
+      error: `${describeGoogleError(error, "Could not read testers.")} ${PLAY_EMAIL_LIST_LIMITATION}`,
       code: "PLAY_TESTERS",
     };
   }
@@ -207,7 +196,7 @@ export async function ensurePlayTesterGroup(
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Could not attach Google Group to the track testers resource.",
+      error: describeGoogleError(error, "Could not attach the Google Group to the track testers resource."),
       code: "PLAY_TESTERS_UPDATE",
       manualFallback:
         "In Play Console, open the closed test track → Testers → Google Groups, and add the group email.",

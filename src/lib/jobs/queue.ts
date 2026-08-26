@@ -7,8 +7,7 @@ import { extractEmails } from "@/lib/email-extract";
 import { createOrGetTester, setTesterStatus } from "@/lib/services/testers";
 import { logActivity, notify } from "@/lib/audit";
 import { readCredentials, markIntegrationExpired } from "@/lib/integrations/store";
-import { testPlayAccess } from "@/lib/integrations/play";
-import type { ServiceAccountJson } from "@/lib/integrations/play";
+import { parseServiceAccount, runPlayDiagnostics } from "@/lib/integrations/play-diagnostics";
 
 const TIMEOUT = 25_000;
 
@@ -221,17 +220,27 @@ async function checkIntegrationHealth(userId: string) {
     if (integration.provider === "GOOGLE_PLAY") {
       const creds = readCredentials(integration.encryptedCredentials);
       if (!creds?.serviceAccountJson) continue;
-      const result = await testPlayAccess(JSON.parse(creds.serviceAccountJson) as ServiceAccountJson);
-      if (!result.ok) {
+      const parsed = parseServiceAccount(creds.serviceAccountJson);
+      if (!parsed.ok) {
         await prisma.integration.update({
           where: { id: integration.id },
-          data: { status: "ERROR", lastError: result.error, lastTestAt: new Date() },
+          data: { status: "ERROR", lastError: parsed.message, lastTestAt: new Date() },
+        });
+        notes += `play=error;`;
+        continue;
+      }
+      const result = await runPlayDiagnostics(parsed.serviceAccount);
+      if (!result.connected) {
+        const reason = result.errorMessage || "Google Play authorization failed.";
+        await prisma.integration.update({
+          where: { id: integration.id },
+          data: { status: "ERROR", lastError: reason, lastTestAt: new Date() },
         });
         await notify({
           userId,
           type: "integration",
           title: "Google Play authorization error",
-          body: result.error,
+          body: reason,
           href: "/integrations",
         });
         notes += `play=error;`;

@@ -16,11 +16,24 @@ Do **not** delete these if Vercel/Neon already added them:
 
 Each must be enabled for **Production**, **Preview**, and **Build**.
 
-You can **delete** these if they exist (login is gone):
+You can **delete** these if they exist:
+
+- `AUTH_URL` — pins Auth.js to one hostname and breaks Google callbacks on the other host
+- `NEXTAUTH_URL` — same problem
+- `AUTH_REDIRECT_PROXY_URL`
+- `GOOGLE_REDIRECT_URI` — never read by the app
+
+Login **requires** these, so keep them:
 
 - `AUTH_SECRET`
-- `AUTH_URL`
-- `GOOGLE_REDIRECT_URI`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+
+Firebase login (Google popup + email/password) additionally needs:
+
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
 
 ## 2. Required env vars — copy into Vercel
 

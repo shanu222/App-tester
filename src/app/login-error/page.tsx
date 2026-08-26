@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { PublicChrome } from "@/components/layout/public-chrome";
+import { FirebaseLogin } from "@/components/auth/firebase-login";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { SITE_NAME } from "@/lib/site";
 import { googleOAuthConfigured } from "@/lib/env";
+import { firebaseAuthConfigured } from "@/lib/firebase/config";
 
 export const metadata: Metadata = {
   title: `Sign in | ${SITE_NAME}`,
@@ -26,12 +28,13 @@ export default async function LoginErrorPage({
             ? `${SITE_NAME} could not build a Google callback for this hostname. Open https://www.testloop.org or https://app-tester-three.vercel.app and try again.`
             : `Google returned ${error}. Try signing in again from this same address.`}
         </p>
-        <div className="mt-8 flex justify-center">
+        <div className="mt-8 space-y-4 text-left">
           {googleOAuthConfigured() ? (
-            <GoogleSignInButton label="Try Google again" />
-          ) : (
-            <p className="text-sm text-amber-100">Google login is not configured on this deployment.</p>
-          )}
+            <div className="flex justify-center">
+              <GoogleSignInButton label="Try Google again" />
+            </div>
+          ) : null}
+          {firebaseAuthConfigured() ? <FirebaseLogin /> : null}
         </div>
       </main>
     </PublicChrome>

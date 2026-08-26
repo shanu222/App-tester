@@ -1,8 +1,10 @@
 import { auth } from "@/auth";
+import { FirebaseLogin } from "@/components/auth/firebase-login";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { PublicChrome } from "@/components/layout/public-chrome";
 import { googleOAuthConfigured } from "@/lib/env";
+import { firebaseAuthConfigured } from "@/lib/firebase/config";
 import { prisma } from "@/lib/db";
 import { SITE_NAME, SITE_ORIGIN } from "@/lib/site";
 import { redirect } from "next/navigation";
@@ -38,14 +40,14 @@ export default async function LandingPage() {
               A professional network for Android closed testing. Publish a request, accept a test, share Gmail only after
               consent, and track real campaign progress.
             </p>
-            <div className="mt-8">
-              {googleOAuthConfigured() ? (
-                <GoogleSignInButton label="Continue with Google" />
-              ) : (
+            <div className="mt-8 max-w-sm space-y-4">
+              {googleOAuthConfigured() ? <GoogleSignInButton label="Continue with Google" /> : null}
+              {firebaseAuthConfigured() ? <FirebaseLogin /> : null}
+              {!googleOAuthConfigured() && !firebaseAuthConfigured() ? (
                 <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                  Google login is not configured on this deployment.
+                  No login provider is configured on this deployment.
                 </p>
-              )}
+              ) : null}
             </div>
           </div>
         </div>

@@ -60,7 +60,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     ...authConfig.callbacks,
     async signIn({ user }) {
       if (!user.email) return false;
-      await bootstrapDeveloper({ email: user.email, name: user.name, image: user.image });
+      try {
+        await bootstrapDeveloper({ email: user.email, name: user.name, image: user.image });
+      } catch (error) {
+        if (error instanceof UnauthorizedError) return false;
+        console.error("[testloop][login] could not bootstrap", user.email, error);
+        throw error;
+      }
       return true;
     },
     async jwt({ token, user }) {

@@ -13,7 +13,7 @@ export function AppSidebar({
 
   return (
     <aside className="border-b border-slate-800 bg-slate-950 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-b-0 lg:border-r">
-      <div className="flex items-center justify-between gap-3 px-4 py-3 lg:block lg:py-4">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 lg:block lg:py-5">
         <BrandLogo href="/dashboard" size="md" />
         <button
           type="button"

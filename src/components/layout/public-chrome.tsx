@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/brand-logo";
-import { CONTACT_EMAIL, CONTACT_PHONE, PUBLIC_NAV, SITE_NAME, SITE_TAGLINE } from "@/lib/site";
+import { CONTACT_EMAIL, CONTACT_PHONE, PUBLIC_NAV, SITE_NAME } from "@/lib/site";
 
 export function SiteFooter({ homeHref = "/" }: { homeHref?: string }) {
   return (
@@ -9,7 +9,6 @@ export function SiteFooter({ homeHref = "/" }: { homeHref?: string }) {
       <div className="mx-auto grid max-w-6xl gap-8 px-6 py-10 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,2fr)]">
         <div>
           <BrandLogo href={homeHref} size="md" />
-          <p className="mt-3 max-w-sm text-sm leading-6 text-slate-400">{SITE_TAGLINE}</p>
           <p className="mt-4 text-sm text-slate-300">
             Email:{" "}
             <a className="text-emerald-300 hover:underline" href={`mailto:${CONTACT_EMAIL}`}>
@@ -46,7 +45,7 @@ export function PublicChrome({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-slate-800 bg-slate-950">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3.5">
           <BrandLogo href="/" size="md" priority />
           <nav className="hidden items-center gap-5 text-sm text-slate-300 md:flex" aria-label="Public">
             <Link href="/" className="hover:text-white">

@@ -3,9 +3,15 @@ import { LOGO_SRC, SITE_NAME } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const HEIGHT: Record<"sm" | "md" | "lg", string> = {
-  sm: "h-9",
-  md: "h-12",
-  lg: "h-[4.5rem]",
+  sm: "h-16",
+  md: "h-[4.75rem]",
+  lg: "h-40 sm:h-48",
+};
+
+const MAX_WIDTH: Record<"sm" | "md" | "lg", string> = {
+  sm: "max-w-[9.5rem]",
+  md: "max-w-[12.5rem]",
+  lg: "max-w-[18rem] sm:max-w-[22rem]",
 };
 
 export function BrandLogo({
@@ -22,17 +28,18 @@ export function BrandLogo({
     <img
       src={LOGO_SRC}
       alt={SITE_NAME}
-      width={320}
-      height={320}
-      className={cn("w-auto max-w-full object-contain object-left", HEIGHT[size])}
+      width={1024}
+      height={1024}
+      className={cn("w-auto object-contain object-left", HEIGHT[size], MAX_WIDTH[size])}
       decoding="async"
       fetchPriority={priority ? "high" : "auto"}
     />
   );
-  if (!href) return image;
+  const mark = <span className="inline-flex rounded-xl bg-white p-1.5">{image}</span>;
+  if (!href) return mark;
   return (
     <Link href={href} className="inline-flex min-w-0 items-center" aria-label={`${SITE_NAME} home`}>
-      {image}
+      {mark}
     </Link>
   );
 }

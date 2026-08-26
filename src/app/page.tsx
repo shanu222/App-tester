@@ -28,23 +28,25 @@ export default async function LandingPage() {
   return (
     <PublicChrome>
       <main className="mx-auto max-w-6xl px-6 py-14 sm:py-20">
-        <div className="max-w-2xl">
+        <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-14">
           <BrandLogo size="lg" priority />
-          <h1 className="mt-8 text-4xl font-semibold tracking-tight sm:text-5xl">
-            Developers testing developers&apos; apps
-          </h1>
-          <p className="mt-4 text-lg leading-7 text-slate-400">
-            A professional network for Android closed testing. Publish a request, accept a test, share Gmail only after
-            consent, and track real campaign progress.
-          </p>
-          <div className="mt-8">
-            {googleOAuthConfigured() ? (
-              <GoogleSignInButton label="Continue with Google" />
-            ) : (
-              <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                Google login is not configured on this deployment.
-              </p>
-            )}
+          <div>
+            <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
+              Developers testing developers&apos; apps
+            </h1>
+            <p className="mt-4 text-lg leading-7 text-slate-400">
+              A professional network for Android closed testing. Publish a request, accept a test, share Gmail only after
+              consent, and track real campaign progress.
+            </p>
+            <div className="mt-8">
+              {googleOAuthConfigured() ? (
+                <GoogleSignInButton label="Continue with Google" />
+              ) : (
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                  Google login is not configured on this deployment.
+                </p>
+              )}
+            </div>
           </div>
         </div>
 

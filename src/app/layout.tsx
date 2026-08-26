@@ -19,8 +19,8 @@ export const metadata: Metadata = {
   title: `${SITE_NAME} — Developers Testing Developers' Apps`,
   description: `${SITE_TAGLINE}. Publish campaigns, accept tests, share Gmail by consent, and track Google Play closed testing.`,
   icons: {
-    icon: "/testloop-logo.png",
-    apple: "/testloop-logo.png",
+    icon: "/testloop-logo.png?v=4",
+    apple: "/testloop-logo.png?v=4",
   },
   openGraph: {
     siteName: SITE_NAME,

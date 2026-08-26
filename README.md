@@ -45,6 +45,8 @@ Demo login after seed: `demo@testerbridge.dev` / `Demo12345!`
 
 Full steps: [DEPLOYMENT.md](DEPLOYMENT.md)
 
+Full Vercel/Neon checklist: [VERCEL_SETUP.md](VERCEL_SETUP.md)
+
 ## Docs
 
 - [SETUP.md](docs/SETUP.md)

@@ -40,50 +40,69 @@ export function OpportunityList({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-3">
-        <Select value={campaignId} onChange={(e) => setCampaignId(e.target.value)}>
-          {campaigns.map((campaign) => (
-            <option key={campaign.id} value={campaign.id}>
-              {campaign.name}
-            </option>
-          ))}
-        </Select>
-        <Select value={tone} onChange={(e) => setTone(e.target.value)}>
-          <option value="professional">Professional</option>
-          <option value="friendly">Friendly</option>
-          <option value="short">Short</option>
-          <option value="developer-to-developer">Developer-to-developer</option>
-        </Select>
+      <div className="flex flex-wrap gap-3 rounded-card border border-line bg-white p-4 shadow-card">
+        <div className="min-w-48 flex-1">
+          <label htmlFor="opportunity-campaign" className="mb-1.5 block text-xs font-medium text-muted">
+            Campaign
+          </label>
+          <Select
+            id="opportunity-campaign"
+            value={campaignId}
+            onChange={(e) => setCampaignId(e.target.value)}
+          >
+            {campaigns.map((campaign) => (
+              <option key={campaign.id} value={campaign.id}>
+                {campaign.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="min-w-48 flex-1">
+          <label htmlFor="opportunity-tone" className="mb-1.5 block text-xs font-medium text-muted">
+            Reply tone
+          </label>
+          <Select id="opportunity-tone" value={tone} onChange={(e) => setTone(e.target.value)}>
+            <option value="professional">Professional</option>
+            <option value="friendly">Friendly</option>
+            <option value="short">Short</option>
+            <option value="developer-to-developer">Developer-to-developer</option>
+          </Select>
+        </div>
       </div>
       {items.map((item) => (
-        <Card key={item.id} className="p-5">
+        <Card key={item.id}>
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{item.personName || "Unknown person"}</span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-slate-900">{item.personName || "Unknown person"}</span>
                 <Badge tone={item.relevanceScore >= 80 ? "good" : item.relevanceScore >= 55 ? "accent" : "warn"}>
-                  {item.relevanceScore >= 80 ? "🔥 HIGH MATCH" : item.relevance} {item.relevanceScore}%
+                  {item.relevance} · {item.relevanceScore}%
                 </Badge>
                 {item.previousContact ? <Badge tone="warn">Previously contacted</Badge> : null}
+                {item.reciprocal ? <Badge>Reciprocal</Badge> : null}
               </div>
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1.5 text-xs text-muted">
                 {item.groupName} · {timeAgo(item.postTimestamp)}
-                {item.reciprocal ? " · Reciprocal: Yes" : ""}
               </p>
             </div>
             {item.postLink ? (
-              <a className="text-sm text-sky-300" href={item.postLink} target="_blank" rel="noreferrer">
+              <a
+                className="text-sm font-medium text-brand hover:underline"
+                href={item.postLink}
+                target="_blank"
+                rel="noreferrer"
+              >
                 View post
               </a>
             ) : null}
           </div>
-          <p className="mt-3 whitespace-pre-wrap text-sm text-slate-200">{item.postContent}</p>
-          <p className="mt-2 text-xs text-slate-400">
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-body">{item.postContent}</p>
+          <p className="mt-2.5 text-xs text-muted">
             Matched: {item.matchedKeywords.join(", ") || "—"} · Intent: {item.testingIntent}
           </p>
           {item.draftBody ? (
-            <div className="mt-4 rounded-xl border border-slate-800 p-3">
-              <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">
+            <div className="mt-4 rounded-control border border-line bg-surface p-3.5">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
                 Preview · {item.draftStatus}
               </div>
               <Textarea
@@ -101,7 +120,7 @@ export function OpportunityList({
               </div>
             </div>
           ) : null}
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-4">
             <JsonButton
               url={`/api/opportunities/${item.id}`}
               body={{ action: "generate", tone, campaignId }}

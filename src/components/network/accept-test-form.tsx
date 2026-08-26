@@ -63,19 +63,27 @@ export function AcceptTestForm({
 
   if (step === "confirm") {
     return (
-      <form onSubmit={confirm} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-        <h2 className="text-lg font-semibold">Confirm testing participation</h2>
-        <p className="mt-2 text-sm text-slate-400">
-          You are agreeing to test <strong className="text-slate-200">{appName}</strong> by {ownerName} for {durationDays}{" "}
-          days. Your Google Play Gmail is shared with the app owner only after this confirmation.
+      <form onSubmit={confirm} className="rounded-card border border-line bg-white p-5 shadow-card sm:p-6">
+        <h2 className="text-[15px] font-semibold text-slate-900">Confirm testing participation</h2>
+        <p className="mt-1.5 max-w-xl text-sm leading-6 text-muted">
+          You are agreeing to test <strong className="font-medium text-slate-900">{appName}</strong> by{" "}
+          {ownerName} for {durationDays} days. Your Google Play Gmail is shared with the app owner only after
+          this confirmation.
         </p>
-        <div className="mt-4">
-          <Label>Your Google Play Gmail</Label>
-          <Input name="gmail" type="email" defaultValue={defaultGmail} required />
+        <div className="mt-5 max-w-sm">
+          <Label htmlFor="accept-gmail">Your Google Play Gmail</Label>
+          <Input id="accept-gmail" name="gmail" type="email" defaultValue={defaultGmail} required />
         </div>
-        {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
-        <div className="mt-4">
-          <Button type="submit" disabled={pending}>
+        {error ? (
+          <p
+            role="alert"
+            className="mt-4 rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-700"
+          >
+            {error}
+          </p>
+        ) : null}
+        <div className="mt-5">
+          <Button type="submit" aria-busy={pending} disabled={pending}>
             {pending ? "Working…" : "Confirm & join test"}
           </Button>
         </div>
@@ -84,9 +92,16 @@ export function AcceptTestForm({
   }
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-      {error ? <p className="mb-3 text-sm text-rose-300">{error}</p> : null}
-      <Button type="button" onClick={accept} disabled={pending}>
+    <div className="rounded-card border border-line bg-white p-5 shadow-card">
+      {error ? (
+        <p
+          role="alert"
+          className="mb-4 rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-700"
+        >
+          {error}
+        </p>
+      ) : null}
+      <Button type="button" aria-busy={pending} onClick={accept} disabled={pending}>
         {pending ? "Working…" : "Accept testing request"}
       </Button>
     </div>

@@ -3,6 +3,9 @@ import { requireAdmin } from "@/auth";
 import { prisma } from "@/lib/db";
 import { JsonButton } from "@/components/ui/json-button";
 import { Badge } from "@/components/ui/badge";
+import { SectionLabel } from "@/components/ui/card";
+import { EmptyState, StatCard } from "@/components/ui/widgets";
+import { Table, TableWrap, Td, Th, Tr } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/utils";
 
 export default async function AdminPage() {
@@ -46,74 +49,131 @@ export default async function AdminPage() {
   ]);
 
   return (
-    <AppShell title="Admin">
-      <p className="mb-6 text-sm text-slate-400">
-        Platform operators cannot see Google passwords or decrypted Play credentials from this screen.
-      </p>
-      <div className="grid gap-4 sm:grid-cols-4">
-        <div className="rounded-2xl border border-slate-800 p-4">Developers {developers}</div>
-        <div className="rounded-2xl border border-slate-800 p-4">Apps {apps}</div>
-        <div className="rounded-2xl border border-slate-800 p-4">Campaigns {campaigns}</div>
-        <div className="rounded-2xl border border-slate-800 p-4">Participations {participations}</div>
+    <AppShell
+      title="Admin"
+      description="Platform operators cannot see Google passwords or decrypted Play credentials."
+    >
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Developers" value={developers} />
+        <StatCard label="Apps" value={apps} />
+        <StatCard label="Campaigns" value={campaigns} />
+        <StatCard label="Participations" value={participations} />
       </div>
-      <h2 className="mb-3 mt-10 text-sm uppercase tracking-wide text-slate-400">Google Play integration health</h2>
-      <div className="flex flex-wrap gap-2 text-sm">
-        {playHealth.map((row) => (
-          <Badge key={row.status}>
-            {row.status}: {row._count}
-          </Badge>
-        ))}
-      </div>
-      <h2 className="mb-3 mt-10 text-sm uppercase tracking-wide text-slate-400">Developers</h2>
-      <div className="overflow-x-auto rounded-2xl border border-slate-800">
-        <table className="min-w-full text-sm">
-          <thead className="bg-slate-950/80 text-left text-slate-400">
+
+      <SectionLabel className="mb-3 mt-10">Google Play integration health</SectionLabel>
+      {playHealth.length === 0 ? (
+        <p className="text-sm text-muted">No Google Play integrations yet.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {playHealth.map((row) => (
+            <Badge
+              key={row.status}
+              tone={row.status === "CONNECTED" ? "good" : row.status === "ERROR" ? "bad" : "neutral"}
+            >
+              {row.status.replaceAll("_", " ")}: {row._count}
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      <SectionLabel className="mb-3 mt-10">Developers</SectionLabel>
+      <TableWrap>
+        <Table>
+          <thead>
             <tr>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Apps</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3"></th>
+              <Th>Name</Th>
+              <Th>Email</Th>
+              <Th className="text-right">Apps</Th>
+              <Th>Status</Th>
+              <Th className="text-right">Action</Th>
             </tr>
           </thead>
           <tbody>
             {users.map((item) => (
-              <tr key={item.id} className="border-t border-slate-800">
-                <td className="px-4 py-3">{item.developerName || item.name}</td>
-                <td className="px-4 py-3">{item.email}</td>
-                <td className="px-4 py-3">{item._count.apps}</td>
-                <td className="px-4 py-3">{item.suspendedAt ? "Suspended" : "Active"}</td>
-                <td className="px-4 py-3">
+              <Tr key={item.id}>
+                <Td className="font-medium text-slate-900">{item.developerName || item.name}</Td>
+                <Td className="text-muted">{item.email}</Td>
+                <Td className="text-right tabular-nums">{item._count.apps}</Td>
+                <Td>
+                  <Badge tone={item.suspendedAt ? "bad" : "good"}>
+                    {item.suspendedAt ? "Suspended" : "Active"}
+                  </Badge>
+                </Td>
+                <Td className="text-right">
                   <JsonButton
                     url="/api/admin"
                     body={{ userId: item.id, action: item.suspendedAt ? "restore" : "suspend" }}
                     label={item.suspendedAt ? "Restore" : "Suspend"}
                     variant={item.suspendedAt ? "secondary" : "danger"}
                   />
-                </td>
-              </tr>
+                </Td>
+              </Tr>
             ))}
           </tbody>
-        </table>
-      </div>
-      <h2 className="mb-3 mt-10 text-sm uppercase tracking-wide text-slate-400">Reports</h2>
-      <div className="space-y-2 text-sm">
-        {reports.map((report) => (
-          <div key={report.id} className="rounded-xl border border-slate-800 p-4">
-            {report.reason} · {report.author.developerName || report.author.name} · {formatDateTime(report.createdAt)}
-            {report.details ? <p className="mt-1 text-slate-400">{report.details}</p> : null}
-          </div>
-        ))}
-      </div>
-      <h2 className="mb-3 mt-10 text-sm uppercase tracking-wide text-slate-400">Recent jobs</h2>
-      <div className="space-y-2 text-sm">
-        {jobs.map((job) => (
-          <div key={job.id} className="rounded-xl border border-slate-800 p-3">
-            {job.type} · {job.status}
-            {job.lastError ? <span className="text-rose-300"> · {job.lastError}</span> : null}
-          </div>
-        ))}
-      </div>
+        </Table>
+      </TableWrap>
+
+      <SectionLabel className="mb-3 mt-10">Reports</SectionLabel>
+      {reports.length === 0 ? (
+        <EmptyState title="No reports" body="Developer reports submitted for review appear here." />
+      ) : (
+        <div className="space-y-2.5">
+          {reports.map((report) => (
+            <div key={report.id} className="rounded-card border border-line bg-white p-4 shadow-card">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                <span className="font-medium text-slate-900">{report.reason}</span>
+                <span className="text-muted">
+                  · {report.author.developerName || report.author.name} ·{" "}
+                  {formatDateTime(report.createdAt)}
+                </span>
+              </div>
+              {report.details ? (
+                <p className="mt-1.5 text-sm leading-6 text-muted">{report.details}</p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <SectionLabel className="mb-3 mt-10">Recent jobs</SectionLabel>
+      {jobs.length === 0 ? (
+        <EmptyState title="No jobs yet" body="Background jobs run when integrations sync tester access." />
+      ) : (
+        <TableWrap>
+          <Table>
+            <thead>
+              <tr>
+                <Th>Type</Th>
+                <Th>Status</Th>
+                <Th>Created</Th>
+                <Th>Last error</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.map((job) => (
+                <Tr key={job.id}>
+                  <Td className="font-medium text-slate-900">{job.type}</Td>
+                  <Td>
+                    <Badge
+                      tone={
+                        job.status === "SUCCEEDED"
+                          ? "good"
+                          : job.status === "FAILED" || job.status === "CANCELLED"
+                            ? "bad"
+                            : "warn"
+                      }
+                    >
+                      {job.status}
+                    </Badge>
+                  </Td>
+                  <Td className="whitespace-nowrap text-muted">{formatDateTime(job.createdAt)}</Td>
+                  <Td className="text-danger">{job.lastError || "—"}</Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
+        </TableWrap>
+      )}
     </AppShell>
   );
 }

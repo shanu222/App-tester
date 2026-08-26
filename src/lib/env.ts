@@ -42,15 +42,18 @@ export function assertProductionSecrets() {
   requiredInProduction("DATABASE_URL", process.env.DATABASE_URL);
   requiredInProduction("ENCRYPTION_KEY", process.env.ENCRYPTION_KEY);
   requiredInProduction("CRON_SECRET", process.env.CRON_SECRET);
-  if (process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_SECRET) {
-    requiredInProduction("AUTH_SECRET", process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET);
-  }
+  // Every session is a JWT signed with this secret, whichever way the user signed in.
+  requiredInProduction("AUTH_SECRET", process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET);
 }
 
 export function isDemoMode() {
   return env.demoMode && env.nodeEnv !== "production";
 }
 
+/**
+ * Google Cloud OAuth credentials for the Gmail and Google Play integrations.
+ * Login does not use these — sign-in goes through Firebase Authentication.
+ */
 export function googleOAuthConfigured() {
   return Boolean(env.googleClientId && env.googleClientSecret);
 }

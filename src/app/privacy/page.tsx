@@ -38,7 +38,7 @@ export default function PrivacyPage() {
                 </p>
                 <p>
                   For privacy questions, contact{" "}
-                  <a className="text-emerald-300" href={`mailto:${CONTACT_EMAIL}`}>
+                  <a className="text-brand" href={`mailto:${CONTACT_EMAIL}`}>
                     {CONTACT_EMAIL}
                   </a>
                   .
@@ -57,39 +57,39 @@ export default function PrivacyPage() {
                   password.
                 </p>
                 <p>
-                  <strong className="text-slate-100">Google account information used for authentication.</strong> When
+                  <strong className="text-slate-900">Google account information used for authentication.</strong> When
                   you choose Continue with Google, Google may share the Google account email address, name, and profile
                   photo associated with the account you select. {SITE_NAME} uses this information to create and maintain
                   your developer account. We do not use Google Sign-In to read your Gmail inbox, contacts, or Drive.
                 </p>
                 <p>
-                  <strong className="text-slate-100">Developer profile information.</strong> After sign-in you may
+                  <strong className="text-slate-900">Developer profile information.</strong> After sign-in you may
                   provide a full name, developer or company name, country, city, developer type, years of experience,
                   platforms, technologies, website, GitHub, LinkedIn, bio, profile photo, and an optional Google Play
                   testing Gmail. Incomplete profiles cannot create testing campaigns or accept tests.
                 </p>
                 <p>
-                  <strong className="text-slate-100">Application information.</strong> If you add an Android app,{" "}
+                  <strong className="text-slate-900">Application information.</strong> If you add an Android app,{" "}
                   {SITE_NAME} stores details you submit such as app name, package name, Google Play Store URL, optional
                   testing or opt-in URL, icon, description, testing track or type, tester targets, and related
                   configuration. {SITE_NAME} does not create fake app records and does not treat a Play Store listing
                   URL as a testing opt-in URL.
                 </p>
                 <p>
-                  <strong className="text-slate-100">Testing campaign information.</strong> Campaign records may include
+                  <strong className="text-slate-900">Testing campaign information.</strong> Campaign records may include
                   the selected app, testing type, target tester count, duration, description, testing instructions,
                   publication status, Google Group configuration if you add one, and campaign progress derived from
                   recorded platform activity.
                 </p>
                 <p>
-                  <strong className="text-slate-100">Tester participation information.</strong> If you accept another
+                  <strong className="text-slate-900">Tester participation information.</strong> If you accept another
                   developer’s testing request, {SITE_NAME} records the participation and its status. Your Google Play
                   testing email is collected only after you explicitly confirm and consent to share it with that
                   campaign’s owner. Other developers do not see your Google email on public profiles or the request
                   feed. Campaign owners can see a consented testing email so they can add you as a tester.
                 </p>
                 <p>
-                  <strong className="text-slate-100">Google Play and testing-related integrations.</strong> If you
+                  <strong className="text-slate-900">Google Play and testing-related integrations.</strong> If you
                   choose to connect a Google Play Developer API service account, optional Gmail sending, Google
                   Workspace / Groups automation, or another supported integration, {SITE_NAME} stores the credentials
                   and connection status you provide so the integration can run for your account. Play service-account
@@ -99,19 +99,19 @@ export default function PrivacyPage() {
                   result.
                 </p>
                 <p>
-                  <strong className="text-slate-100">Messages, feedback, reports, and activity.</strong> {SITE_NAME}{" "}
+                  <strong className="text-slate-900">Messages, feedback, reports, and activity.</strong> {SITE_NAME}{" "}
                   stores developer-to-developer messages you send, testing feedback you submit, in-app notifications,
                   reports or blocks you file, and activity logs needed to operate campaigns and support trust and
                   safety.
                 </p>
                 <p>
-                  <strong className="text-slate-100">Optional in-app telemetry.</strong> If a developer’s own application
+                  <strong className="text-slate-900">Optional in-app telemetry.</strong> If a developer’s own application
                   is configured to call {SITE_NAME}’s telemetry endpoint, {SITE_NAME} may store a campaign token, an
                   anonymous tester identifier, optional app version, optional platform, and timestamps. This is an
                   activity signal from that app. It is not a Google Play per-account download confirmation.
                 </p>
                 <p>
-                  <strong className="text-slate-100">Technical information.</strong> When you visit {SITE_NAME}, our
+                  <strong className="text-slate-900">Technical information.</strong> When you visit {SITE_NAME}, our
                   hosting and infrastructure providers may process standard request data such as IP address, browser
                   type, device or user-agent information, and timestamps in order to operate, secure, and diagnose the
                   service. {SITE_NAME} does not currently operate a separate advertising pixel or third-party marketing
@@ -202,7 +202,7 @@ export default function PrivacyPage() {
                 </p>
                 <p>
                   To request deletion of your {SITE_NAME} account and associated personal data, email{" "}
-                  <a className="text-emerald-300" href={`mailto:${CONTACT_EMAIL}`}>
+                  <a className="text-brand" href={`mailto:${CONTACT_EMAIL}`}>
                     {CONTACT_EMAIL}
                   </a>
                   . We may retain limited records where we have a legitimate need, such as security, dispute
@@ -309,11 +309,11 @@ export default function PrivacyPage() {
             content: (
               <p>
                 Privacy requests, including access or deletion requests, can be sent to{" "}
-                <a className="text-emerald-300" href={`mailto:${CONTACT_EMAIL}`}>
+                <a className="text-brand" href={`mailto:${CONTACT_EMAIL}`}>
                   {CONTACT_EMAIL}
                 </a>
                 . You can also return to the main {SITE_NAME} website at{" "}
-                <a className="text-emerald-300" href={SITE_ORIGIN}>
+                <a className="text-brand" href={SITE_ORIGIN}>
                   {SITE_ORIGIN}
                 </a>
                 .

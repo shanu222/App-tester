@@ -31,13 +31,19 @@ export function PasteReplyForm({ campaignId }: { campaignId: string }) {
   }
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <Label>Paste reply</Label>
-      <Input name="personName" placeholder="Person name" />
+      <div>
+        <Label htmlFor="paste-person">Paste reply</Label>
+        <Input id="paste-person" name="personName" placeholder="Person name" />
+      </div>
       <Textarea name="text" placeholder="Sure, my Gmail is tester@gmail.com" required />
       <Button type="submit" variant="secondary">
         Extract email
       </Button>
-      {result ? <p className="text-sm text-emerald-300">{result}</p> : null}
+      {result ? (
+        <p className="whitespace-pre-wrap rounded-control border border-blue-200 bg-brand-soft px-3 py-2 text-sm leading-6 text-blue-800">
+          {result}
+        </p>
+      ) : null}
     </form>
   );
 }

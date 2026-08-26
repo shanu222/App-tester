@@ -1,23 +1,29 @@
 "use client";
 
+import { AlertTriangle } from "lucide-react";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { Button } from "@/components/ui/button";
 
-export default function ErrorBoundary({
-  error,
-  reset,
-}: {
-  error: Error;
-  reset: () => void;
-}) {
+export default function ErrorBoundary({ error, reset }: { error: Error; reset: () => void }) {
   return (
-    <div className="mx-auto flex max-w-lg flex-col items-center px-6 py-24 text-center">
-      <BrandLogo size="sm" />
-      <h1 className="mt-6 text-2xl font-semibold">Something went wrong</h1>
-      <p className="mt-3 text-sm leading-6 text-slate-400">{error.message}</p>
-      <Button type="button" className="mt-6" onClick={reset}>
-        Try again
-      </Button>
+    <div className="flex min-h-screen flex-col bg-white">
+      <div className="border-b border-line px-4 py-3 sm:px-6">
+        <BrandLogo href="/" size="md" />
+      </div>
+      <main className="flex flex-1 items-center justify-center px-4 py-16">
+        <div className="w-full max-w-md rounded-card border border-line bg-white p-8 text-center shadow-card">
+          <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-red-50 text-red-600">
+            <AlertTriangle className="h-5 w-5" aria-hidden />
+          </span>
+          <h1 className="mt-5 text-xl font-semibold text-slate-900">Something went wrong</h1>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            {error.message || "An unexpected error stopped this page from loading."}
+          </p>
+          <Button type="button" className="mt-6 w-full" onClick={reset}>
+            Try again
+          </Button>
+        </div>
+      </main>
     </div>
   );
 }

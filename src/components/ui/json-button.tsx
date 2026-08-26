@@ -49,7 +49,7 @@ export function JsonButton({
       >
         {pending ? "Working…" : label}
       </Button>
-      {error ? <span className="max-w-xs text-xs text-rose-300">{error}</span> : null}
+      {error ? <span className="max-w-xs text-xs text-danger">{error}</span> : null}
     </span>
   );
 }

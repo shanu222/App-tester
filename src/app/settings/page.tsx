@@ -8,7 +8,7 @@ export default async function SettingsPage() {
   const settings = await prisma.userSettings.findUnique({ where: { userId: user.id } });
   const templates = await prisma.messageTemplate.findMany({ where: { userId: user.id, campaignId: null } });
   return (
-    <AppShell title="Settings">
+    <AppShell title="Settings" description="Account details, rate limits, notifications, and data export.">
       <SettingsForms
         user={{
           name: user.name || "",

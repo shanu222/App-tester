@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PublicChrome } from "@/components/layout/public-chrome";
 import { CONTACT_EMAIL, CONTACT_PHONE, SITE_NAME, SITE_ORIGIN } from "@/lib/site";
+import { Mail, Phone } from "lucide-react";
 import Link from "next/link";
 
 export const metadata: Metadata = {
@@ -19,26 +20,45 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   return (
     <PublicChrome>
-      <main className="mx-auto max-w-3xl px-6 py-16">
-        <h1 className="text-3xl font-semibold tracking-tight">Contact</h1>
-        <p className="mt-4 text-slate-300">
-          For privacy requests, legal questions, trust and safety reports, or account deletion requests, email{" "}
-          <a className="text-emerald-300 hover:underline" href={`mailto:${CONTACT_EMAIL}`}>
-            {CONTACT_EMAIL}
+      <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:py-16">
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">Contact</h1>
+        <p className="mt-4 max-w-2xl text-base leading-7 text-body">
+          For privacy requests, legal questions, trust and safety reports, or account deletion, reach out
+          using either channel below.
+        </p>
+
+        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+          <a
+            href={`mailto:${CONTACT_EMAIL}`}
+            className="group rounded-card border border-line bg-white p-5 shadow-card transition-colors hover:border-brand"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-control bg-brand-soft text-brand">
+              <Mail className="h-4.5 w-4.5" aria-hidden />
+            </span>
+            <h2 className="mt-4 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">Email</h2>
+            <p className="mt-1 font-medium text-slate-900 group-hover:text-brand">{CONTACT_EMAIL}</p>
           </a>
-          .
-        </p>
-        <p className="mt-3 text-slate-300">
-          Phone:{" "}
-          <a className="text-emerald-300 hover:underline" href={`tel:${CONTACT_PHONE}`}>
-            {CONTACT_PHONE}
+
+          <a
+            href={`tel:${CONTACT_PHONE}`}
+            className="group rounded-card border border-line bg-white p-5 shadow-card transition-colors hover:border-brand"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-control bg-brand-soft text-brand">
+              <Phone className="h-4.5 w-4.5" aria-hidden />
+            </span>
+            <h2 className="mt-4 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">Phone</h2>
+            <p className="mt-1 font-medium text-slate-900 group-hover:text-brand">{CONTACT_PHONE}</p>
           </a>
-        </p>
-        <p className="mt-6 text-sm leading-7 text-slate-400">
-          Signed-in developers can also use in-app Messages and report/block tools. Do not send Google passwords or
-          private service-account keys by email.
-        </p>
-        <Link href="/" className="mt-8 inline-block text-sm text-emerald-300">
+        </div>
+
+        <div className="mt-8 rounded-card border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm leading-6 text-amber-800">
+            Signed-in developers can also use in-app Messages and the report/block tools. Never send Google
+            passwords or private service-account keys by email.
+          </p>
+        </div>
+
+        <Link href="/" className="mt-8 inline-block text-sm font-medium text-brand hover:underline">
           Back to {SITE_NAME}
         </Link>
       </main>

@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { JsonButton } from "@/components/ui/json-button";
 import { publicDeveloper } from "@/lib/services/network";
 import { Button } from "@/components/ui/button";
+import { SectionLabel } from "@/components/ui/card";
+import { CheckCircle2, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 export default async function MyTestingPage() {
@@ -25,11 +27,10 @@ export default async function MyTestingPage() {
   ]);
 
   return (
-    <AppShell title="My testing">
-      <p className="mb-6 max-w-2xl text-sm text-slate-400">
-        Status changes only after a real event: your consent, a Google API result, owner confirmation, your opt-in,
-        or submitted feedback. TestLoop does not invent downloads.
-      </p>
+    <AppShell
+      title="My testing"
+      description="Status changes only after a real event — consent, a Google API result, your opt-in, or feedback."
+    >
       {mine.length === 0 ? (
         <EmptyState
           title="You are not testing any apps yet"
@@ -48,23 +49,30 @@ export default async function MyTestingPage() {
             );
             const owner = publicDeveloper(row.owner);
             return (
-              <div key={row.id} className="rounded-xl border border-slate-800 bg-card p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="font-medium">{row.campaign.app.name}</div>
-                    <div className="text-sm text-slate-400">
-                      {owner.name} · {row.campaign.testingType}
+              <div key={row.id} className="rounded-card border border-line bg-white p-5 shadow-card">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-900">{row.campaign.app.name}</div>
+                    <div className="mt-0.5 text-sm text-muted">
+                      {owner.name} · {row.campaign.testingType} testing
                     </div>
                   </div>
                   <Badge tone={row.status === "FAILED" || row.status === "MANUAL_REQUIRED" ? "warn" : "neutral"}>
-                    {row.status}
+                    {row.status.replaceAll("_", " ")}
                   </Badge>
                 </div>
-                {row.lastError ? <p className="mt-2 text-sm text-amber-200">{row.lastError}</p> : null}
+                {row.lastError ? (
+                  <p className="mt-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-800">
+                    {row.lastError}
+                  </p>
+                ) : null}
                 {ready && row.campaign.webOptInUrl ? (
-                  <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm">
-                    <div className="font-medium">You&apos;re ready to test</div>
-                    <ol className="mt-2 list-decimal space-y-1 pl-5 text-slate-300">
+                  <div className="mt-4 rounded-control border border-emerald-200 bg-emerald-50 p-4">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
+                      <CheckCircle2 className="h-4.5 w-4.5" aria-hidden />
+                      You&apos;re ready to test
+                    </div>
+                    <ol className="mt-2.5 list-decimal space-y-1 pl-5 text-sm leading-6 text-emerald-900/80">
                       <li>Open the testing link.</li>
                       <li>Join the test.</li>
                       <li>Install the app from Google Play.</li>
@@ -72,21 +80,22 @@ export default async function MyTestingPage() {
                       <li>Submit feedback.</li>
                     </ol>
                     <a
-                      className="mt-3 inline-block text-emerald-300 hover:underline"
+                      className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-800 hover:underline"
                       href={row.campaign.webOptInUrl}
                       target="_blank"
                       rel="noreferrer"
                     >
                       Join Google Play test
+                      <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                     </a>
                   </div>
                 ) : ready && !row.campaign.webOptInUrl ? (
-                  <p className="mt-3 text-sm text-slate-400">
+                  <p className="mt-3 text-sm leading-6 text-muted">
                     Access is configured. A testing/opt-in URL has not been stored for this campaign, so TestLoop
                     will not show a join link yet.
                   </p>
                 ) : null}
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-4">
                   {row.status === "FAILED" || row.status === "MANUAL_REQUIRED" ? (
                     <JsonButton
                       url="/api/network"
@@ -129,18 +138,21 @@ export default async function MyTestingPage() {
         </div>
       )}
 
-      <h2 className="mb-3 mt-10 text-sm uppercase tracking-wide text-slate-400">Reciprocal testing</h2>
+      <SectionLabel className="mb-3 mt-10">Reciprocal testing</SectionLabel>
       {incoming.length === 0 ? (
-        <p className="text-sm text-slate-500">No reciprocal requests yet.</p>
+        <p className="text-sm text-muted">No reciprocal requests yet.</p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {incoming.map((row) => {
             const other = row.requesterId === user.id ? row.target : row.requester;
             return (
-              <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 p-4">
-                <div className="text-sm">
-                  <div className="font-medium">{publicDeveloper(other).name}</div>
-                  <div className="text-slate-400">{row.status}</div>
+              <div
+                key={row.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-white p-4 shadow-card"
+              >
+                <div className="min-w-0">
+                  <div className="font-medium text-slate-900">{publicDeveloper(other).name}</div>
+                  <div className="mt-0.5 text-sm text-muted">{row.status.replaceAll("_", " ")}</div>
                 </div>
                 {row.targetId === user.id && row.status === "PENDING" ? (
                   <div className="flex gap-2">

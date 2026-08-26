@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { Card } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/fields";
 
@@ -37,9 +37,12 @@ export function WorkspaceForm() {
   }
 
   return (
-    <Card className="p-5">
-      <h2 className="font-medium">Google Group</h2>
-      <form onSubmit={onSubmit} className="mt-4 space-y-3">
+    <Card>
+      <CardHeader
+        title="Google Group"
+        description="Optional. Workspace credentials enable automated group membership."
+      />
+      <form onSubmit={onSubmit} className="mt-5 space-y-4">
         <div>
           <Label htmlFor="groupEmail">Group email</Label>
           <Input id="groupEmail" name="email" placeholder="testers@googlegroups.com" required />
@@ -56,8 +59,15 @@ export function WorkspaceForm() {
           <Label htmlFor="workspaceJson">Workspace service account JSON (optional)</Label>
           <Textarea id="workspaceJson" name="serviceAccountJson" />
         </div>
-        {error ? <p className="text-sm text-rose-300">{error}</p> : null}
-        <Button type="submit" variant="secondary" disabled={pending}>
+        {error ? (
+          <p
+            role="alert"
+            className="rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-700"
+          >
+            {error}
+          </p>
+        ) : null}
+        <Button type="submit" variant="secondary" aria-busy={pending} disabled={pending}>
           {pending ? "Saving…" : "Save group"}
         </Button>
       </form>

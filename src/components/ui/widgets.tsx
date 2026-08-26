@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { TESTER_STATUS_LABELS } from "@/lib/status";
+import { cn } from "@/lib/utils";
 import type { TesterStatus } from "@prisma/client";
 import type { ReactNode } from "react";
 
@@ -19,16 +20,23 @@ export function EmptyState({
   title,
   body,
   action,
+  icon,
 }: {
   title: string;
   body: string;
   action?: ReactNode;
+  icon?: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-slate-700 px-6 py-12 text-center">
-      <h2 className="text-base font-medium text-white">{title}</h2>
-      <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-400">{body}</p>
-      {action ? <div className="mt-5">{action}</div> : null}
+    <div className="rounded-card border border-dashed border-line-strong bg-white px-6 py-12 text-center">
+      {icon ? (
+        <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface text-muted">
+          {icon}
+        </div>
+      ) : null}
+      <h2 className="text-[15px] font-semibold text-slate-900">{title}</h2>
+      <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-muted">{body}</p>
+      {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
     </div>
   );
 }
@@ -37,30 +45,34 @@ export function StatCard({
   label,
   value,
   hint,
+  className,
 }: {
   label: string;
   value: number | string;
   hint?: string;
+  className?: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-card p-4">
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-2 text-2xl font-semibold tabular-nums">{value}</div>
-      {hint ? <div className="mt-1 text-xs leading-5 text-slate-500">{hint}</div> : null}
+    <div className={cn("rounded-card border border-line bg-white p-4 shadow-card", className)}>
+      <div className="text-[13px] font-medium text-muted">{label}</div>
+      <div className="mt-1.5 text-[26px] font-semibold leading-none tracking-tight text-slate-900 tabular-nums">
+        {value}
+      </div>
+      {hint ? <div className="mt-2 text-xs leading-5 text-muted">{hint}</div> : null}
     </div>
   );
 }
 
 export function PageSkeleton() {
   return (
-    <div className="animate-pulse space-y-4" aria-busy="true" aria-label="Loading">
-      <div className="h-7 w-48 rounded-md bg-slate-800" />
+    <div className="animate-pulse space-y-6" aria-busy="true" aria-label="Loading">
+      <div className="h-6 w-44 rounded bg-surface-strong" />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="h-24 rounded-xl border border-slate-800 bg-slate-900" />
+          <div key={index} className="h-24 rounded-card border border-line bg-white shadow-card" />
         ))}
       </div>
-      <div className="h-48 rounded-xl border border-slate-800 bg-slate-900" />
+      <div className="h-56 rounded-card border border-line bg-white shadow-card" />
     </div>
   );
 }

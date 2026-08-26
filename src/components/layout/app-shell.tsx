@@ -1,35 +1,39 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { Bell, LogOut } from "lucide-react";
 import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
 import { isDemoMode } from "@/lib/env";
 import { signOutAction } from "@/app/actions/auth";
 import { redirect } from "next/navigation";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { type NavItem } from "@/components/layout/sidebar-nav";
 import { SiteFooter } from "@/components/layout/public-chrome";
 
-const NAV = [
-  { href: "/dashboard", label: "Home", section: "Workspace" },
-  { href: "/apps", label: "My Apps", section: "Workspace" },
-  { href: "/requests", label: "Testing Requests", section: "Testing" },
-  { href: "/campaigns", label: "My Testing Requests", section: "Testing" },
-  { href: "/testing", label: "My Testing", section: "Testing" },
-  { href: "/testers", label: "Testers", section: "Testing" },
-  { href: "/messages", label: "Messages", section: "Account" },
-  { href: "/play", label: "Google Play", section: "Account" },
-  { href: "/analytics", label: "Analytics", section: "Account" },
-  { href: "/profile", label: "Developer Profile", section: "Account" },
-  { href: "/integrations", label: "Integrations", section: "Account" },
-  { href: "/settings", label: "Settings", section: "Account" },
+const NAV: NavItem[] = [
+  { href: "/dashboard", label: "Home", section: "Workspace", icon: "home" },
+  { href: "/apps", label: "My Apps", section: "Workspace", icon: "apps" },
+  { href: "/requests", label: "Testing Requests", section: "Testing", icon: "requests" },
+  { href: "/campaigns", label: "My Testing Requests", section: "Testing", icon: "campaigns" },
+  { href: "/testing", label: "My Testing", section: "Testing", icon: "testing" },
+  { href: "/testers", label: "Testers", section: "Testing", icon: "testers" },
+  { href: "/messages", label: "Messages", section: "Account", icon: "messages" },
+  { href: "/play", label: "Google Play", section: "Account", icon: "play" },
+  { href: "/analytics", label: "Analytics", section: "Account", icon: "analytics" },
+  { href: "/profile", label: "Developer Profile", section: "Account", icon: "profile" },
+  { href: "/integrations", label: "Integrations", section: "Account", icon: "integrations" },
+  { href: "/settings", label: "Settings", section: "Account", icon: "settings" },
 ];
 
 export async function AppShell({
   children,
   title,
+  description,
   actions,
 }: {
   children: ReactNode;
   title: string;
+  description?: string;
   actions?: ReactNode;
 }) {
   const user = await requireUser();
@@ -37,35 +41,71 @@ export async function AppShell({
   const unread = await prisma.notification.count({
     where: { userId: user.id, readAt: null },
   });
-  const items = user.role === "ADMIN" ? [...NAV, { href: "/admin", label: "Admin", section: "Account" }] : NAV;
+  const items: NavItem[] =
+    user.role === "ADMIN"
+      ? [...NAV, { href: "/admin", label: "Admin", section: "Account", icon: "admin" }]
+      : NAV;
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
+    <div className="min-h-screen bg-surface lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
       <AppSidebar items={items} />
+
       <div className="flex min-w-0 flex-col">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3 sm:px-8">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-            {isDemoMode() ? (
-              <p className="text-xs text-amber-200">DEMO MODE — no production APIs are called.</p>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            {actions}
-            <Link href="/activity" className="text-sm text-slate-300 hover:text-white">
-              Alerts{unread ? ` (${unread})` : ""}
-            </Link>
-            <Link href="/profile" className="text-sm text-slate-400 hover:text-white">
-              {user.developerName || user.name || "Developer"}
-            </Link>
-            <form action={signOutAction}>
-              <button type="submit" className="text-sm text-slate-400 hover:text-white">
-                Sign out
-              </button>
-            </form>
+        <header className="sticky top-0 z-20 border-b border-line bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6 lg:py-4">
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-semibold tracking-tight text-slate-900">{title}</h1>
+              {description ? (
+                <p className="mt-0.5 truncate text-sm text-muted">{description}</p>
+              ) : null}
+              {isDemoMode() ? (
+                <p className="mt-0.5 text-xs font-medium text-amber-700">
+                  Demo mode — no production APIs are called.
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1.5">
+              {actions}
+              <Link
+                href="/activity"
+                className="relative inline-flex h-9 w-9 items-center justify-center rounded-control text-slate-500 transition-colors hover:bg-surface-strong hover:text-slate-900"
+                aria-label={unread ? `Alerts, ${unread} unread` : "Alerts"}
+              >
+                <Bell className="h-4.5 w-4.5" aria-hidden />
+                {unread ? (
+                  <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-white">
+                    {unread > 9 ? "9+" : unread}
+                  </span>
+                ) : null}
+              </Link>
+              <Link
+                href="/profile"
+                className="hidden items-center gap-2 rounded-control px-2 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-surface-strong sm:inline-flex"
+              >
+                <span className="flex h-6.5 w-6.5 items-center justify-center rounded-full bg-brand-soft text-[11px] font-semibold text-brand">
+                  {(user.developerName || user.name || "D").charAt(0).toUpperCase()}
+                </span>
+                <span className="max-w-32 truncate">{user.developerName || user.name || "Developer"}</span>
+              </Link>
+              <form action={signOutAction}>
+                <button
+                  type="submit"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-control text-slate-500 transition-colors hover:bg-surface-strong hover:text-slate-900"
+                  aria-label="Sign out"
+                  title="Sign out"
+                >
+                  <LogOut className="h-4.5 w-4.5" aria-hidden />
+                </button>
+              </form>
+            </div>
           </div>
         </header>
-        <main className="flex-1 px-4 py-6 sm:px-8">{children}</main>
+
+        <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">
+          <div className="mx-auto max-w-6xl">{children}</div>
+        </main>
+
         <SiteFooter homeHref="/dashboard" />
       </div>
     </div>

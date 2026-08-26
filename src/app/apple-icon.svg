@@ -1,14 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 80" fill="none">
-  <defs>
-    <linearGradient id="g" x1="0%" y1="50%" x2="100%" y2="50%">
-      <stop offset="0%" stop-color="#2f6fed" />
-      <stop offset="100%" stop-color="#12b981" />
-    </linearGradient>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" fill="none">
+  <rect width="180" height="180" rx="40" fill="#2563eb" />
   <path
-    d="M20 40C20 12 52 12 80 40C108 68 140 68 140 40C140 12 108 12 80 40C52 68 20 68 20 40"
-    stroke="url(#g)"
-    stroke-width="12"
+    d="M36 90C36 66 64 66 90 90C116 114 144 114 144 90C144 66 116 66 90 90C64 114 36 114 36 90"
+    stroke="#ffffff"
+    stroke-width="14"
     stroke-linecap="round"
     stroke-linejoin="round"
   />

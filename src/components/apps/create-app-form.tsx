@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent } from "react";
-import { Card } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/fields";
 
@@ -30,9 +30,9 @@ export function CreateAppForm() {
     window.location.reload();
   }
   return (
-    <Card className="p-5">
-      <h2 className="font-medium">Add Android app</h2>
-      <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
+    <Card>
+      <CardHeader title="Add Android app" description="Store and testing URLs are kept separate." />
+      <form onSubmit={onSubmit} className="mt-5 grid gap-4 md:grid-cols-2">
         <div>
           <Label>App name</Label>
           <Input name="name" placeholder="NET360 Preparation" required />
@@ -65,7 +65,7 @@ export function CreateAppForm() {
           <Label>Tester target</Label>
           <Input name="testerTarget" type="number" defaultValue={12} />
         </div>
-        <div className="flex items-end">
+        <div className="flex items-end md:col-span-2">
           <Button type="submit">Save app</Button>
         </div>
       </form>

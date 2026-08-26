@@ -1,10 +1,9 @@
 import { json } from "@/lib/http";
 import { googleOAuthConfigured, isDemoMode } from "@/lib/env";
 import { firebaseAuthConfigured } from "@/lib/firebase/config";
-import { googleLoginCallbackUrl } from "@/lib/canonical";
 import { prisma } from "@/lib/db";
 
-/** Tables written while a Google or Firebase login bootstraps its developer record. */
+/** Tables written while a Firebase login bootstraps its developer record. */
 const LOGIN_TABLES = ["User", "UserSettings", "MessageTemplate"];
 
 async function databaseStatus() {
@@ -45,8 +44,7 @@ async function databaseStatus() {
   return status;
 }
 
-export async function GET(request: Request) {
-  const origin = new URL(request.url).origin;
+export async function GET() {
   const database = await databaseStatus();
   return json({
     ok: database.ok,
@@ -54,10 +52,8 @@ export async function GET(request: Request) {
     demoMode: isDemoMode(),
     time: new Date().toISOString(),
     database,
-    googleOAuth: {
-      configured: googleOAuthConfigured(),
-      callbackUrl: googleLoginCallbackUrl(origin),
-    },
-    firebaseAuth: { configured: firebaseAuthConfigured() },
+    // Login is Firebase-only. Google Cloud OAuth is for Gmail and Play access.
+    signIn: { provider: "firebase", configured: firebaseAuthConfigured() },
+    googleApiAccess: { configured: googleOAuthConfigured() },
   });
 }

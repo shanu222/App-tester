@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent } from "react";
-import { Card } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/fields";
 
@@ -28,9 +28,9 @@ export function FeedbackForm({ options }: { options: Array<{ id: string; label: 
     window.location.reload();
   }
   return (
-    <Card className="p-5">
-      <h2 className="font-medium">Record feedback</h2>
-      <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
+    <Card>
+      <CardHeader title="Record feedback" description="Structured notes are stored against the tester and campaign." />
+      <form onSubmit={onSubmit} className="mt-5 grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
           <Label>Tester / campaign</Label>
           <Select name="testerCampaignId" required>
@@ -77,7 +77,7 @@ export function FeedbackForm({ options }: { options: Array<{ id: string; label: 
           <Label>Screen recording link</Label>
           <Input name="recordingUrl" />
         </div>
-        <div>
+        <div className="md:col-span-2 border-t border-line pt-5">
           <Button type="submit">Save feedback</Button>
         </div>
       </form>

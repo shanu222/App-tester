@@ -7,7 +7,21 @@ import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import { requestFillStatus } from "@/lib/request-status";
 import { AppMark } from "@/components/brand/app-mark";
+import { SectionLabel } from "@/components/ui/card";
 import Link from "next/link";
+
+const FILTERS: Array<{
+  href: string;
+  label: string;
+  testingType?: string;
+  reciprocal?: boolean;
+}> = [
+  { href: "/requests", label: "All" },
+  { href: "/requests?testingType=CLOSED", label: "Closed testing", testingType: "CLOSED" },
+  { href: "/requests?testingType=INTERNAL", label: "Internal", testingType: "INTERNAL" },
+  { href: "/requests?testingType=OPEN", label: "Open", testingType: "OPEN" },
+  { href: "/requests?reciprocal=1", label: "Reciprocal", reciprocal: true },
+];
 
 export default async function RequestsPage({
   searchParams,
@@ -23,38 +37,47 @@ export default async function RequestsPage({
   const recommended = [...requests].sort((a, b) => b.match.score - a.match.score).slice(0, 3);
 
   return (
-    <AppShell title="Testing Requests">
-      <p className="mb-5 max-w-2xl text-sm leading-6 text-slate-400">
-        Only registered developers can see this list. Match scores come from reciprocal availability, country, testing
-        type, remaining testers, Play connection, and your current testing load.
-      </p>
-      <div className="mb-6 flex flex-wrap gap-2 text-sm">
-        {[
-          { href: "/requests", label: "All" },
-          { href: "/requests?testingType=CLOSED", label: "Closed testing" },
-          { href: "/requests?testingType=INTERNAL", label: "Internal" },
-          { href: "/requests?testingType=OPEN", label: "Open" },
-          { href: "/requests?reciprocal=1", label: "Reciprocal" },
-        ].map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="rounded-full border border-slate-800 px-3 py-1 text-slate-300 hover:border-slate-600"
-          >
-            {item.label}
-          </Link>
-        ))}
+    <AppShell
+      title="Testing Requests"
+      description="Match scores use reciprocal availability, country, testing type, and your current load."
+    >
+      <div className="mb-6 flex flex-wrap gap-2" role="group" aria-label="Filter requests">
+        {FILTERS.map((item) => {
+          const active = item.reciprocal
+            ? params.reciprocal === "1"
+            : params.reciprocal !== "1" && (params.testingType || "") === (item.testingType || "");
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "true" : undefined}
+              className={
+                active
+                  ? "rounded-full border border-brand bg-brand-soft px-3.5 py-1.5 text-[13px] font-medium text-brand"
+                  : "rounded-full border border-line bg-white px-3.5 py-1.5 text-[13px] font-medium text-slate-600 shadow-card transition-colors hover:border-line-strong hover:text-slate-900"
+              }
+            >
+              {item.label}
+            </Link>
+          );
+        })}
       </div>
+
       {recommended.length ? (
-        <div className="mb-8">
-          <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-slate-500">Recommended for you</h2>
+        <div className="mb-10">
+          <SectionLabel className="mb-3">Recommended for you</SectionLabel>
           <div className="grid gap-3 md:grid-cols-3">
             {recommended.map((item) => (
-              <Link key={item.id} href={`/requests/${item.id}`} className="rounded-xl border border-slate-800 p-4 hover:border-slate-700">
-                <div className="font-medium">{item.app.name}</div>
-                <p className="mt-1 text-sm text-slate-400">
-                  {item.remaining} testers needed · {item.match.score}% match
-                </p>
+              <Link
+                key={item.id}
+                href={`/requests/${item.id}`}
+                className="rounded-card border border-line bg-white p-4 shadow-card transition-colors hover:border-brand hover:bg-brand-soft/40"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="truncate font-medium text-slate-900">{item.app.name}</div>
+                  <Badge tone="accent">{item.match.score}%</Badge>
+                </div>
+                <p className="mt-1.5 text-sm text-muted">{item.remaining} testers needed</p>
               </Link>
             ))}
           </div>
@@ -77,32 +100,37 @@ export default async function RequestsPage({
             return (
               <article
                 key={item.id}
-                className="rounded-xl border border-slate-800 bg-card p-4 sm:p-5"
+                className="rounded-card border border-line bg-white p-4 shadow-card transition-colors hover:border-line-strong sm:p-5"
               >
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                   <AppMark src={item.app.iconUrl} name={item.app.name} size={48} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-medium">{item.app.name}</h2>
+                      <h2 className="font-semibold text-slate-900">{item.app.name}</h2>
                       <Badge tone={fill.tone}>{fill.label}</Badge>
+                      {item.reciprocalOpen ? <Badge tone="accent">Reciprocal open</Badge> : null}
                     </div>
-                    <p className="mt-1 text-sm text-slate-400">
+                    <p className="mt-1 text-sm text-muted">
                       {item.owner.name}
                       {item.country ? ` · ${item.country}` : ""} · Android · {item.testingType} testing
                     </p>
-                    <p className="mt-2 text-sm text-slate-300">
-                      Testers {item.testersReceived} / {item.targetTesters} · Duration {item.durationDays} days
-                      {item.reciprocalOpen ? " · Reciprocal open" : ""}
+                    <p className="mt-2 text-sm text-body">
+                      <span className="font-medium text-slate-900 tabular-nums">
+                        {item.testersReceived} / {item.targetTesters}
+                      </span>{" "}
+                      testers · {item.durationDays} day duration
                     </p>
                     {item.description ? (
-                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">{item.description}</p>
+                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted">{item.description}</p>
                     ) : null}
                   </div>
                   <Link href={`/requests/${item.id}`} className="sm:self-center">
-                    <Button>View request</Button>
+                    <Button className="w-full sm:w-auto">View request</Button>
                   </Link>
                 </div>
-                <p className="mt-3 text-xs text-slate-500">Posted {formatDate(item.publishedAt)} · {item.match.score}% match</p>
+                <p className="mt-4 border-t border-line pt-3 text-xs text-muted">
+                  Posted {formatDate(item.publishedAt)} · {item.match.score}% match
+                </p>
               </article>
             );
           })}

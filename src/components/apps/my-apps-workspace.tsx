@@ -2,12 +2,13 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input, Label, Select } from "@/components/ui/fields";
 import { EmptyState } from "@/components/ui/widgets";
 import { parsePlayStoreUrl } from "@/lib/play-url";
+import { Plus, RefreshCw, Search } from "lucide-react";
 
 export type AppCardModel = {
   id: string;
@@ -162,31 +163,49 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm text-slate-400">
-            Store listing URLs and closed-testing opt-in URLs are stored separately. Tester counts come from recorded
-            TestLoop activity, not invented Play Console numbers.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <p className="max-w-2xl text-sm leading-6 text-muted">
+          Store listing URLs and closed-testing opt-in URLs are stored separately. Tester counts come from
+          recorded TestLoop activity, not invented Play Console numbers.
+        </p>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" onClick={syncPlay} disabled={syncing}>
-            {syncing ? "Syncing…" : "Sync Google Play Apps"}
+          <Button type="button" variant="secondary" aria-busy={syncing} onClick={syncPlay} disabled={syncing}>
+            <RefreshCw className={syncing ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden />
+            {syncing ? "Syncing…" : "Sync Google Play"}
           </Button>
           <Button type="button" onClick={() => setShowForm((open) => !open)}>
-            + Add App
+            <Plus className="h-4 w-4" aria-hidden />
+            Add app
           </Button>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search by app or package name"
-          className="max-w-sm"
-        />
-        <Select value={filter} onChange={(event) => setFilter(event.target.value)} className="max-w-xs">
+        <div className="relative w-full max-w-sm">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            aria-hidden
+          />
+          <label htmlFor="apps-search" className="sr-only">
+            Search apps
+          </label>
+          <Input
+            id="apps-search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by app or package name"
+            className="pl-9"
+          />
+        </div>
+        <label htmlFor="apps-filter" className="sr-only">
+          Filter apps
+        </label>
+        <Select
+          id="apps-filter"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          className="w-full max-w-xs"
+        >
           {FILTERS.map((item) => (
             <option key={item.id} value={item.id}>
               {item.label}
@@ -195,30 +214,62 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
         </Select>
       </div>
 
-      {error ? <p className="text-sm text-rose-300">{error}</p> : null}
-      {syncMessage ? <p className="text-sm text-emerald-300">{syncMessage}</p> : null}
+      {error ? (
+        <p
+          role="alert"
+          className="rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-700"
+        >
+          {error}
+        </p>
+      ) : null}
+      {syncMessage ? (
+        <p className="rounded-control border border-blue-200 bg-brand-soft px-3 py-2 text-sm leading-5 text-blue-700">
+          {syncMessage}
+        </p>
+      ) : null}
 
       {newPlayApps.length > 0 ? (
-        <Card className="space-y-3 p-5">
-          <h2 className="font-medium">New apps available in Google Play</h2>
-          {newPlayApps.map((app) => (
-            <div key={app.packageName} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 px-4 py-3">
-              <div>
-                <div className="font-medium">{app.name}</div>
-                <div className="text-xs text-slate-400">{app.packageName}</div>
+        <Card>
+          <CardHeader
+            title="New apps available in Google Play"
+            description="These apps exist in your Play Console but not yet in TestLoop."
+          />
+          <div className="mt-4 space-y-2.5">
+            {newPlayApps.map((app) => (
+              <div
+                key={app.packageName}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-line bg-surface px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-slate-900">{app.name}</div>
+                  <div className="mt-0.5 font-mono text-xs text-muted">{app.packageName}</div>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => importPlayApp(app.packageName)}
+                  disabled={syncing}
+                >
+                  Add to My Apps
+                </Button>
               </div>
-              <Button type="button" variant="secondary" onClick={() => importPlayApp(app.packageName)} disabled={syncing}>
-                Add to My Apps
-              </Button>
-            </div>
-          ))}
+            ))}
+          </div>
         </Card>
       ) : null}
 
       {showForm ? (
-        <Card className="p-5">
-          <h2 className="font-medium">Add Android app</h2>
-          <form onSubmit={onCreate} className="mt-4 grid gap-3 md:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="Add Android app"
+            description="Package name must match the Google Play URL."
+            action={
+              <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
+                Cancel
+              </Button>
+            }
+          />
+          <form onSubmit={onCreate} className="mt-5 grid gap-4 md:grid-cols-2">
             <div>
               <Label>App name</Label>
               <Input name="name" placeholder="My New App" required />
@@ -255,8 +306,8 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
               <Label>Campaign target</Label>
               <Input name="testerTarget" type="number" defaultValue={12} />
             </div>
-            <div className="flex items-end">
-              <Button type="submit">Save App</Button>
+            <div className="flex items-end md:col-span-2">
+              <Button type="submit">Save app</Button>
             </div>
           </form>
         </Card>
@@ -286,19 +337,26 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
               app.googlePlayStatus === "OPEN_TESTING" ||
               Boolean(app.campaign);
             return (
-              <Card key={app.id} className="p-5">
+              <Card key={app.id} className="flex flex-col">
                 <div className="flex gap-4">
                   {app.iconUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={app.iconUrl} alt="" className="h-14 w-14 rounded-xl object-cover" />
+                    <img
+                      src={app.iconUrl}
+                      alt=""
+                      className="h-14 w-14 shrink-0 rounded-control border border-line object-cover"
+                    />
                   ) : (
-                    <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-500/15 text-sm font-semibold text-emerald-200">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-control bg-brand-soft text-sm font-semibold text-brand">
                       {initials(app.name)}
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Link href={`/apps/${app.id}`} className="truncate text-lg font-semibold">
+                      <Link
+                        href={`/apps/${app.id}`}
+                        className="truncate text-base font-semibold text-slate-900 hover:text-brand"
+                      >
                         {app.name}
                       </Link>
                       <Badge tone={statusTone(app.googlePlayStatus)}>{statusLabel(app.googlePlayStatus)}</Badge>
@@ -308,64 +366,77 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
                         <Badge>No campaign</Badge>
                       )}
                     </div>
-                    <div className="mt-1 truncate text-sm text-slate-400">{app.packageName}</div>
-                    <div className="mt-1 truncate text-xs text-slate-500">
+                    <div className="mt-1 truncate font-mono text-xs text-muted">{app.packageName}</div>
+                    <div className="mt-1 truncate text-xs text-muted">
                       {app.tracks[0]?.name || app.testingType} · {app.campaign?.name || "No testing campaign yet"}
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-4">
-                  <div className="mb-1 flex justify-between text-xs text-slate-400">
-                    <span>
-                      {app.optedInTesters} / {target} testers opted in
+                <div className="mt-5">
+                  <div className="mb-1.5 flex justify-between text-xs">
+                    <span className="text-muted">
+                      {app.optedInTesters} of {target} testers opted in
                     </span>
-                    <span>{progress}%</span>
+                    <span className="font-semibold text-slate-900 tabular-nums">{progress}%</span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-                    <div className="h-2 rounded-full bg-emerald-400" style={{ width: `${Math.max(progress, 4)}%` }} />
+                  <div
+                    className="h-2 overflow-hidden rounded-full bg-surface-strong"
+                    role="progressbar"
+                    aria-valuenow={progress}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <div className="h-full rounded-full bg-brand" style={{ width: `${Math.max(progress, 2)}%` }} />
                   </div>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs text-slate-400">
+
+                  <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-4 text-center">
                     <div>
-                      <div className="text-base font-semibold text-slate-100">{app.testersAdded}</div>
-                      Added
+                      <dd className="text-lg font-semibold leading-none text-slate-900 tabular-nums">
+                        {app.testersAdded}
+                      </dd>
+                      <dt className="mt-1 text-xs text-muted">Added</dt>
                     </div>
                     <div>
-                      <div className="text-base font-semibold text-slate-100">{app.optedInTesters}</div>
-                      Opted in
+                      <dd className="text-lg font-semibold leading-none text-slate-900 tabular-nums">
+                        {app.optedInTesters}
+                      </dd>
+                      <dt className="mt-1 text-xs text-muted">Opted in</dt>
                     </div>
                     <div>
-                      <div className="text-base font-semibold text-slate-100">{app.testingActivity}</div>
-                      Testing activity
+                      <dd className="text-lg font-semibold leading-none text-slate-900 tabular-nums">
+                        {app.testingActivity}
+                      </dd>
+                      <dt className="mt-1 text-xs text-muted">Activity</dt>
                     </div>
-                  </div>
+                  </dl>
                 </div>
 
                 {app.playConflictNote ? (
-                  <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                  <p className="mt-4 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
                     {app.playConflictNote}
                   </p>
                 ) : null}
 
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-5 flex flex-wrap items-center gap-2">
                   {app.playStoreUrl ? (
                     <a
                       href={app.playStoreUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center rounded-lg bg-emerald-500 px-3.5 py-2 text-sm font-medium text-slate-950"
+                      className="inline-flex h-9.5 items-center rounded-control bg-brand px-4 text-sm font-medium text-white shadow-card transition-colors hover:bg-brand-hover"
                     >
                       Open Google Play
                     </a>
                   ) : (
-                    <span className="text-xs text-slate-500">No Play Store URL stored</span>
+                    <span className="text-xs text-muted">No Play Store URL stored</span>
                   )}
                   {showManage ? (
                     <Link
                       href={manageHref}
-                      className="inline-flex items-center rounded-lg border border-slate-700 bg-slate-800 px-3.5 py-2 text-sm"
+                      className="inline-flex h-9.5 items-center rounded-control border border-line-strong bg-white px-4 text-sm font-medium text-slate-700 shadow-card transition-colors hover:bg-surface hover:text-slate-900"
                     >
-                      Manage Testing
+                      Manage testing
                     </Link>
                   ) : null}
                 </div>

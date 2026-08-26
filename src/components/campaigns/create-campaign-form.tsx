@@ -1,9 +1,9 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { Card } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Select } from "@/components/ui/fields";
+import { Checkbox, Input, Label, Select } from "@/components/ui/fields";
 import { EmptyState } from "@/components/ui/widgets";
 import Link from "next/link";
 
@@ -87,9 +87,12 @@ export function CreateCampaignForm({
   }
 
   return (
-    <Card className="p-5">
-      <h2 className="font-medium">New campaign</h2>
-      <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
+    <Card>
+      <CardHeader
+        title="New testing request"
+        description="Set a real tester target and duration. Leave the opt-in URL empty unless one exists."
+      />
+      <form onSubmit={onSubmit} className="mt-5 grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
           <Label>Select app</Label>
           <Select name="appId" value={appId} onChange={(event) => setAppId(event.target.value)} required>
@@ -101,10 +104,10 @@ export function CreateCampaignForm({
           </Select>
         </div>
         {selected ? (
-          <div className="md:col-span-2 rounded-xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-300">
+          <div className="md:col-span-2 rounded-card border border-line bg-surface p-4 text-sm text-slate-600">
             <div className="font-medium">{selected.name}</div>
-            <div className="text-slate-400">{selected.packageName}</div>
-            <div className="mt-2 break-all text-xs text-sky-300">{selected.playStoreUrl || "No Play Store URL stored"}</div>
+            <div className="text-muted">{selected.packageName}</div>
+            <div className="mt-2 break-all text-xs text-brand">{selected.playStoreUrl || "No Play Store URL stored"}</div>
           </div>
         ) : null}
         <div className="md:col-span-2">
@@ -187,17 +190,18 @@ export function CreateCampaignForm({
           <Label>Testing instructions</Label>
           <Input name="testingInstructions" placeholder="Install the app and use it regularly." />
         </div>
-        <label className="flex items-center gap-2 text-sm text-slate-300">
-          <input type="checkbox" name="reciprocalOpen" defaultChecked />
-          Reciprocal testing welcome
-        </label>
-        <label className="flex items-center gap-2 text-sm text-slate-300">
-          <input type="checkbox" name="published" defaultChecked />
-          Publish testing request
-        </label>
-        {error ? <p className="md:col-span-2 text-sm text-rose-300">{error}</p> : null}
+        <Checkbox name="reciprocalOpen" defaultChecked label="Reciprocal testing welcome" />
+        <Checkbox name="published" defaultChecked label="Publish testing request" />
+        {error ? (
+          <p
+            role="alert"
+            className="rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-700 md:col-span-2"
+          >
+            {error}
+          </p>
+        ) : null}
         <div className="md:col-span-2">
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" aria-busy={pending} disabled={pending}>
             {pending ? "Publishing…" : "Publish testing request"}
           </Button>
         </div>

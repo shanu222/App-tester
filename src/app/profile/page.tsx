@@ -4,6 +4,10 @@ import { developerBadges, publicDeveloper } from "@/lib/services/network";
 import { prisma } from "@/lib/db";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { SectionLabel } from "@/components/ui/card";
+import { EmptyState, StatCard } from "@/components/ui/widgets";
+import { CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
 export default async function ProfilePage() {
@@ -19,65 +23,87 @@ export default async function ProfilePage() {
     <AppShell
       title="Developer profile"
       actions={
-        <Link href="/profile/complete" className="text-sm text-emerald-300 hover:underline">
-          Edit profile
+        <Link href="/profile/complete">
+          <Button variant="secondary">Edit profile</Button>
         </Link>
       }
     >
-      <div className="flex flex-wrap items-start gap-5">
-        {user.image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={user.image} alt="" className="h-20 w-20 rounded-full object-cover" />
-        ) : null}
-        <div>
-          <h2 className="text-2xl font-semibold">{profile.name}</h2>
-          <p className="text-slate-400">{profile.company || profile.developerType}</p>
-          <p className="text-sm text-slate-500">
-            {profile.city ? `${profile.city}, ` : ""}
-            {profile.country || "—"} · Joined {formatDate(profile.joinedAt)}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {badges.map((badge) => (
-              <Badge key={badge.key} tone={badge.key === "verified" ? "good" : "neutral"}>
-                {badge.label}
-                {badge.key === "verified" ? " ✓" : ""}
-              </Badge>
-            ))}
+      <section className="rounded-card border border-line bg-white p-5 shadow-card sm:p-6">
+        <div className="flex flex-wrap items-start gap-5">
+          {user.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={user.image}
+              alt=""
+              className="h-16 w-16 rounded-full border border-line object-cover"
+            />
+          ) : (
+            <span
+              className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-soft text-xl font-semibold text-brand"
+              aria-hidden
+            >
+              {profile.name.charAt(0).toUpperCase()}
+            </span>
+          )}
+          <div className="min-w-0">
+            <h2 className="text-xl font-semibold text-slate-900">{profile.name}</h2>
+            <p className="mt-0.5 text-sm text-body">{profile.company || profile.developerType}</p>
+            <p className="mt-0.5 text-sm text-muted">
+              {profile.city ? `${profile.city}, ` : ""}
+              {profile.country || "—"} · Joined {formatDate(profile.joinedAt)}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {badges.map((badge) => (
+                <Badge key={badge.key} tone={badge.key === "verified" ? "good" : "neutral"}>
+                  {badge.key === "verified" ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : null}
+                  {badge.label}
+                </Badge>
+              ))}
+            </div>
           </div>
         </div>
+
+        {user.bio ? (
+          <p className="mt-5 max-w-2xl border-t border-line pt-5 text-sm leading-6 text-body">{user.bio}</p>
+        ) : null}
+      </section>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Testing score"
+          value={score.score ? `${score.score} / 5` : "—"}
+          hint={score.label}
+        />
+        <StatCard label="Tests completed" value={score.completed} />
+        <StatCard label="Tests participated in" value={score.accepted} />
+        <StatCard label="Tests received" value={score.received} />
       </div>
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-slate-800 bg-card p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Testing score</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums">{score.score ?? "—"}{score.score ? " / 5" : ""}</div>
-          <p className="mt-1 text-xs text-slate-500">{score.label}</p>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-card p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Tests completed</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums">{score.completed}</div>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-card p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Tests participated in</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums">{score.accepted}</div>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-card p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Tests received</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums">{score.received}</div>
-        </div>
-      </div>
-      <p className="mt-3 text-xs text-slate-500">
+
+      <p className="mt-3 text-xs leading-5 text-muted">
         Google Play connected: {playConnected ? "yes" : "no"}. This is not a Google Play verification badge.
       </p>
-      {user.bio ? <p className="mt-6 max-w-2xl text-slate-300">{user.bio}</p> : null}
-      <h2 className="mb-3 mt-10 text-sm font-medium uppercase tracking-wide text-slate-500">Apps ({apps})</h2>
+
+      <SectionLabel className="mb-3 mt-10">Apps ({apps})</SectionLabel>
       {appRows.length === 0 ? (
-        <p className="text-sm text-slate-500">No apps added yet.</p>
+        <EmptyState
+          title="No apps added yet"
+          body="Add an Android app to publish testing requests and track tester access."
+          action={
+            <Link href="/apps">
+              <Button>Add an app</Button>
+            </Link>
+          }
+        />
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {appRows.map((app) => (
-            <Link key={app.id} href={`/apps/${app.id}`} className="block rounded-xl border border-slate-800 px-4 py-3 text-sm hover:border-slate-700">
-              {app.name}
-              <span className="ml-2 text-slate-500">{app.packageName}</span>
+            <Link
+              key={app.id}
+              href={`/apps/${app.id}`}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-white px-4 py-3.5 shadow-card transition-colors hover:border-line-strong hover:bg-surface"
+            >
+              <span className="font-medium text-slate-900">{app.name}</span>
+              <span className="font-mono text-xs text-muted">{app.packageName}</span>
             </Link>
           ))}
         </div>

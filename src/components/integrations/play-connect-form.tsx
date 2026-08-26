@@ -39,9 +39,9 @@ export function PlayConnectForm() {
   }
 
   return (
-    <Card className="p-5">
-      <h2 className="font-medium">Google Play service account</h2>
-      <p className="mt-1 text-sm leading-6 text-slate-400">
+    <Card>
+      <h2 className="text-[15px] font-semibold text-slate-900">Google Play service account</h2>
+      <p className="mt-1 text-sm leading-6 text-muted">
         Paste the JSON key. Grant this service account Play Console access, then TestLoop verifies before marking
         Connected.
       </p>
@@ -59,9 +59,20 @@ export function PlayConnectForm() {
           <Label htmlFor="packageName">Package name to verify (optional)</Label>
           <Input id="packageName" name="packageName" placeholder="com.example.app" />
         </div>
-        {error ? <p className="text-sm text-rose-300">{error}</p> : null}
-        {success ? <p className="text-sm text-emerald-300">{success}</p> : null}
-        <Button type="submit" disabled={pending}>
+        {error ? (
+          <p
+            role="alert"
+            className="rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-700"
+          >
+            {error}
+          </p>
+        ) : null}
+        {success ? (
+          <p className="rounded-control border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm leading-5 text-emerald-700">
+            {success}
+          </p>
+        ) : null}
+        <Button type="submit" aria-busy={pending} disabled={pending}>
           {pending ? "Checking…" : "Test & connect"}
         </Button>
       </form>

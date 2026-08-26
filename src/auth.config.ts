@@ -1,16 +1,18 @@
 import "@/lib/apply-auth-url";
 import type { NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import Google from "next-auth/providers/google";
 import { recordAuthError } from "@/lib/auth-error";
-import { env, googleOAuthConfigured } from "@/lib/env";
-import { firebaseAuthConfigured } from "@/lib/firebase/config";
+import { env } from "@/lib/env";
 import { verifyFirebaseIdToken } from "@/lib/firebase/verify";
 
 /**
- * Firebase Authentication (Google popup or email/password) happens in the browser.
- * The resulting ID token is exchanged here for a normal TestLoop session, so roles,
- * middleware, and the Prisma user record behave the same as Auth.js Google login.
+ * Firebase Authentication is the only way into TestLoop. Google sign-in and
+ * email/password both happen in the browser through Firebase; the resulting ID
+ * token is exchanged here for a TestLoop session, so roles, middleware, and the
+ * Prisma user record have a single code path regardless of how the user signed in.
+ *
+ * Google Cloud OAuth credentials are still used, but only for the Gmail and
+ * Google Play integrations — never for login.
  */
 const firebaseProvider = Credentials({
   id: "firebase",
@@ -43,17 +45,7 @@ export const authConfig = {
       console.warn("[testloop][auth]", code);
     },
   },
-  providers: [
-    ...(googleOAuthConfigured()
-      ? [
-          Google({
-            clientId: env.googleClientId,
-            clientSecret: env.googleClientSecret,
-          }),
-        ]
-      : []),
-    ...(firebaseAuthConfigured() ? [firebaseProvider] : []),
-  ],
+  providers: [firebaseProvider],
   callbacks: {
     jwt({ token, user }) {
       if (user) {

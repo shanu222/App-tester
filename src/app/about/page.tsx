@@ -12,10 +12,12 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <PublicChrome>
-      <main className="mx-auto max-w-3xl px-6 py-16">
-        <h1 className="text-3xl font-semibold tracking-tight">About {SITE_NAME}</h1>
-        <p className="mt-4 text-lg leading-7 text-slate-300">{SITE_TAGLINE}.</p>
-        <div className="mt-8 space-y-4 text-sm leading-7 text-slate-400">
+      <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:py-16">
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+          About {SITE_NAME}
+        </h1>
+        <p className="mt-4 text-lg leading-8 text-body">{SITE_TAGLINE}.</p>
+        <div className="mt-8 space-y-4 text-base leading-7 text-body">
           <p>
             {SITE_NAME} is a professional network for Android developers, indie teams, and startups who need closed
             testing support from other developers — and who can offer testing in return.
@@ -31,7 +33,10 @@ export default function AboutPage() {
             scores are calculated from recorded platform activity, not invented statistics.
           </p>
         </div>
-        <Link href="/" className="mt-8 inline-block text-sm text-emerald-300">
+        <Link
+          href="/"
+          className="mt-10 inline-block border-t border-line pt-6 text-sm font-medium text-brand hover:underline"
+        >
           Back to {SITE_NAME}
         </Link>
       </main>

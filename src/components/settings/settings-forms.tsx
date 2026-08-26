@@ -1,9 +1,9 @@
 "use client";
 
 import { FormEvent } from "react";
-import { Card } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Textarea } from "@/components/ui/fields";
+import { Checkbox, Hint, Input, Label, Textarea } from "@/components/ui/fields";
 import { JsonButton } from "@/components/ui/json-button";
 
 export function SettingsForms({
@@ -63,104 +63,134 @@ export function SettingsForms({
   }
 
   return (
-    <div className="space-y-6">
-      <Card className="p-5">
-        <h2 className="font-medium">Profile</h2>
-        <form onSubmit={save} className="mt-4 grid gap-3 md:grid-cols-2">
+    <form onSubmit={save} className="space-y-6">
+      <Card>
+        <CardHeader title="Profile" description="How other developers see you across TestLoop." />
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
           <div>
-            <Label>Name</Label>
-            <Input name="name" defaultValue={user.name} />
-          </div>
-          <div>
-            <Label>Email</Label>
-            <Input defaultValue={user.email} disabled />
+            <Label htmlFor="settings-name">Name</Label>
+            <Input id="settings-name" name="name" defaultValue={user.name} />
           </div>
           <div>
-            <Label>Developer / company</Label>
-            <Input name="developerName" defaultValue={user.developerName} />
+            <Label htmlFor="settings-email">Email</Label>
+            <Input id="settings-email" defaultValue={user.email} disabled />
+            <Hint>Your sign-in email cannot be changed here.</Hint>
           </div>
           <div>
-            <Label>Company</Label>
-            <Input name="company" defaultValue={user.company} />
+            <Label htmlFor="settings-developer">Developer / company</Label>
+            <Input id="settings-developer" name="developerName" defaultValue={user.developerName} />
           </div>
           <div>
-            <Label>Comments / hour</Label>
-            <Input name="commentsPerHour" type="number" defaultValue={settings.commentsPerHour} />
+            <Label htmlFor="settings-company">Company</Label>
+            <Input id="settings-company" name="company" defaultValue={user.company} />
           </div>
-          <div>
-            <Label>Comments / day</Label>
-            <Input name="commentsPerDay" type="number" defaultValue={settings.commentsPerDay} />
-          </div>
-          <div>
-            <Label>Processed posts / day</Label>
-            <Input name="processedPostsPerDay" type="number" defaultValue={settings.processedPostsPerDay} />
-          </div>
-          <div>
-            <Label>Messages / day</Label>
-            <Input name="messagesPerDay" type="number" defaultValue={settings.messagesPerDay} />
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="requireCommentApproval" defaultChecked={settings.requireCommentApproval} />
-            Require comment approval
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="allowAutomatedEmail" defaultChecked={settings.allowAutomatedEmail} />
-            Allow automated Gmail sending
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="notifyOpportunities" defaultChecked={settings.notifyOpportunities} />
-            Notify new opportunities
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="notifyReplies" defaultChecked={settings.notifyReplies} />
-            Notify replies
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="notifyTesters" defaultChecked={settings.notifyTesters} />
-            Notify tester events
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="notifyIntegrations" defaultChecked={settings.notifyIntegrations} />
-            Notify integration errors
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="notifyFeedback" defaultChecked={settings.notifyFeedback} />
-            Notify feedback
-          </label>
-          <div>
-            <Label>Closed-test target (configurable)</Label>
-            <Input name="playClosedTestTarget" type="number" defaultValue={settings.playClosedTestTarget} />
-          </div>
-          <div>
-            <Label>Closed-test days (configurable)</Label>
-            <Input name="playClosedTestDays" type="number" defaultValue={settings.playClosedTestDays} />
-          </div>
-          <div className="md:col-span-2">
-            <Label>Default keywords</Label>
-            <Textarea name="defaultKeywords" defaultValue={settings.defaultKeywords} />
-          </div>
-          <div>
-            <Button type="submit">Save settings</Button>
-          </div>
-        </form>
-      </Card>
-      <Card className="p-5">
-        <h2 className="font-medium">Templates</h2>
-        <div className="mt-3 space-y-3 text-sm text-slate-300">
-          {templates.map((template) => (
-            <div key={template.key}>
-              <div className="font-medium">{template.name}</div>
-              <pre className="mt-1 whitespace-pre-wrap text-slate-400">{template.body}</pre>
-            </div>
-          ))}
         </div>
       </Card>
-      <Card className="p-5">
-        <h2 className="font-medium">Privacy & data</h2>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <JsonButton url="/api/export" label="Export tester data" />
+
+      <Card>
+        <CardHeader
+          title="Rate limits"
+          description="Caps that keep outreach within safe, human-paced volumes."
+        />
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <Label htmlFor="commentsPerHour">Comments / hour</Label>
+            <Input id="commentsPerHour" name="commentsPerHour" type="number" min={0} defaultValue={settings.commentsPerHour} />
+          </div>
+          <div>
+            <Label htmlFor="commentsPerDay">Comments / day</Label>
+            <Input id="commentsPerDay" name="commentsPerDay" type="number" min={0} defaultValue={settings.commentsPerDay} />
+          </div>
+          <div>
+            <Label htmlFor="processedPostsPerDay">Processed posts / day</Label>
+            <Input id="processedPostsPerDay" name="processedPostsPerDay" type="number" min={0} defaultValue={settings.processedPostsPerDay} />
+          </div>
+          <div>
+            <Label htmlFor="messagesPerDay">Messages / day</Label>
+            <Input id="messagesPerDay" name="messagesPerDay" type="number" min={0} defaultValue={settings.messagesPerDay} />
+          </div>
         </div>
       </Card>
-    </div>
+
+      <Card>
+        <CardHeader title="Automation & notifications" description="Nothing is sent automatically unless you enable it." />
+        <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
+          <Checkbox
+            name="requireCommentApproval"
+            defaultChecked={settings.requireCommentApproval}
+            label="Require comment approval"
+          />
+          <Checkbox
+            name="allowAutomatedEmail"
+            defaultChecked={settings.allowAutomatedEmail}
+            label="Allow automated Gmail sending"
+          />
+          <Checkbox
+            name="notifyOpportunities"
+            defaultChecked={settings.notifyOpportunities}
+            label="Notify new opportunities"
+          />
+          <Checkbox name="notifyReplies" defaultChecked={settings.notifyReplies} label="Notify replies" />
+          <Checkbox name="notifyTesters" defaultChecked={settings.notifyTesters} label="Notify tester events" />
+          <Checkbox
+            name="notifyIntegrations"
+            defaultChecked={settings.notifyIntegrations}
+            label="Notify integration errors"
+          />
+          <Checkbox name="notifyFeedback" defaultChecked={settings.notifyFeedback} label="Notify feedback" />
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Closed-testing defaults" description="Applied when you create a new testing request." />
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="playClosedTestTarget">Closed-test tester target</Label>
+            <Input id="playClosedTestTarget" name="playClosedTestTarget" type="number" min={1} defaultValue={settings.playClosedTestTarget} />
+          </div>
+          <div>
+            <Label htmlFor="playClosedTestDays">Closed-test duration (days)</Label>
+            <Input id="playClosedTestDays" name="playClosedTestDays" type="number" min={1} defaultValue={settings.playClosedTestDays} />
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor="defaultKeywords">Default keywords</Label>
+            <Textarea id="defaultKeywords" name="defaultKeywords" defaultValue={settings.defaultKeywords} />
+            <Hint>One keyword per line.</Hint>
+          </div>
+        </div>
+      </Card>
+
+      <div className="sticky bottom-4 z-10 flex justify-end">
+        <Button type="submit" className="shadow-overlay">
+          Save settings
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader title="Templates" description="Message templates available to your campaigns." />
+        {templates.length === 0 ? (
+          <p className="mt-4 text-sm text-muted">No templates yet.</p>
+        ) : (
+          <div className="mt-5 space-y-4">
+            {templates.map((template) => (
+              <div key={template.key} className="rounded-control border border-line bg-surface p-4">
+                <div className="text-sm font-medium text-slate-900">{template.name}</div>
+                <pre className="mt-2 whitespace-pre-wrap font-mono text-xs leading-6 text-muted">
+                  {template.body}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Privacy & data"
+          description="Export the tester records associated with your account."
+          action={<JsonButton url="/api/export" label="Export tester data" variant="secondary" />}
+        />
+      </Card>
+    </form>
   );
 }

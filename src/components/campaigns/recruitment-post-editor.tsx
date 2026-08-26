@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import { generateRecruitmentPost } from "@/lib/templates";
 import { Button } from "@/components/ui/button";
+import { Card, CardHeader } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/fields";
+import { Check, Copy } from "lucide-react";
 
 export function RecruitmentPostEditor({
   appName,
@@ -19,27 +22,32 @@ export function RecruitmentPostEditor({
   const [copied, setCopied] = useState(false);
 
   return (
-    <div className="rounded-2xl border border-slate-800 p-5">
-      <h2 className="font-medium">Facebook tester post</h2>
-      <p className="mt-1 text-xs text-slate-500">
-        Edit before publishing. This uses the selected app. It does not invent a testing opt-in URL.
-      </p>
-      <textarea
-        className="mt-3 min-h-48 w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm"
+    <Card>
+      <CardHeader
+        title="Facebook tester post"
+        description="Edit before publishing. This never invents a testing opt-in URL."
+      />
+      <label htmlFor="recruitment-post" className="sr-only">
+        Recruitment post
+      </label>
+      <Textarea
+        id="recruitment-post"
+        className="mt-5 min-h-48"
         value={body}
         onChange={(event) => setBody(event.target.value)}
       />
       <Button
         type="button"
         variant="secondary"
-        className="mt-3"
+        className="mt-4"
         onClick={async () => {
           await navigator.clipboard.writeText(body);
           setCopied(true);
         }}
       >
+        {copied ? <Check className="h-4 w-4" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
         {copied ? "Copied" : "Copy post"}
       </Button>
-    </div>
+    </Card>
   );
 }

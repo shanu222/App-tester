@@ -68,24 +68,33 @@ export default async function IntegrationsPage() {
   ];
 
   return (
-    <AppShell title="Integrations">
+    <AppShell
+      title="Integrations"
+      description="Connect official Google APIs. TestLoop never stores a Google password."
+    >
       <div className="grid gap-4 lg:grid-cols-2">
         {cards.map((card) => (
-          <div key={card.provider} className="rounded-xl border border-slate-800 bg-card p-5">
+          <div
+            key={card.provider}
+            className="flex flex-col rounded-card border border-line bg-white p-5 shadow-card"
+          >
             <div className="flex items-center justify-between gap-3">
-              <h2 className="font-medium">{card.title}</h2>
+              <h2 className="text-[15px] font-semibold text-slate-900">{card.title}</h2>
               <Badge tone={tone(card.item?.status || "NOT_CONNECTED")}>
                 {statusLabel(card.item?.status)}
               </Badge>
             </div>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-muted">
               Last sync: {card.item?.lastSyncAt ? timeAgo(card.item.lastSyncAt) : "never"}
               {card.item?.lastError ? ` · ${card.item.lastError}` : ""}
             </p>
-            <p className="mt-3 text-sm text-slate-400">{card.note}</p>
+            <p className="mt-3 flex-1 text-sm leading-6 text-muted">{card.note}</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {card.connectHref ? (
-                <a className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-slate-950" href={card.connectHref}>
+                <a
+                  className="inline-flex h-9.5 items-center rounded-control bg-brand px-4 text-sm font-medium text-white shadow-card transition-colors hover:bg-brand-hover"
+                  href={card.connectHref}
+                >
                   Connect / Reconnect
                 </a>
               ) : null}
@@ -99,7 +108,7 @@ export default async function IntegrationsPage() {
           </div>
         ))}
       </div>
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+      <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
         <PlayConnectForm />
         <WorkspaceForm />
       </div>

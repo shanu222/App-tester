@@ -2,8 +2,10 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
 import { googleOAuthConfigured } from "@/lib/env";
+import { firebaseAuthConfigured } from "@/lib/firebase/config";
 import { JsonButton } from "@/components/ui/json-button";
 import Link from "next/link";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 
 export default async function OnboardingPage() {
   const user = await requireUser();
@@ -26,7 +28,7 @@ export default async function OnboardingPage() {
 
   return (
     <AppShell title="Developer onboarding">
-      <p className="mb-6 max-w-2xl text-slate-400">
+      <p className="mb-6 max-w-2xl text-muted">
         TestLoop is a developer-to-developer testing network. Official Google OAuth and Play APIs only — never
         passwords, and never fake success states.
       </p>
@@ -35,20 +37,29 @@ export default async function OnboardingPage() {
           <Link
             key={step.n}
             href={step.href}
-            className="flex items-center justify-between rounded-xl border border-slate-800 bg-card px-5 py-4 hover:border-slate-700"
+            className="flex items-center justify-between gap-4 rounded-card border border-line bg-white px-5 py-4 shadow-card transition-colors hover:border-line-strong hover:bg-surface"
           >
             <div>
-              <div className="text-xs text-slate-500">Step {step.n}</div>
-              <div className="font-medium">{step.title}</div>
+              <div className="text-xs font-medium text-muted">Step {step.n}</div>
+              <div className="mt-0.5 font-medium text-slate-900">{step.title}</div>
             </div>
-            <span className={step.done ? "text-emerald-300" : "text-slate-500"}>
-              {step.done ? "✓ Done" : "○ Continue"}
-            </span>
+            {step.done ? (
+              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-success">
+                <CheckCircle2 className="h-4.5 w-4.5" aria-hidden />
+                Done
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-brand">
+                Continue
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </span>
+            )}
           </Link>
         ))}
       </div>
-      <p className="mt-6 text-sm text-slate-400">
-        Google login configured: {googleOAuthConfigured() ? "yes" : "no"}
+      <p className="mt-6 text-sm text-muted">
+        Sign-in configured: {firebaseAuthConfigured() ? "yes" : "no"} · Google API access for Gmail
+        and Play: {googleOAuthConfigured() ? "yes" : "no"}
       </p>
       <div className="mt-4">
         <JsonButton

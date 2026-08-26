@@ -13,9 +13,9 @@ export default async function CompleteProfilePage() {
   });
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b border-slate-800 px-6 py-3">
-        <div className="mx-auto flex max-w-3xl items-center justify-between">
+    <div className="flex min-h-screen flex-col bg-surface">
+      <header className="sticky top-0 z-20 border-b border-line bg-white px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
           <BrandLogo href="/" size="md" />
           <form action={signOutAction}>
             <Button type="submit" variant="ghost">
@@ -24,12 +24,14 @@ export default async function CompleteProfilePage() {
           </form>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
-        <h1 className="text-2xl font-semibold">Complete your developer profile</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-400">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 lg:py-14">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          Complete your developer profile
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-muted">
           Every member is a developer. Campaigns stay locked until this profile is complete.
         </p>
-        <div className="mt-8">
+        <div className="mt-7">
           <CompleteProfileForm
             defaults={{
               name: user.name || "",

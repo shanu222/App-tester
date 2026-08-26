@@ -7,6 +7,8 @@ import { TIMELINE_STEPS } from "@/lib/status";
 import { formatDateTime } from "@/lib/utils";
 import { TesterActions } from "@/components/testers/tester-actions";
 import { JsonButton } from "@/components/ui/json-button";
+import { Card, CardHeader } from "@/components/ui/card";
+import { CheckCircle2, Circle } from "lucide-react";
 
 export default async function TesterDetailPage({
   params,
@@ -29,38 +31,43 @@ export default async function TesterDetailPage({
 
   return (
     <AppShell title={tester.name || tester.email || "Tester"}>
-      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-2xl border border-slate-800 p-5">
-          <dl className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <dt className="text-slate-500">Email</dt>
-              <dd>{tester.email || "—"}</dd>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <Card>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <CardHeader title="Tester details" />
+            {row ? <StatusBadge status={row.status} /> : null}
+          </div>
+
+          <dl className="mt-5 grid gap-4 border-t border-line pt-5 text-sm sm:grid-cols-2">
+            <div className="min-w-0">
+              <dt className="text-xs font-medium text-muted">Email</dt>
+              <dd className="mt-1 truncate text-slate-700">{tester.email || "—"}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-xs font-medium text-muted">Source</dt>
+              <dd className="mt-1 truncate text-slate-700">{tester.sourceLabel || "—"}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-xs font-medium text-muted">Campaign</dt>
+              <dd className="mt-1 truncate text-slate-700">{row?.campaign.name || "—"}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-xs font-medium text-muted">App</dt>
+              <dd className="mt-1 truncate text-slate-700">{row?.campaign.app.name || "—"}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Source</dt>
-              <dd>{tester.sourceLabel || "—"}</dd>
+              <dt className="text-xs font-medium text-muted">Access</dt>
+              <dd className="mt-1 text-slate-700">{row?.accessAdded ? "Added" : "—"}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Campaign</dt>
-              <dd>{row?.campaign.name || "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">App</dt>
-              <dd>{row?.campaign.app.name || "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">Access</dt>
-              <dd>{row?.accessAdded ? "✅ Added" : "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">Opt-in</dt>
-              <dd>{row?.optedIn ? "✅ Opted in" : "⏳ Pending"}</dd>
+              <dt className="text-xs font-medium text-muted">Opt-in</dt>
+              <dd className="mt-1 text-slate-700">{row?.optedIn ? "Opted in" : "Pending"}</dd>
             </div>
           </dl>
-          {row ? <div className="mt-4"><StatusBadge status={row.status} /></div> : null}
+
           {row ? <TesterActions testerId={tester.id} testerCampaignId={row.id} email={tester.email} /> : null}
           {row ? (
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
               <JsonButton
                 url="/api/google/groups/members"
                 body={{ testerCampaignId: row.id }}
@@ -80,21 +87,36 @@ export default async function TesterDetailPage({
               />
             </div>
           ) : null}
-        </div>
-        <div className="rounded-2xl border border-slate-800 p-5">
-          <h2 className="font-medium">Status timeline</h2>
-          <ol className="mt-4 space-y-3">
+        </Card>
+
+        <Card>
+          <CardHeader title="Status timeline" />
+          <ol className="mt-5 space-y-1">
             {TIMELINE_STEPS.map((step) => {
               const hit = tester.statusHistory.find((item) => item.toStatus === step);
               return (
-                <li key={step} className="flex items-center justify-between text-sm">
-                  <span className={hit ? "text-emerald-200" : "text-slate-500"}>{step.replaceAll("_", " ")}</span>
-                  <span className="text-slate-500">{hit ? formatDateTime(hit.createdAt) : "—"}</span>
+                <li
+                  key={step}
+                  className="flex items-center justify-between gap-3 border-b border-line py-2 text-sm last:border-b-0"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    {hit ? (
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden />
+                    ) : (
+                      <Circle className="h-4 w-4 shrink-0 text-line-strong" aria-hidden />
+                    )}
+                    <span className={hit ? "truncate font-medium text-slate-900" : "truncate text-muted"}>
+                      {step.replaceAll("_", " ")}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs text-muted">
+                    {hit ? formatDateTime(hit.createdAt) : "—"}
+                  </span>
                 </li>
               );
             })}
           </ol>
-        </div>
+        </Card>
       </div>
     </AppShell>
   );

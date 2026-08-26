@@ -2,6 +2,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
 import { getApp } from "@/lib/services/apps";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader } from "@/components/ui/card";
 import Link from "next/link";
 
 export default async function AppDetailPage({
@@ -22,64 +24,94 @@ export default async function AppDetailPage({
               href={app.playStoreUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-slate-950"
+              className="inline-flex h-9.5 items-center rounded-control bg-brand px-4 text-sm font-medium text-white shadow-card transition-colors hover:bg-brand-hover"
             >
               Open Google Play
             </a>
           ) : null}
-          <Link
-            href={`/campaigns?appId=${app.id}`}
-            className="rounded-lg border border-slate-700 px-3 py-2 text-sm"
-          >
-            Create testing campaign
+          <Link href={`/campaigns?appId=${app.id}`}>
+            <Button variant="secondary">Create testing campaign</Button>
           </Link>
-          <Link
-            href="/play"
-            className="rounded-lg border border-slate-700 px-3 py-2 text-sm"
-          >
-            Google Play
+          <Link href="/play">
+            <Button variant="ghost">Google Play</Button>
           </Link>
         </div>
       }
     >
-      <p className="text-slate-400">{app.packageName}</p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Badge>{app.googlePlayStatus.replaceAll("_", " ")}</Badge>
-        <Badge>{app.testingType}</Badge>
-        {app.syncedFromPlay ? <Badge tone="good">Synced</Badge> : <Badge>Manual</Badge>}
-      </div>
-      <div className="mt-4 space-y-1 text-sm text-slate-400">
-        <div>Google Play: {app.playStoreUrl || "Not stored"}</div>
-        <div>Testing / opt-in: {app.webOptInUrl || "Not configured — not invented"}</div>
-        <div>Target testers: {app.testerTarget}</div>
-      </div>
+      <section className="rounded-card border border-line bg-white p-5 shadow-card sm:p-6">
+        <p className="font-mono text-sm text-muted">{app.packageName}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Badge tone="accent">{app.googlePlayStatus.replaceAll("_", " ")}</Badge>
+          <Badge>{app.testingType}</Badge>
+          {app.syncedFromPlay ? <Badge tone="good">Synced from Play</Badge> : <Badge>Manual entry</Badge>}
+        </div>
+
+        <dl className="mt-5 grid gap-4 border-t border-line pt-5 text-sm sm:grid-cols-3">
+          <div className="min-w-0">
+            <dt className="text-xs font-medium text-muted">Google Play URL</dt>
+            <dd className="mt-1 break-all text-slate-700">{app.playStoreUrl || "Not stored"}</dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="text-xs font-medium text-muted">Testing / opt-in URL</dt>
+            <dd className="mt-1 break-all text-slate-700">
+              {app.webOptInUrl || "Not configured — not invented"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium text-muted">Target testers</dt>
+            <dd className="mt-1 font-semibold text-slate-900 tabular-nums">{app.testerTarget}</dd>
+          </div>
+        </dl>
+      </section>
+
       {app.playConflictNote ? (
-        <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
+        <p className="mt-4 rounded-card border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
           {app.playConflictNote}
         </p>
       ) : null}
-      <div className="mt-6 rounded-2xl border border-slate-800 p-5">
-        <h2 className="font-medium">Tracks</h2>
-        <ul className="mt-3 space-y-2 text-sm">
-          {app.tracks.length === 0 ? <li className="text-slate-500">No tracks stored yet.</li> : null}
-          {app.tracks.map((track) => (
-            <li key={track.id}>
-              {track.name} · {track.testingType} · {track.googleGroupEmail || "no group"}
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="mt-6">
-        <h2 className="font-medium">Campaigns</h2>
-        <ul className="mt-3 space-y-2">
-          {app.campaigns.map((item) => (
-            <li key={item.id}>
-              <Link className="text-sky-300" href={`/campaigns/${item.id}`}>
-                {item.name}
-              </Link>
-            </li>
-          ))}
-        </ul>
+
+      <div className="mt-6 grid items-start gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader title="Tracks" description="Testing tracks synced or configured for this app." />
+          {app.tracks.length === 0 ? (
+            <p className="mt-4 text-sm text-muted">No tracks stored yet.</p>
+          ) : (
+            <ul className="mt-4 space-y-2.5">
+              {app.tracks.map((track) => (
+                <li
+                  key={track.id}
+                  className="rounded-control border border-line bg-surface px-3.5 py-2.5 text-sm"
+                >
+                  <span className="font-medium text-slate-900">{track.name}</span>
+                  <span className="text-muted">
+                    {" "}
+                    · {track.testingType} · {track.googleGroupEmail || "no group"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader title="Campaigns" description="Testing requests published for this app." />
+          {app.campaigns.length === 0 ? (
+            <p className="mt-4 text-sm text-muted">No campaigns for this app yet.</p>
+          ) : (
+            <ul className="mt-4 space-y-2.5">
+              {app.campaigns.map((item) => (
+                <li key={item.id}>
+                  <Link
+                    className="block rounded-control border border-line bg-surface px-3.5 py-2.5 text-sm font-medium text-brand transition-colors hover:border-brand"
+                    href={`/campaigns/${item.id}`}
+                  >
+                    {item.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       </div>
     </AppShell>
   );

@@ -22,7 +22,7 @@ export default async function OpportunitiesPage() {
   });
 
   return (
-    <AppShell title="Opportunities">
+    <AppShell title="Opportunities" description="Imported posts scored for testing intent and reciprocal language.">
       {opportunities.length === 0 ? (
         <EmptyState
           title="No opportunities yet"

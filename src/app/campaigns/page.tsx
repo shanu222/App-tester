@@ -4,6 +4,7 @@ import { listCampaigns } from "@/lib/services/campaigns";
 import { prisma } from "@/lib/db";
 import { EmptyState } from "@/components/ui/widgets";
 import { Badge } from "@/components/ui/badge";
+import { SectionLabel } from "@/components/ui/card";
 import Link from "next/link";
 import { CreateCampaignForm } from "@/components/campaigns/create-campaign-form";
 
@@ -24,7 +25,10 @@ export default async function CampaignsPage({
   const groups = await prisma.googleGroup.findMany({ where: { userId: user.id } });
 
   return (
-    <AppShell title="My testing requests">
+    <AppShell
+      title="My testing requests"
+      description="Publish a request, set a tester target, and track who accepts."
+    >
       <CreateCampaignForm
         initialAppId={params.appId}
         apps={apps.map((app) => ({
@@ -41,7 +45,8 @@ export default async function CampaignsPage({
         sources={sources.map((item) => ({ id: item.id, name: item.name }))}
         groups={groups.map((item) => ({ id: item.id, email: item.email }))}
       />
-      <div className="mt-8 space-y-3">
+      <SectionLabel className="mb-3 mt-10">Published requests</SectionLabel>
+      <div className="space-y-2.5">
         {campaigns.length === 0 ? (
           <EmptyState
             title="No testing requests yet"
@@ -52,12 +57,13 @@ export default async function CampaignsPage({
             <Link
               key={campaign.id}
               href={`/campaigns/${campaign.id}`}
-              className="flex items-center justify-between rounded-xl border border-slate-800 bg-card p-5 hover:border-slate-700"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-white p-4 shadow-card transition-colors hover:border-line-strong hover:bg-surface sm:p-5"
             >
-              <div>
-                <div className="font-medium">{campaign.name}</div>
-                <div className="text-sm text-slate-400">
-                  {campaign.app.name} · target {campaign.targetTesters} · {campaign._count.testerCampaigns} testers
+              <div className="min-w-0">
+                <div className="truncate font-medium text-slate-900">{campaign.name}</div>
+                <div className="mt-0.5 text-sm text-muted">
+                  {campaign.app.name} · target {campaign.targetTesters} ·{" "}
+                  {campaign._count.testerCampaigns} testers
                 </div>
               </div>
               <Badge tone={campaign.status === "ACTIVE" ? "good" : "neutral"}>{campaign.status}</Badge>

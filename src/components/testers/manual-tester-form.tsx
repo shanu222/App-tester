@@ -25,11 +25,15 @@ export function ManualTesterForm({ campaignId }: { campaignId: string }) {
     window.location.reload();
   }
   return (
-    <form onSubmit={onSubmit} className="mt-3 space-y-3">
-      <Label>Add tester manually</Label>
-      <Input name="name" placeholder="Name" />
+    <form onSubmit={onSubmit} className="space-y-3">
+      <div>
+        <Label htmlFor="manual-tester-name">Add tester manually</Label>
+        <Input id="manual-tester-name" name="name" placeholder="Name" />
+      </div>
       <Input name="email" type="email" placeholder="tester@gmail.com" required />
-      <Button type="submit">Add tester</Button>
+      <Button type="submit" variant="secondary">
+        Add tester
+      </Button>
     </form>
   );
 }

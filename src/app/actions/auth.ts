@@ -2,19 +2,12 @@
 
 import { bindAuthUrlToRequest, originFromHeaders } from "@/lib/apply-auth-url";
 import { headers } from "next/headers";
-import { signIn, signOut } from "@/auth";
-import { googleLoginCallbackUrl } from "@/lib/canonical";
+import { signOut } from "@/auth";
 
-export async function signInWithGoogle() {
-  const headerStore = await headers();
-  const origin = originFromHeaders(headerStore);
-  bindAuthUrlToRequest(origin);
-  if (origin) {
-    console.info("GOOGLE OAUTH REDIRECT URI:", googleLoginCallbackUrl(origin));
-  }
-  await signIn("google", { redirectTo: "/dashboard" });
-}
-
+/**
+ * Signing in happens client-side through Firebase, so there is no server-side
+ * sign-in action. Only sign-out needs the request origin bound to Auth.js.
+ */
 export async function signOutAction() {
   const origin = originFromHeaders(await headers());
   bindAuthUrlToRequest(origin);

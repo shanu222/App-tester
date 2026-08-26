@@ -2,7 +2,8 @@
 
 import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Select, Textarea } from "@/components/ui/fields";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox, Input, Label, Select, Textarea } from "@/components/ui/fields";
 
 const TYPES = [
   { id: "ANDROID_DEVELOPER", label: "Android developer" },
@@ -81,12 +82,21 @@ export function CompleteProfileForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
+    <form
+      onSubmit={onSubmit}
+      className="grid gap-4 rounded-card border border-line bg-white p-5 shadow-card md:grid-cols-2 sm:p-6"
+    >
       {defaults.image ? (
-        <div className="md:col-span-2 flex items-center gap-3">
+        <div className="flex items-center gap-3 md:col-span-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={defaults.image} alt="" className="h-14 w-14 rounded-full object-cover" />
-          <p className="text-sm text-slate-400">Profile photo from Google. TestLoop does not store Google passwords.</p>
+          <img
+            src={defaults.image}
+            alt=""
+            className="h-12 w-12 rounded-full border border-line object-cover"
+          />
+          <p className="text-sm leading-6 text-muted">
+            Profile photo from Google. TestLoop does not store Google passwords.
+          </p>
         </div>
       ) : null}
       <div>
@@ -125,20 +135,18 @@ export function CompleteProfileForm({
       </div>
       <div className="md:col-span-2">
         <Label>Primary platforms</Label>
-        <div className="flex flex-wrap gap-3 text-sm">
+        <div className="grid gap-2.5 sm:grid-cols-4">
           {PLATFORMS.map((item) => (
-            <label key={item} className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={platforms.includes(item)}
-                onChange={(event) => {
-                  setPlatforms((current) =>
-                    event.target.checked ? [...current, item] : current.filter((value) => value !== item),
-                  );
-                }}
-              />
-              {item}
-            </label>
+            <Checkbox
+              key={item}
+              label={item}
+              checked={platforms.includes(item)}
+              onChange={(event) => {
+                setPlatforms((current) =>
+                  event.target.checked ? [...current, item] : current.filter((value) => value !== item),
+                );
+              }}
+            />
           ))}
         </div>
       </div>
@@ -162,16 +170,26 @@ export function CompleteProfileForm({
         <Label>Google Play testing Gmail</Label>
         <Input name="testingGmail" type="email" defaultValue={defaults.testingGmail} placeholder="Used only after you accept a test" />
       </div>
-      <div className="md:col-span-2 rounded-xl border border-slate-800 p-4 text-sm text-slate-300">
-        Google Play developer account: {defaults.playConnected ? "Connected" : "Not connected"}
+      <div className="flex items-center justify-between gap-3 rounded-control border border-line bg-surface p-4 text-sm md:col-span-2">
+        <span className="text-slate-700">Google Play developer account</span>
+        <Badge tone={defaults.playConnected ? "good" : "neutral"}>
+          {defaults.playConnected ? "Connected" : "Not connected"}
+        </Badge>
       </div>
       <div className="md:col-span-2">
         <Label>Developer bio</Label>
         <Textarea name="bio" defaultValue={defaults.bio} />
       </div>
-      {error ? <p className="md:col-span-2 text-sm text-rose-300">{error}</p> : null}
-      <div className="md:col-span-2">
-        <Button type="submit" disabled={pending}>
+      {error ? (
+        <p
+          role="alert"
+          className="rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-700 md:col-span-2"
+        >
+          {error}
+        </p>
+      ) : null}
+      <div className="md:col-span-2 border-t border-line pt-5">
+        <Button type="submit" aria-busy={pending} disabled={pending}>
           {pending ? "Saving…" : defaults.completed ? "Save profile" : "Complete profile"}
         </Button>
       </div>

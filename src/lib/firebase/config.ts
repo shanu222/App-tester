@@ -1,5 +1,5 @@
 /**
- * Firebase Authentication is a second login path next to Auth.js Google OAuth.
+ * Firebase Authentication is the only login path into TestLoop.
  * Only the public web config lives here. It is safe in the browser bundle:
  * Firebase restricts access by authorized domain, not by hiding the API key.
  */

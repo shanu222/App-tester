@@ -28,10 +28,10 @@ export function TesterActions({
     window.location.reload();
   }
   return (
-    <div className="mt-6 space-y-3 rounded-xl border border-slate-800 p-4">
-      <Label>Potential Google Play account email</Label>
-      <Input value={detected} onChange={(e) => setDetected(e.target.value)} />
-      <div className="flex flex-wrap gap-2">
+    <div className="mt-5 rounded-control border border-line bg-surface p-4">
+      <Label htmlFor="tester-email">Potential Google Play account email</Label>
+      <Input id="tester-email" value={detected} onChange={(e) => setDetected(e.target.value)} />
+      <div className="mt-3 flex flex-wrap gap-2">
         <Button type="button" onClick={() => patch({ email: detected, confirmEmail: true })}>
           Confirm
         </Button>
@@ -45,8 +45,11 @@ export function TesterActions({
           Block tester
         </Button>
       </div>
-      <Label>Change status</Label>
+      <div className="mt-4">
+        <Label htmlFor="tester-status">Change status</Label>
+      </div>
       <Select
+        id="tester-status"
         defaultValue=""
         onChange={(e) => {
           if (e.target.value) patch({ status: e.target.value });

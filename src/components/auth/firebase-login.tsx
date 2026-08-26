@@ -6,6 +6,7 @@ import {
   createUserWithEmailAndPassword,
   getRedirectResult,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
@@ -16,12 +17,33 @@ import { firebaseAuth, googleProvider } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/fields";
 
+/** Popup failures that are environmental rather than user error; retry via redirect. */
 const POPUP_FALLBACK = new Set([
   "auth/popup-blocked",
   "auth/popup-closed-by-user",
   "auth/cancelled-popup-request",
   "auth/operation-not-supported-in-this-environment",
 ]);
+
+function GoogleGlyph() {
+  return (
+    <svg viewBox="0 0 18 18" className="h-4 w-4 shrink-0" aria-hidden>
+      <path
+        fill="#4285F4"
+        d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62Z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.34A9 9 0 0 0 9 18Z"
+      />
+      <path fill="#FBBC05" d="M3.97 10.72a5.41 5.41 0 0 1 0-3.44V4.94H.96a9 9 0 0 0 0 8.12l3.01-2.34Z" />
+      <path
+        fill="#EA4335"
+        d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.94l3.01 2.34C4.68 5.16 6.66 3.58 9 3.58Z"
+      />
+    </svg>
+  );
+}
 
 function readableError(error: unknown) {
   if (error instanceof FirebaseError) {
@@ -40,6 +62,8 @@ function readableError(error: unknown) {
         return "Too many attempts. Wait a moment and try again.";
       case "auth/unauthorized-domain":
         return "This hostname is not in the Firebase authorized domains list.";
+      case "auth/account-exists-with-different-credential":
+        return "This email already uses a different sign-in method. Use Google instead.";
       default:
         return error.message.replace("Firebase: ", "");
     }
@@ -51,7 +75,7 @@ export function FirebaseLogin() {
   const [mode, setMode] = useState<"signin" | "create">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [pending, setPending] = useState<"google" | "email" | null>(null);
+  const [pending, setPending] = useState<"google" | "email" | "reset" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
@@ -59,12 +83,14 @@ export function FirebaseLogin() {
     const idToken = await user.getIdToken(true);
     const result = await signIn("firebase", { idToken, redirect: false, callbackUrl: "/dashboard" });
     if (!result || result.error) {
-      setError("TestLoop could not create a session for this account. Try again.");
+      setError("Signed in with Firebase, but TestLoop could not create a session. Try again.");
+      setPending(null);
       return;
     }
     window.location.assign(result.url || "/dashboard");
   }, []);
 
+  // Completes a sign-in that fell back to a full-page redirect.
   useEffect(() => {
     let active = true;
     getRedirectResult(firebaseAuth())
@@ -82,9 +108,13 @@ export function FirebaseLogin() {
     };
   }, [exchangeForSession]);
 
-  async function withGoogle() {
+  function reset() {
     setError(null);
     setInfo(null);
+  }
+
+  async function withGoogle() {
+    reset();
     setPending("google");
     const auth = firebaseAuth();
     try {
@@ -107,8 +137,7 @@ export function FirebaseLogin() {
 
   async function withEmail(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
-    setInfo(null);
+    reset();
     setPending("email");
     const auth = firebaseAuth();
     try {
@@ -117,6 +146,7 @@ export function FirebaseLogin() {
           ? await createUserWithEmailAndPassword(auth, email.trim(), password)
           : await signInWithEmailAndPassword(auth, email.trim(), password);
 
+      // Password accounts must prove the address before they get a session.
       if (!credential.user.emailVerified) {
         await sendEmailVerification(credential.user);
         await auth.signOut();
@@ -131,40 +161,76 @@ export function FirebaseLogin() {
     }
   }
 
-  return (
-    <div className="rounded-xl border border-slate-800 bg-card p-5">
-      <h2 className="text-sm font-medium text-slate-200">Firebase sign-in</h2>
-      <p className="mt-1 text-xs leading-5 text-slate-500">
-        Use your Google account or an email and password.
-      </p>
+  async function withPasswordReset() {
+    reset();
+    if (!email.trim()) {
+      setError("Enter your email address first, then request a reset link.");
+      return;
+    }
+    setPending("reset");
+    try {
+      await sendPasswordResetEmail(firebaseAuth(), email.trim());
+      setInfo(`Password reset link sent to ${email.trim()}.`);
+    } catch (cause) {
+      setError(readableError(cause));
+    }
+    setPending(null);
+  }
 
+  const busy = pending !== null;
+
+  return (
+    <div className="space-y-5">
       <Button
         type="button"
         variant="secondary"
-        className="mt-4 w-full"
-        disabled={pending !== null}
+        className="w-full"
+        aria-busy={pending === "google"}
+        disabled={busy}
         onClick={withGoogle}
       >
-        {pending === "google" ? "Opening Google…" : "Google (Firebase)"}
+        <GoogleGlyph />
+        {pending === "google" ? "Opening Google…" : "Continue with Google"}
       </Button>
 
-      <form className="mt-4 space-y-3" onSubmit={withEmail}>
+      <div className="flex items-center gap-3" aria-hidden>
+        <span className="h-px flex-1 bg-line" />
+        <span className="text-xs font-medium uppercase tracking-[0.06em] text-muted">or</span>
+        <span className="h-px flex-1 bg-line" />
+      </div>
+
+      <form className="space-y-4" onSubmit={withEmail}>
         <div>
           <Label htmlFor="firebase-email">Email</Label>
           <Input
             id="firebase-email"
+            name="email"
             type="email"
             autoComplete="email"
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@gmail.com"
+            placeholder="you@example.com"
           />
         </div>
+
         <div>
-          <Label htmlFor="firebase-password">Password</Label>
+          <div className="flex items-baseline justify-between gap-3">
+            <Label htmlFor="firebase-password">Password</Label>
+            {mode === "signin" ? (
+              <button
+                type="button"
+                className="mb-1.5 text-xs font-medium text-brand hover:underline disabled:opacity-60"
+                disabled={busy}
+                onClick={withPasswordReset}
+              >
+                {pending === "reset" ? "Sending…" : "Forgot password?"}
+              </button>
+            ) : null}
+          </div>
           <Input
             id="firebase-password"
+            name="password"
             type="password"
             autoComplete={mode === "create" ? "new-password" : "current-password"}
             required
@@ -174,29 +240,43 @@ export function FirebaseLogin() {
             placeholder="At least 6 characters"
           />
         </div>
-        <Button type="submit" className="w-full" disabled={pending !== null}>
+
+        <Button type="submit" className="w-full" aria-busy={pending === "email"} disabled={busy}>
           {pending === "email"
             ? "Working…"
             : mode === "create"
               ? "Create account"
-              : "Sign in with email"}
+              : "Sign in"}
         </Button>
       </form>
 
-      <button
-        type="button"
-        className="mt-3 text-xs text-emerald-300 hover:underline"
-        onClick={() => {
-          setMode(mode === "create" ? "signin" : "create");
-          setError(null);
-          setInfo(null);
-        }}
-      >
-        {mode === "create" ? "I already have an account" : "Create an account with email"}
-      </button>
+      <p className="text-sm text-muted">
+        {mode === "create" ? "Already have an account?" : "New to TestLoop?"}{" "}
+        <button
+          type="button"
+          className="font-medium text-brand hover:underline"
+          onClick={() => {
+            setMode(mode === "create" ? "signin" : "create");
+            reset();
+          }}
+        >
+          {mode === "create" ? "Sign in" : "Create an account"}
+        </button>
+      </p>
 
-      {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
-      {info ? <p className="mt-3 text-sm text-emerald-300">{info}</p> : null}
+      {error ? (
+        <p
+          role="alert"
+          className="rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-700"
+        >
+          {error}
+        </p>
+      ) : null}
+      {info ? (
+        <p className="rounded-control border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm leading-5 text-emerald-700">
+          {info}
+        </p>
+      ) : null}
     </div>
   );
 }

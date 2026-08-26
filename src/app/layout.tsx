@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Source_Sans_3 } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { isDemoMode } from "@/lib/env";
 import { SITE_NAME, SITE_ORIGIN, SITE_TAGLINE } from "@/lib/site";
 
-const sans = Source_Sans_3({
+const inter = Inter({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-sans",
+  variable: "--font-inter",
 });
 
 export const dynamic = "force-dynamic";
@@ -26,11 +26,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body className={`${sans.className} min-h-screen antialiased`}>
+    <html lang="en" className={inter.variable}>
+      <body className="min-h-screen bg-white font-sans text-body antialiased">
         {isDemoMode() ? (
-          <div className="bg-amber-500/15 text-center text-xs tracking-wide text-amber-200 py-1.5">
-            DEMO MODE — mock adapters only. Demo records stay isolated from production.
+          <div className="border-b border-amber-200 bg-amber-50 py-2 text-center text-xs font-medium text-amber-800">
+            Demo mode — mock adapters only. Demo records stay isolated from production.
           </div>
         ) : null}
         {children}

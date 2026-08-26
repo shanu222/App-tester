@@ -6,6 +6,7 @@ import { JsonButton } from "@/components/ui/json-button";
 import { Badge } from "@/components/ui/badge";
 import { AppMark } from "@/components/brand/app-mark";
 import { requestFillStatus } from "@/lib/request-status";
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
 export default async function RequestDetailPage({
@@ -21,50 +22,70 @@ export default async function RequestDetailPage({
 
   return (
     <AppShell title={request.app.name}>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        <AppMark src={request.app.iconUrl} name={request.app.name} size={56} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={fill.tone}>{fill.label}</Badge>
-            {pending ? <Badge tone="warn">Pending</Badge> : null}
-            <Badge>Android · {request.testingType}</Badge>
+      <section className="rounded-card border border-line bg-white p-5 shadow-card sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <AppMark src={request.app.iconUrl} name={request.app.name} size={56} />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={fill.tone}>{fill.label}</Badge>
+              {pending ? <Badge tone="warn">Pending</Badge> : null}
+              <Badge tone="accent">Android · {request.testingType}</Badge>
+              {request.reciprocalOpen ? <Badge>Reciprocal open</Badge> : null}
+            </div>
+            <p className="mt-3 text-sm text-muted">
+              Developer:{" "}
+              <Link href={`/developers/${request.owner.id}`} className="font-medium text-brand hover:underline">
+                {request.owner.name}
+              </Link>
+              {request.owner.country ? ` · ${request.owner.country}` : ""}
+            </p>
+            <p className="mt-1.5 text-sm text-body">
+              <span className="font-medium text-slate-900 tabular-nums">
+                {request.testersReceived} / {request.targetTesters}
+              </span>{" "}
+              testers · {request.durationDays} day duration
+            </p>
           </div>
-          <p className="mt-3 text-sm text-slate-400">
-            Developer:{" "}
-            <Link href={`/developers/${request.owner.id}`} className="text-emerald-300">
-              {request.owner.name}
-            </Link>
-            {request.owner.country ? ` · ${request.owner.country}` : ""}
-          </p>
-          <p className="mt-2 text-sm text-slate-300">
-            Testers {request.testersReceived} / {request.targetTesters} · {request.durationDays} days
-            {request.reciprocalOpen ? " · Reciprocal open" : ""}
-          </p>
         </div>
-      </div>
-      <p className="mt-6 max-w-3xl text-slate-300">
-        {request.description || "This developer did not add a campaign description."}
-      </p>
-      {request.testingInstructions ? (
-        <div className="mt-4 rounded-xl border border-slate-800 p-4 text-sm leading-6 text-slate-300">
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Testing requirements</div>
-          <p className="mt-2">{request.testingInstructions}</p>
-        </div>
-      ) : null}
-      <p className="mt-3 text-xs text-slate-500">Google emails stay private until you confirm participation.</p>
+
+        <p className="mt-5 max-w-3xl border-t border-line pt-5 text-sm leading-7 text-body">
+          {request.description || "This developer did not add a campaign description."}
+        </p>
+
+        {request.testingInstructions ? (
+          <div className="mt-4 rounded-control border border-line bg-surface p-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+              Testing requirements
+            </div>
+            <p className="mt-2 text-sm leading-6 text-body">{request.testingInstructions}</p>
+          </div>
+        ) : null}
+
+        <p className="mt-4 text-xs text-muted">
+          Google emails stay private until you confirm participation.
+        </p>
+      </section>
+
       <div className="mt-6">
         {request.isOwner ? (
-          <Link href={`/campaigns/${request.id}`} className="text-sm text-emerald-300">
-            Manage your campaign
+          <Link href={`/campaigns/${request.id}`}>
+            <Button variant="secondary">Manage your campaign</Button>
           </Link>
         ) : request.participation?.consentAt ? (
-          <div className="rounded-xl border border-slate-800 p-5 text-sm">
-            <div>Status: {request.participation.status.replaceAll("_", " ")}</div>
+          <div className="rounded-card border border-line bg-white p-5 shadow-card">
+            <div className="text-sm text-body">
+              Status:{" "}
+              <span className="font-medium text-slate-900">
+                {request.participation.status.replaceAll("_", " ")}
+              </span>
+            </div>
             {request.participation.lastError ? (
-              <p className="mt-2 text-amber-200">{request.participation.lastError}</p>
+              <p className="mt-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-800">
+                {request.participation.lastError}
+              </p>
             ) : null}
-            <Link href="/testing" className="mt-3 inline-block text-emerald-300">
-              Open My Testing
+            <Link href="/testing" className="mt-4 inline-block">
+              <Button variant="secondary">Open My Testing</Button>
             </Link>
           </div>
         ) : (
@@ -77,7 +98,7 @@ export default async function RequestDetailPage({
           />
         )}
       </div>
-      <div className="mt-6 flex flex-wrap gap-2">
+      <div className="mt-8 flex flex-wrap gap-2 border-t border-line pt-6">
         <JsonButton
           url="/api/network/safety"
           body={{ action: "report", campaignId: request.id, reason: "spam" }}

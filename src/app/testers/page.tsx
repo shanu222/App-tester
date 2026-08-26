@@ -3,7 +3,10 @@ import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
 import { EmptyState, StatusBadge } from "@/components/ui/widgets";
 import { Input } from "@/components/ui/fields";
+import { Button } from "@/components/ui/button";
+import { Table, TableWrap, Td, Th, Tr } from "@/components/ui/table";
 import { formatDate } from "@/lib/utils";
+import { Search } from "lucide-react";
 import Link from "next/link";
 
 export default async function TestersPage({
@@ -33,18 +36,27 @@ export default async function TestersPage({
   });
 
   return (
-    <AppShell title="Testers">
-      <form className="mb-4" role="search">
+    <AppShell title="Testers" description="Everyone who has consented to test one of your apps.">
+      <form className="mb-5 flex max-w-lg gap-2" role="search">
         <label htmlFor="tester-search" className="sr-only">
           Search testers
         </label>
-        <Input
-          id="tester-search"
-          name="q"
-          defaultValue={params.q}
-          placeholder="Search name or email"
-          className="max-w-md"
-        />
+        <div className="relative flex-1">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            aria-hidden
+          />
+          <Input
+            id="tester-search"
+            name="q"
+            defaultValue={params.q}
+            placeholder="Search name or email"
+            className="pl-9"
+          />
+        </div>
+        <Button type="submit" variant="secondary">
+          Search
+        </Button>
       </form>
       {testers.length === 0 ? (
         <EmptyState
@@ -52,51 +64,55 @@ export default async function TestersPage({
           body="Testers appear after a developer consents to share Gmail, or after you add one from a campaign."
         />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-800">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-950 text-left text-xs uppercase text-slate-400">
+        <TableWrap>
+          <Table>
+            <thead>
               <tr>
-                <th className="px-3 py-3">Name</th>
-                <th className="px-3 py-3">Email</th>
-                <th className="px-3 py-3">Source</th>
-                <th className="px-3 py-3">App</th>
-                <th className="px-3 py-3">Campaign</th>
-                <th className="px-3 py-3">Status</th>
-                <th className="px-3 py-3">Contacted</th>
-                <th className="px-3 py-3">Opt-in</th>
-                <th className="px-3 py-3">Added</th>
-                <th className="px-3 py-3">Testing</th>
+                <Th>Name</Th>
+                <Th>Email</Th>
+                <Th>Source</Th>
+                <Th>App</Th>
+                <Th>Campaign</Th>
+                <Th>Status</Th>
+                <Th>Contacted</Th>
+                <Th>Opt-in</Th>
+                <Th>Added</Th>
+                <Th>Testing</Th>
               </tr>
             </thead>
             <tbody>
               {testers.map((tester) => {
                 const row = tester.campaigns[0];
+                const active =
+                  row &&
+                  ["TESTING", "FEEDBACK_REQUESTED", "FEEDBACK_RECEIVED", "COMPLETED"].includes(row.status);
                 return (
-                  <tr key={tester.id} className="border-t border-slate-800">
-                    <td className="px-3 py-3">
-                      <Link className="text-emerald-300 hover:underline" href={`/testers/${tester.id}`}>
+                  <Tr key={tester.id}>
+                    <Td>
+                      <Link
+                        className="font-medium text-brand hover:underline"
+                        href={`/testers/${tester.id}`}
+                      >
                         {tester.name || "Unnamed"}
                       </Link>
-                    </td>
-                    <td className="px-3 py-3">{tester.email || "—"}</td>
-                    <td className="px-3 py-3">{tester.sourceLabel || "—"}</td>
-                    <td className="px-3 py-3">{row?.campaign.app.name || "—"}</td>
-                    <td className="px-3 py-3">{row?.campaign.name || "—"}</td>
-                    <td className="px-3 py-3">{row ? <StatusBadge status={row.status} /> : "—"}</td>
-                    <td className="px-3 py-3">{formatDate(row?.dateContacted)}</td>
-                    <td className="px-3 py-3">{row?.optedIn ? "Yes" : "Pending"}</td>
-                    <td className="px-3 py-3">{formatDate(row?.dateAdded || tester.createdAt)}</td>
-                    <td className="px-3 py-3">
-                      {row && ["TESTING", "FEEDBACK_REQUESTED", "FEEDBACK_RECEIVED", "COMPLETED"].includes(row.status)
-                        ? "Activity detected"
-                        : "—"}
-                    </td>
-                  </tr>
+                    </Td>
+                    <Td className="text-muted">{tester.email || "—"}</Td>
+                    <Td className="text-muted">{tester.sourceLabel || "—"}</Td>
+                    <Td>{row?.campaign.app.name || "—"}</Td>
+                    <Td>{row?.campaign.name || "—"}</Td>
+                    <Td>{row ? <StatusBadge status={row.status} /> : "—"}</Td>
+                    <Td className="whitespace-nowrap text-muted">{formatDate(row?.dateContacted)}</Td>
+                    <Td>{row?.optedIn ? "Yes" : "Pending"}</Td>
+                    <Td className="whitespace-nowrap text-muted">
+                      {formatDate(row?.dateAdded || tester.createdAt)}
+                    </Td>
+                    <Td className="text-muted">{active ? "Activity detected" : "—"}</Td>
+                  </Tr>
                 );
               })}
             </tbody>
-          </table>
-        </div>
+          </Table>
+        </TableWrap>
       )}
     </AppShell>
   );

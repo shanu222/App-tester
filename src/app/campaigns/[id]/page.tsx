@@ -4,7 +4,10 @@ import { campaignStats, getCampaign } from "@/lib/services/campaigns";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState, StatusBadge, StatCard } from "@/components/ui/widgets";
 import { JsonButton } from "@/components/ui/json-button";
+import { Card, CardHeader, SectionLabel } from "@/components/ui/card";
+import { Table, TableWrap, Td, Th, Tr } from "@/components/ui/table";
 import { percent } from "@/lib/utils";
+import { ExternalLink, Info } from "lucide-react";
 import Link from "next/link";
 import { PasteReplyForm } from "@/components/messages/paste-reply-form";
 import { ManualTesterForm } from "@/components/testers/manual-tester-form";
@@ -41,26 +44,63 @@ export default async function CampaignDetailPage({
         </div>
       }
     >
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <Badge tone={campaign.published ? "good" : "neutral"}>{campaign.published ? "PUBLISHED" : "UNPUBLISHED"}</Badge>
-        <span className="text-sm text-slate-400">
-          {campaign.app.name} · {campaign.app.packageName} · {campaign.testingType} · Target {campaign.targetTesters}
-        </span>
+      <section className="mb-6 rounded-card border border-line bg-white p-5 shadow-card">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={campaign.published ? "good" : "neutral"}>
+            {campaign.published ? "Published" : "Unpublished"}
+          </Badge>
+          <Badge tone="accent">{campaign.testingType} testing</Badge>
+        </div>
+
+        <p className="mt-3 text-sm text-body">
+          <span className="font-medium text-slate-900">{campaign.app.name}</span>{" "}
+          <span className="font-mono text-xs text-muted">{campaign.app.packageName}</span>
+        </p>
+
+        <div className="mt-4">
+          <div className="mb-1.5 flex justify-between text-xs">
+            <span className="text-muted">
+              {stats.optedIn} of {campaign.targetTesters} testers opted in
+            </span>
+            <span className="font-semibold text-slate-900 tabular-nums">
+              {percent(stats.optedIn, campaign.targetTesters)}%
+            </span>
+          </div>
+          <div
+            className="h-2 overflow-hidden rounded-full bg-surface-strong"
+            role="progressbar"
+            aria-valuenow={percent(stats.optedIn, campaign.targetTesters)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <span
+              className="block h-full rounded-full bg-brand"
+              style={{ width: `${Math.min(100, percent(stats.optedIn, campaign.targetTesters))}%` }}
+            />
+          </div>
+        </div>
+
         {campaign.app.playStoreUrl ? (
-          <a className="text-sm text-emerald-300 hover:underline" href={campaign.app.playStoreUrl} target="_blank" rel="noreferrer">
+          <a
+            className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
+            href={campaign.app.playStoreUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
             Open Google Play
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
           </a>
         ) : null}
-        <span className="text-sm text-slate-300">
-          Progress {stats.optedIn} / {campaign.targetTesters} ({percent(stats.optedIn, campaign.targetTesters)}%)
-        </span>
-      </div>
+      </section>
 
-      <div className="mb-6 rounded-2xl border border-slate-800 p-4 text-sm text-slate-300">
-        Required testers: {campaign.requiredTesters} · Opted in: {stats.optedIn} · Remaining: {remaining} ·
-        Days active window: {campaign.requiredActiveDays} (configurable). Based on recorded tester activity —
-        verify official Play Console status before applying for production access. TestLoop does not determine
-        Google&apos;s eligibility.
+      <div className="mb-6 flex gap-3 rounded-card border border-blue-200 bg-brand-soft p-4">
+        <Info className="mt-0.5 h-4.5 w-4.5 shrink-0 text-brand" aria-hidden />
+        <p className="text-sm leading-6 text-blue-900">
+          Required testers: {campaign.requiredTesters} · Opted in: {stats.optedIn} · Remaining: {remaining} ·
+          Active-day window: {campaign.requiredActiveDays}. Based on recorded tester activity — verify official
+          Play Console status before applying for production access. TestLoop does not determine Google&apos;s
+          eligibility.
+        </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -74,33 +114,52 @@ export default async function CampaignDetailPage({
         <StatCard label="Feedback" value={stats.feedback} />
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-800 p-5">
-          <h2 className="font-medium">Testing links</h2>
-          <p className="mt-2 text-sm text-slate-400">
-            Store URL: {campaign.playStoreUrl || campaign.app.playStoreUrl || "Not stored"}
-          </p>
-          <p className="mt-2 text-sm text-slate-400">
-            Testing / opt-in: {campaign.webOptInUrl || "No testing link configured — do not invent one."}
-          </p>
-          {campaign.webOptInUrl ? (
-            <div className="mt-3 flex gap-3 text-sm">
-              <a className="text-emerald-300 hover:underline" href={campaign.webOptInUrl} target="_blank" rel="noreferrer">
-                Open testing link
-              </a>
+      <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader title="Testing links" description="Store and opt-in URLs are stored separately." />
+          <dl className="mt-5 space-y-4 text-sm">
+            <div>
+              <dt className="text-xs font-medium text-muted">Store URL</dt>
+              <dd className="mt-1 break-all text-slate-700">
+                {campaign.playStoreUrl || campaign.app.playStoreUrl || "Not stored"}
+              </dd>
             </div>
+            <div>
+              <dt className="text-xs font-medium text-muted">Testing / opt-in URL</dt>
+              <dd className="mt-1 break-all text-slate-700">
+                {campaign.webOptInUrl || "No testing link configured — do not invent one."}
+              </dd>
+            </div>
+          </dl>
+          {campaign.webOptInUrl ? (
+            <a
+              className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
+              href={campaign.webOptInUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open testing link
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+            </a>
           ) : null}
-          <p className="mt-3 text-xs text-slate-500">
-            In-app telemetry token: {campaign.telemetryToken} · POST /api/telemetry
+          <p className="mt-4 border-t border-line pt-4 text-xs leading-5 text-muted">
+            In-app telemetry token:{" "}
+            <span className="font-mono text-slate-600">{campaign.telemetryToken}</span> · POST /api/telemetry
           </p>
-        </div>
-        <div className="rounded-2xl border border-slate-800 p-5">
-          <h2 className="font-medium">Manual override</h2>
-          <ManualTesterForm campaignId={campaign.id} />
-          <div className="mt-4">
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Manual override"
+            description="Use only when Google APIs cannot complete the action automatically."
+          />
+          <div className="mt-5">
+            <ManualTesterForm campaignId={campaign.id} />
+          </div>
+          <div className="mt-5 border-t border-line pt-5">
             <PasteReplyForm campaignId={campaign.id} />
           </div>
-        </div>
+        </Card>
       </div>
 
       <div className="mt-6">
@@ -110,11 +169,12 @@ export default async function CampaignDetailPage({
         />
       </div>
 
-      <h2 className="mt-10 mb-3 font-medium">Developer testers</h2>
-      <p className="mb-3 text-xs text-slate-500">
-        Gmail is visible here only after the developer explicitly consented. Never shown on the public request page.
+      <SectionLabel className="mb-1.5 mt-10">Developer testers</SectionLabel>
+      <p className="mb-3 text-xs leading-5 text-muted">
+        Gmail is visible here only after the developer explicitly consented. It is never shown on the public
+        request page.
       </p>
-      <div className="mb-8 space-y-3">
+      <div className="mb-10 space-y-2.5">
         {campaign.participations.length === 0 ? (
           <EmptyState
             title="No testers yet"
@@ -122,83 +182,92 @@ export default async function CampaignDetailPage({
           />
         ) : (
           campaign.participations.map((row) => (
-          <div key={row.id} className="rounded-xl border border-slate-800 p-4 text-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <Link href={`/developers/${row.tester.id}`} className="text-emerald-300 hover:underline">
-                  {row.tester.developerName || row.tester.name}
-                </Link>
-                <div className="text-slate-400">{row.status}</div>
-              </div>
-              <div>{row.consentAt ? row.gmail : "Gmail hidden until consent"}</div>
-            </div>
-            {row.lastError ? <p className="mt-2 text-amber-200">{row.lastError}</p> : null}
-            {row.status === "MANUAL_REQUIRED" || row.status === "FAILED" ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {row.gmail ? (
-                  <button
-                    type="button"
-                    className="rounded-lg border border-slate-700 px-3 py-2 text-xs"
-                    data-email={row.gmail}
+            <div key={row.id} className="rounded-card border border-line bg-white p-4 shadow-card">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Link
+                    href={`/developers/${row.tester.id}`}
+                    className="font-medium text-brand hover:underline"
                   >
-                    Copy tester email: {row.gmail}
-                  </button>
-                ) : null}
-                <JsonButton
-                  url="/api/network"
-                  body={{ action: "retry-access", participationId: row.id }}
-                  label="Retry"
-                  variant="secondary"
-                />
-                <JsonButton
-                  url="/api/network"
-                  body={{ action: "manual-added", participationId: row.id }}
-                  label="Mark manually added"
-                />
+                    {row.tester.developerName || row.tester.name}
+                  </Link>
+                  <div className="mt-0.5 text-sm text-muted">{row.status.replaceAll("_", " ")}</div>
+                </div>
+                <div className="text-sm text-slate-700">
+                  {row.consentAt ? row.gmail : <span className="text-muted">Gmail hidden until consent</span>}
+                </div>
               </div>
-            ) : null}
-          </div>
-        ))
+              {row.lastError ? (
+                <p className="mt-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-800">
+                  {row.lastError}
+                </p>
+              ) : null}
+              {row.status === "MANUAL_REQUIRED" || row.status === "FAILED" ? (
+                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+                  {row.gmail ? (
+                    <span className="rounded-control border border-line bg-surface px-3 py-1.5 font-mono text-xs text-slate-600">
+                      {row.gmail}
+                    </span>
+                  ) : null}
+                  <JsonButton
+                    url="/api/network"
+                    body={{ action: "retry-access", participationId: row.id }}
+                    label="Retry"
+                    variant="secondary"
+                  />
+                  <JsonButton
+                    url="/api/network"
+                    body={{ action: "manual-added", participationId: row.id }}
+                    label="Mark manually added"
+                  />
+                </div>
+              ) : null}
+            </div>
+          ))
         )}
       </div>
 
-      <h2 className="mt-10 mb-3 font-medium">Testers</h2>
-      <div className="overflow-x-auto rounded-2xl border border-slate-800">
-        <table className="min-w-full text-sm">
-          <thead className="bg-slate-950 text-left text-slate-400">
-            <tr>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Access</th>
-              <th className="px-4 py-3">Opt-in</th>
-              <th className="px-4 py-3">Testing</th>
-              <th className="px-4 py-3">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {campaign.testerCampaigns.map((row) => (
-              <tr key={row.id} className="border-t border-slate-800">
-                <td className="px-4 py-3">
-                  <Link className="text-sky-300" href={`/testers/${row.testerId}`}>
-                    {row.tester.name || "Unnamed"}
-                  </Link>
-                </td>
-                <td className="px-4 py-3">{row.detectedEmail || row.tester.email || "—"}</td>
-                <td className="px-4 py-3">{row.accessAdded ? "✅ Added" : "—"}</td>
-                <td className="px-4 py-3">{row.optedIn ? "✅ Opted in" : "⏳ Pending"}</td>
-                <td className="px-4 py-3">
-                  {["TESTING", "FEEDBACK_REQUESTED", "FEEDBACK_RECEIVED", "COMPLETED"].includes(row.status)
-                    ? "Activity detected"
-                    : "—"}
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={row.status} />
-                </td>
+      <SectionLabel className="mb-3 mt-10">Testers</SectionLabel>
+      {campaign.testerCampaigns.length === 0 ? (
+        <EmptyState title="No tester records yet" body="Tester rows appear as access and opt-in events are recorded." />
+      ) : (
+        <TableWrap>
+          <Table>
+            <thead>
+              <tr>
+                <Th>Name</Th>
+                <Th>Email</Th>
+                <Th>Access</Th>
+                <Th>Opt-in</Th>
+                <Th>Testing</Th>
+                <Th>Status</Th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {campaign.testerCampaigns.map((row) => (
+                <Tr key={row.id}>
+                  <Td>
+                    <Link className="font-medium text-brand hover:underline" href={`/testers/${row.testerId}`}>
+                      {row.tester.name || "Unnamed"}
+                    </Link>
+                  </Td>
+                  <Td className="text-muted">{row.detectedEmail || row.tester.email || "—"}</Td>
+                  <Td>{row.accessAdded ? "Added" : "—"}</Td>
+                  <Td>{row.optedIn ? "Opted in" : "Pending"}</Td>
+                  <Td className="text-muted">
+                    {["TESTING", "FEEDBACK_REQUESTED", "FEEDBACK_RECEIVED", "COMPLETED"].includes(row.status)
+                      ? "Activity detected"
+                      : "—"}
+                  </Td>
+                  <Td>
+                    <StatusBadge status={row.status} />
+                  </Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
+        </TableWrap>
+      )}
     </AppShell>
   );
 }

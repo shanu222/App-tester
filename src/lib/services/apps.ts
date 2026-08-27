@@ -182,12 +182,9 @@ export async function listAppsWithStats(userId: string) {
 
 export function statusFromPlayTracks(tracks: Array<{ typeGuess: string }>): GooglePlayStatus | null {
   const types = new Set(tracks.map((track) => track.typeGuess));
-  if (types.has("PRODUCTION") && !types.has("CLOSED") && !types.has("INTERNAL") && !types.has("OPEN")) {
-    return "PRODUCTION";
-  }
+  if (types.has("OPEN")) return "OPEN_TESTING";
   if (types.has("CLOSED")) return "CLOSED_TESTING";
   if (types.has("INTERNAL")) return "INTERNAL_TESTING";
-  if (types.has("OPEN")) return "OPEN_TESTING";
   if (types.has("PRODUCTION")) return "PRODUCTION";
   return null;
 }

@@ -17,7 +17,7 @@ export type PublicTestingPage = {
 };
 
 export type PublicJoinResult = {
-  outcome: "READY" | "WAITING" | "FAILED";
+  outcome: "READY" | "REGISTERED" | "FAILED";
   statusLabel: string;
   detail: string;
   email: string;

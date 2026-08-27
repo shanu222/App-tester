@@ -66,8 +66,11 @@ export default async function PublicTestPage({
           </div>
         </dl>
 
+        <p className="mt-6 text-sm leading-6 text-body">
+          Join this beta test through Google Play.
+        </p>
         {page.description ? (
-          <p className="mt-6 text-sm leading-6 text-body">{page.description}</p>
+          <p className="mt-3 text-sm leading-6 text-body">{page.description}</p>
         ) : null}
         {page.instructions ? (
           <p className="mt-3 text-sm leading-6 text-body">{page.instructions}</p>

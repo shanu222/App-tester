@@ -78,7 +78,7 @@ export async function grantTesterAccess(input: {
     userId: input.userId,
     testerCampaignId: row.id,
     to: "ADDING",
-    note: "Waiting for the developer to add this address to the Play Console email list.",
+    note: "Tester registered. Google Play controls eligibility for this track.",
   });
   await logActivity({
     userId: input.userId,
@@ -90,8 +90,8 @@ export async function grantTesterAccess(input: {
   await notify({
     userId: input.userId,
     type: "tester",
-    title: "Tester waiting for Play Console",
-    body: `${row.tester.emailNormalized} is ready. Add the address to the ${testingType.toLowerCase()} testing email list, then mark it added.`,
+    title: "Tester registered",
+    body: `${row.tester.emailNormalized} registered for ${testingType.toLowerCase()} testing. Configure eligibility in Play Console, then mark the tester as added.`,
     href: `/campaigns/${row.campaignId}`,
     campaignId: row.campaignId,
   });

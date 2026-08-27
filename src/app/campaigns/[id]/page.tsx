@@ -2,10 +2,9 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
 import { campaignStats, getCampaign } from "@/lib/services/campaigns";
 import { Badge } from "@/components/ui/badge";
-import { EmptyState, StatusBadge, StatCard } from "@/components/ui/widgets";
+import { EmptyState, StatCard } from "@/components/ui/widgets";
 import { JsonButton } from "@/components/ui/json-button";
 import { Card, CardHeader, SectionLabel } from "@/components/ui/card";
-import { Table, TableWrap, Td, Th, Tr } from "@/components/ui/table";
 import { percent } from "@/lib/utils";
 import { ExternalLink, Info } from "lucide-react";
 import Link from "next/link";
@@ -14,7 +13,11 @@ import { ManualTesterForm } from "@/components/testers/manual-tester-form";
 import { RecruitmentPostEditor } from "@/components/campaigns/recruitment-post-editor";
 import { CopyButton } from "@/components/ui/copy-button";
 import { campaignShareUrl } from "@/lib/services/campaigns";
-import { testerAccessMode } from "@/lib/integrations/play-testers";
+import { PLAY_TESTER_API_LIMITATION, testerAccessMode } from "@/lib/integrations/play-testers";
+import { CampaignTestersTable } from "@/components/campaigns/campaign-testers-table";
+import { prisma } from "@/lib/db";
+import { parseTracksSnapshot, PLAY_API_UNAVAILABLE, playTrackDisplayName, playTrackUiStatus } from "@/lib/integrations/play-config";
+import { PlayStatusMark } from "@/components/play/play-status";
 
 export default async function CampaignDetailPage({
   params,
@@ -36,6 +39,29 @@ export default async function CampaignDetailPage({
     .filter((row) => row.status === "ADDING")
     .map((row) => row.detectedEmail || row.tester.email)
     .filter((email): email is string => Boolean(email));
+
+  const playApp = await prisma.googlePlayApp.findFirst({
+    where: { userId: user.id, appId: campaign.appId },
+  });
+  const playTracks = parseTracksSnapshot(playApp?.tracksSnapshot);
+  const playTrack =
+    playTracks.find((track) => track.track === campaign.playTrack) ||
+    playTracks.find((track) => track.typeGuess === campaign.testingType) ||
+    null;
+  const trackLabel = playTrack
+    ? playTrack.displayName
+    : playTrackDisplayName(campaign.playTrack || campaign.testingType.toLowerCase());
+  const trackStatus = playTrackUiStatus({
+    exists: Boolean(playTrack || campaign.playTrack),
+    releaseStatus: playTrack?.releaseStatus,
+  });
+  const version =
+    playTrack?.releaseName ||
+    (playTrack?.versionCodes[0] ? `Version code ${playTrack.versionCodes[0]}` : PLAY_API_UNAVAILABLE);
+  const activeTesters = campaign.testerCampaigns.filter((row) =>
+    ["ADDED", "INVITATION_SENT", "OPT_IN_PENDING", "OPTED_IN", "TESTING", "FEEDBACK_REQUESTED", "FEEDBACK_RECEIVED", "COMPLETED"].includes(row.status),
+  ).length;
+  const pendingTesters = campaign.testerCampaigns.length - activeTesters;
 
   return (
     <AppShell
@@ -62,13 +88,38 @@ export default async function CampaignDetailPage({
           <Badge tone={campaign.published ? "good" : "neutral"}>
             {campaign.published ? "Published" : "Unpublished"}
           </Badge>
-          <Badge tone="accent">{campaign.testingType} testing</Badge>
+          <Badge tone="accent">{trackLabel}</Badge>
+          <Badge tone={campaign.status === "ACTIVE" ? "good" : "neutral"}>{campaign.status}</Badge>
         </div>
 
-        <p className="mt-3 text-sm text-body">
-          <span className="font-medium text-slate-900">{campaign.app.name}</span>{" "}
-          <span className="font-mono text-xs text-muted">{campaign.app.packageName}</span>
-        </p>
+        <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <dt className="text-xs font-medium text-muted">App</dt>
+            <dd className="mt-1 font-medium text-slate-900">{campaign.app.name}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium text-muted">Package</dt>
+            <dd className="mt-1 font-mono text-xs text-slate-700">{campaign.app.packageName}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium text-muted">Track</dt>
+            <dd className="mt-1 text-slate-900">{trackLabel}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium text-muted">Status</dt>
+            <dd className="mt-1">
+              <PlayStatusMark status={trackStatus} />
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium text-muted">Version</dt>
+            <dd className="mt-1 text-slate-900">{version}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium text-muted">TestLoop campaign</dt>
+            <dd className="mt-1 text-slate-900">{campaign.status}</dd>
+          </div>
+        </dl>
 
         <div className="mt-4">
           <div className="mb-1.5 flex justify-between text-xs">
@@ -281,46 +332,30 @@ export default async function CampaignDetailPage({
       </div>
 
       <SectionLabel className="mb-3 mt-10">Testers</SectionLabel>
-      {campaign.testerCampaigns.length === 0 ? (
-        <EmptyState title="No tester records yet" body="Tester rows appear as access and opt-in events are recorded." />
+      <div className="mb-4 grid gap-4 sm:grid-cols-3">
+        <StatCard label="Total" value={campaign.testerCampaigns.length} />
+        <StatCard label="Active" value={activeTesters} />
+        <StatCard label="Pending" value={pendingTesters} />
+      </div>
+      {accessMode === "MANUAL_EMAIL_LIST" ? (
+        <p className="mb-4 text-sm leading-6 text-body">{PLAY_TESTER_API_LIMITATION}</p>
       ) : (
-        <TableWrap>
-          <Table>
-            <thead>
-              <tr>
-                <Th>Name</Th>
-                <Th>Email</Th>
-                <Th>Access</Th>
-                <Th>Opt-in</Th>
-                <Th>Testing</Th>
-                <Th>Status</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {campaign.testerCampaigns.map((row) => (
-                <Tr key={row.id}>
-                  <Td>
-                    <Link className="font-medium text-brand hover:underline" href={`/testers/${row.testerId}`}>
-                      {row.tester.name || "Unnamed"}
-                    </Link>
-                  </Td>
-                  <Td className="text-muted">{row.detectedEmail || row.tester.email || "—"}</Td>
-                  <Td>{row.accessAdded ? "Added" : "—"}</Td>
-                  <Td>{row.optedIn ? "Opted in" : "Pending"}</Td>
-                  <Td className="text-muted">
-                    {["TESTING", "FEEDBACK_REQUESTED", "FEEDBACK_RECEIVED", "COMPLETED"].includes(row.status)
-                      ? "Activity detected"
-                      : "—"}
-                  </Td>
-                  <Td>
-                    <StatusBadge status={row.status} />
-                  </Td>
-                </Tr>
-              ))}
-            </tbody>
-          </Table>
-        </TableWrap>
+        <p className="mb-4 text-sm leading-6 text-body">
+          Open testing testers join through Google Play using the official testing link. TestLoop
+          records registration and does not install the app.
+        </p>
       )}
+      <CampaignTestersTable
+        testers={campaign.testerCampaigns.map((row) => ({
+          id: row.id,
+          testerId: row.testerId,
+          name: row.tester.name,
+          email: row.detectedEmail || row.tester.email,
+          status: row.status,
+          joinedAt: (row.dateEmailConfirmed || row.createdAt).toISOString(),
+          lastActivityAt: (row.lastActivityAt || row.updatedAt).toISOString(),
+        }))}
+      />
     </AppShell>
   );
 }

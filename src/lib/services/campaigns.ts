@@ -131,10 +131,18 @@ export async function createCampaign(
   const webOptInUrl = input.webOptInUrl || app.webOptInUrl || undefined;
   if (input.published) {
     const duplicate = await prisma.campaign.findFirst({
-      where: { userId, appId: app.id, published: true, status: "ACTIVE" },
+      where: {
+        userId,
+        appId: app.id,
+        published: true,
+        status: "ACTIVE",
+        playTrack: input.playTrack ?? null,
+      },
     });
     if (duplicate) {
-      throw new AppError("An active published testing request already exists for this app.");
+      throw new AppError(
+        "An active published testing request already exists for this app and track.",
+      );
     }
   }
   const testingType = input.testingType || app.testingType;

@@ -6,6 +6,11 @@ import {
   publisherClient,
   type PlayCredentials,
 } from "@/lib/integrations/play-auth";
+import {
+  classifyPlayTrack,
+  playTrackDisplayName,
+} from "@/lib/integrations/play-config";
+import { mapPlayFailure } from "@/lib/integrations/play-errors";
 
 export type ServiceAccountJson = {
   client_email: string;
@@ -79,10 +84,11 @@ export async function searchPlayApps(
         })),
     };
   } catch (error) {
+    const mapped = mapPlayFailure(error, describeGoogleError(error, "Play app search failed."));
     return {
       ok: false,
-      error: describeGoogleError(error, "Play app search failed."),
-      code: "PLAY_APPS_SEARCH",
+      error: mapped.message,
+      code: mapped.code === "PLAY_ERROR" ? "PLAY_APPS_SEARCH" : mapped.code,
       manualFallback: "Add apps manually by package name.",
     };
   }
@@ -99,32 +105,47 @@ export async function listPlayTracks(
     if (!editId) {
       return { ok: false, error: "Could not open a Play Console edit.", code: "PLAY_EDIT" };
     }
-    const tracks = await publisher.edits.tracks.list({ packageName, editId });
-    await publisher.edits.delete({ packageName, editId });
-    const rows = (tracks.data.tracks || []).map((track) => {
-      const name = track.track || "unknown";
-      let typeGuess: PlayTrackRecord["typeGuess"] = "CLOSED";
-      if (name === "production") typeGuess = "PRODUCTION";
-      else if (name === "beta") typeGuess = "OPEN";
-      else if (name === "qa" || name === "internal") typeGuess = "INTERNAL";
-      else if (name === "alpha") typeGuess = "CLOSED";
-      // Play returns releases newest-last; the active one carries the version.
-      const releases = track.releases || [];
-      const current = releases.find((release) => release.status === "completed") || releases.at(-1);
-      return {
-        track: name,
-        typeGuess,
-        releaseName: current?.name ?? null,
-        versionCodes: (current?.versionCodes || []).map(String),
-        releaseStatus: current?.status ?? null,
-      };
-    });
-    return { ok: true, data: rows };
+    try {
+      const tracks = await publisher.edits.tracks.list({ packageName, editId });
+      const rows: PlayTrackRecord[] = [];
+      for (const track of tracks.data.tracks || []) {
+        const name = track.track || "unknown";
+        const typeGuess = classifyPlayTrack(name);
+        const releases = track.releases || [];
+        const current =
+          releases.find((release) => release.status === "completed") ||
+          releases.find((release) => release.status === "inProgress") ||
+          releases.at(-1);
+        const notes = current?.releaseNotes?.[0]?.text?.trim() || null;
+        let googleGroupCount: number | null = null;
+        try {
+          const testers = await publisher.edits.testers.get({ packageName, editId, track: name });
+          googleGroupCount = (testers.data.googleGroups || []).length;
+        } catch {
+          googleGroupCount = null;
+        }
+        rows.push({
+          track: name,
+          typeGuess,
+          displayName: playTrackDisplayName(name, typeGuess),
+          releaseName: current?.name ?? null,
+          versionCodes: (current?.versionCodes || []).map(String),
+          releaseStatus: current?.status ?? null,
+          userFraction: typeof current?.userFraction === "number" ? current.userFraction : null,
+          releaseNotes: notes,
+          googleGroupCount,
+        });
+      }
+      return { ok: true, data: rows };
+    } finally {
+      await publisher.edits.delete({ packageName, editId }).catch(() => undefined);
+    }
   } catch (error) {
+    const mapped = mapPlayFailure(error, describeGoogleError(error, "Could not list tracks."));
     return {
       ok: false,
-      error: describeGoogleError(error, "Could not list tracks."),
-      code: "PLAY_TRACKS",
+      error: mapped.message,
+      code: mapped.code === "PLAY_ERROR" ? "PLAY_TRACKS" : mapped.code,
       manualFallback: "Enter the track name from Play Console (for closed tests, use the custom track name).",
     };
   }

@@ -1,4 +1,4 @@
-import type { GooglePlayConnection, GooglePlayConnectionMethod } from "@prisma/client";
+import type { GooglePlayConnection, GooglePlayConnectionMethod, GooglePlayStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError, NotFoundError, mapInfrastructureError } from "@/lib/errors";
 import { logActivity } from "@/lib/audit";
@@ -20,6 +20,18 @@ import {
 } from "@/lib/integrations/play-auth";
 import { listPlayTracks, searchPlayApps, type ServiceAccountJson } from "@/lib/integrations/play";
 import { canonicalPlayStoreUrl } from "@/lib/play-url";
+import type { PlayTrackRecord } from "@/lib/integrations/types";
+import {
+  detectTestingConfiguration,
+  parseTracksSnapshot,
+  recommendTestingMode,
+  summarizeConfiguration,
+  type ConfigurationSummary,
+  type TestingConfiguration,
+  type TestingRecommendation,
+} from "@/lib/integrations/play-config";
+import { campaignTestingUrl } from "@/lib/integrations/play-testers";
+import { createCampaign, ensureCampaignPublicFields } from "@/lib/services/campaigns";
 
 /**
  * Shape of the credential blob held in GooglePlayConnection.encryptedCredentials.
@@ -39,6 +51,7 @@ export type SafePlayConnection = {
   cloudProjectId: string | null;
   scopes: string[];
   lastVerifiedAt: string | null;
+  lastSyncAt: string | null;
   lastError: string | null;
   errorCode: string | null;
   oauthAvailable: boolean;
@@ -55,6 +68,7 @@ export function safePlayConnection(
     cloudProjectId: connection?.cloudProjectId ?? null,
     scopes: connection?.scopes ?? [],
     lastVerifiedAt: connection?.lastVerifiedAt?.toISOString() ?? null,
+    lastSyncAt: connection?.lastSyncAt?.toISOString() ?? null,
     lastError: connection?.lastError ?? null,
     errorCode: connection?.errorCode ?? null,
     oauthAvailable: playOAuthConfigured(),
@@ -192,6 +206,9 @@ export async function connectServiceAccount(input: {
     };
   }
 
+  if (diagnostics.connected) {
+    await discoverAppsAfterConnect(input.userId);
+  }
   return diagnostics;
 }
 
@@ -253,6 +270,9 @@ export async function connectOAuthCode(input: {
     }`,
   });
 
+  if (diagnostics.connected) {
+    await discoverAppsAfterConnect(input.userId);
+  }
   return diagnostics;
 }
 
@@ -319,7 +339,70 @@ export type DiscoveredApp = {
   iconUrl: string | null;
   selected: boolean;
   appId: string | null;
+  lastSyncAt: string | null;
+  tracks: PlayTrackRecord[];
+  configuration: ConfigurationSummary;
 };
+
+export type PlayTrackDiscovery = {
+  packageName: string;
+  tracks: PlayTrackRecord[];
+  configuration: TestingConfiguration;
+  recommendation: TestingRecommendation;
+  newTracks: string[];
+  lastSyncAt: string;
+};
+
+function googlePlayStatusFromConfig(config: TestingConfiguration): GooglePlayStatus {
+  if (config.openTesting.exists) return "OPEN_TESTING";
+  if (config.closedTesting.exists) return "CLOSED_TESTING";
+  if (config.internalTesting.exists) return "INTERNAL_TESTING";
+  if (config.production.exists) return "PRODUCTION";
+  return "NOT_CONFIGURED";
+}
+
+async function discoverAppsAfterConnect(userId: string) {
+  try {
+    await discoverPlayApps(userId, { syncTracks: false });
+  } catch (error) {
+    console.error("Play app discovery after connect failed", error);
+  }
+}
+
+async function mapPool<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>) {
+  let index = 0;
+  async function worker() {
+    while (index < items.length) {
+      const current = items[index++];
+      await fn(current);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) || 1 }, () => worker()));
+}
+
+function toDiscoveredApp(row: {
+  id: string;
+  packageName: string;
+  name: string;
+  iconUrl: string | null;
+  selected: boolean;
+  appId: string | null;
+  lastSyncAt: Date | null;
+  tracksSnapshot: unknown;
+}): DiscoveredApp {
+  const tracks = parseTracksSnapshot(row.tracksSnapshot);
+  return {
+    id: row.id,
+    packageName: row.packageName,
+    name: row.name,
+    iconUrl: row.iconUrl,
+    selected: row.selected,
+    appId: row.appId,
+    lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
+    tracks,
+    configuration: summarizeConfiguration(detectTestingConfiguration(tracks)),
+  };
+}
 
 /**
  * Ask Google which applications this connection can see and cache the answer.
@@ -327,7 +410,7 @@ export type DiscoveredApp = {
  * Developer Reporting API; when that API is not enabled the failure is
  * reported rather than papered over with an empty list.
  */
-export async function discoverPlayApps(userId: string) {
+export async function discoverPlayApps(userId: string, options?: { syncTracks?: boolean }) {
   const connection = await getPlayConnection(userId);
   if (!connection) throw new NotFoundError("Google Play is not connected.");
 
@@ -346,6 +429,7 @@ export async function discoverPlayApps(userId: string) {
     throw new AppError(result.error);
   }
 
+  const seen = result.data.map((app) => app.packageName);
   for (const app of result.data) {
     await prisma.googlePlayApp.upsert({
       where: {
@@ -361,15 +445,31 @@ export async function discoverPlayApps(userId: string) {
     });
   }
 
+  if (seen.length > 0) {
+    await prisma.googlePlayApp.deleteMany({
+      where: {
+        connectionId: connection.id,
+        selected: false,
+        appId: null,
+        packageName: { notIn: seen },
+      },
+    });
+  }
+
+  const syncedAt = new Date();
   await prisma.googlePlayConnection.update({
     where: { userId },
-    data: { lastError: null, errorCode: null },
+    data: { lastError: null, errorCode: null, lastSyncAt: syncedAt },
   });
   await logActivity({
     userId,
     action: "PLAY_APPS_DISCOVERED",
     result: `${result.data.length} app(s)`,
   });
+
+  if (options?.syncTracks) {
+    await syncAllPackageTracks(userId);
+  }
 
   return listDiscoveredApps(userId);
 }
@@ -378,16 +478,8 @@ export async function listDiscoveredApps(userId: string): Promise<DiscoveredApp[
   const rows = await prisma.googlePlayApp.findMany({
     where: { userId },
     orderBy: { name: "asc" },
-    select: {
-      id: true,
-      packageName: true,
-      name: true,
-      iconUrl: true,
-      selected: true,
-      appId: true,
-    },
   });
-  return rows;
+  return rows.map(toDiscoveredApp);
 }
 
 /**
@@ -415,7 +507,7 @@ export async function selectPlayApp(input: { userId: string; packageName: string
 
   const app = await prisma.app.upsert({
     where: { userId_packageName: { userId: input.userId, packageName: discovered.packageName } },
-    update: { syncedFromPlay: true, lastSyncedAt: new Date() },
+    update: { syncedFromPlay: true, lastSyncedAt: new Date(), name: discovered.name },
     create: {
       userId: input.userId,
       name: discovered.name,
@@ -440,8 +532,62 @@ export async function selectPlayApp(input: { userId: string; packageName: string
   return { app, packageName: discovered.packageName };
 }
 
-/** Read the real tracks for a package. Ownership is enforced by connection lookup. */
-export async function listTracksForPackage(input: { userId: string; packageName: string }) {
+async function persistTestingTracks(input: {
+  appId: string | null;
+  packageName: string;
+  tracks: PlayTrackRecord[];
+}) {
+  if (!input.appId) return;
+  const testing = input.tracks.filter((track) => track.typeGuess !== "PRODUCTION");
+  for (const track of testing) {
+    const existing = await prisma.testingTrack.findFirst({
+      where: { appId: input.appId, trackId: track.track },
+    });
+    const testingType = track.typeGuess as "INTERNAL" | "CLOSED" | "OPEN";
+    const testingLink = campaignTestingUrl({
+      testingType,
+      packageName: input.packageName,
+    }).url;
+    if (existing) {
+      await prisma.testingTrack.update({
+        where: { id: existing.id },
+        data: {
+          name: track.displayName,
+          testingType,
+          syncedFromPlay: true,
+          testingLink: existing.testingLink || testingLink,
+        },
+      });
+    } else {
+      await prisma.testingTrack.create({
+        data: {
+          appId: input.appId,
+          name: track.displayName,
+          trackId: track.track,
+          testingType,
+          testingLink,
+          syncedFromPlay: true,
+        },
+      });
+    }
+  }
+
+  const config = detectTestingConfiguration(input.tracks);
+  await prisma.app.update({
+    where: { id: input.appId },
+    data: {
+      lastSyncedAt: new Date(),
+      syncedFromPlay: true,
+      googlePlayStatus: googlePlayStatusFromConfig(config),
+    },
+  });
+}
+
+/** Read the real tracks for a package and persist the Play snapshot. */
+export async function syncPackageTracks(input: {
+  userId: string;
+  packageName: string;
+}): Promise<PlayTrackDiscovery> {
   const connection = await getPlayConnection(input.userId);
   if (!connection) throw new NotFoundError("Google Play is not connected.");
 
@@ -452,12 +598,12 @@ export async function listTracksForPackage(input: { userId: string; packageName:
         packageName: input.packageName,
       },
     },
-    select: { id: true },
   });
   if (!owned) {
-    throw new NotFoundError("This connection has no access to that package.");
+    throw new NotFoundError("This app is no longer accessible through the connected Play Console account.");
   }
 
+  const previous = parseTracksSnapshot(owned.tracksSnapshot).map((track) => track.track);
   const creds = await resolvePlayCredentials(input.userId);
   const result = await listPlayTracks(creds, input.packageName);
   if (!result.ok) {
@@ -466,7 +612,174 @@ export async function listTracksForPackage(input: { userId: string; packageName:
       action: "PLAY_TRACKS_FAILED",
       result: `${input.packageName} · ${result.code}`,
     });
-    throw new AppError(result.error);
+    throw new AppError(
+      result.error,
+      result.code === "PLAY_AUTH_EXPIRED" ? 409 : result.code === "PLAY_UNAVAILABLE" ? 503 : 400,
+      result.code,
+    );
   }
-  return result.data;
+
+  const lastSyncAt = new Date();
+  await prisma.googlePlayApp.update({
+    where: { id: owned.id },
+    data: { tracksSnapshot: result.data as Prisma.InputJsonValue, lastSyncAt },
+  });
+  await persistTestingTracks({
+    appId: owned.appId,
+    packageName: input.packageName,
+    tracks: result.data,
+  });
+
+  const newTracks = result.data
+    .map((track) => track.track)
+    .filter((name) => previous.length > 0 && !previous.includes(name));
+  const configuration = detectTestingConfiguration(result.data);
+
+  await logActivity({
+    userId: input.userId,
+    action: "PLAY_TRACKS_DISCOVERED",
+    result: `${input.packageName} · ${result.data.length} track(s)${
+      newTracks.length ? ` · new: ${newTracks.join(", ")}` : ""
+    }`,
+  });
+
+  return {
+    packageName: input.packageName,
+    tracks: result.data,
+    configuration,
+    recommendation: recommendTestingMode(configuration),
+    newTracks,
+    lastSyncAt: lastSyncAt.toISOString(),
+  };
+}
+
+export async function syncAllPackageTracks(userId: string) {
+  const apps = await prisma.googlePlayApp.findMany({
+    where: { userId },
+    select: { packageName: true },
+    take: 20,
+  });
+  await mapPool(apps, 3, async (app) => {
+    try {
+      await syncPackageTracks({ userId, packageName: app.packageName });
+    } catch (error) {
+      console.error(`Play track sync failed for ${app.packageName}`, error);
+    }
+  });
+}
+
+/**
+ * Full refresh: verify the connection, re-list apps, then re-read tracks.
+ * TestLoop campaign and tester rows are not overwritten.
+ */
+export async function refreshFromGooglePlay(userId: string) {
+  const diagnostics = await verifyPlayConnection({ userId });
+  if (!diagnostics.connected) {
+    throw new AppError(
+      diagnostics.errorMessage || "Your Google Play authorization has expired. Reconnect Google Play to continue.",
+      409,
+      diagnostics.errorCode || "PLAY_AUTH_EXPIRED",
+    );
+  }
+  const apps = await discoverPlayApps(userId, { syncTracks: true });
+  const connection = await getPlayConnection(userId);
+  await logActivity({
+    userId,
+    action: "PLAY_REFRESHED",
+    result: `${apps.length} app(s)`,
+  });
+  return {
+    apps,
+    lastSyncAt: connection?.lastSyncAt?.toISOString() ?? new Date().toISOString(),
+  };
+}
+
+/** Read the real tracks for a package. Ownership is enforced by connection lookup. */
+export async function listTracksForPackage(input: { userId: string; packageName: string }) {
+  return syncPackageTracks(input);
+}
+
+/**
+ * Open or create a TestLoop campaign for a discovered Play testing track.
+ * Production tracks are rejected — TestLoop never publishes to production here.
+ */
+export async function managePlayTrack(input: {
+  userId: string;
+  packageName: string;
+  track: string;
+}) {
+  if (input.track.trim().toLowerCase() === "production") {
+    throw new AppError(
+      "Production is separate from testing. TestLoop will not publish this app to production from a testing action.",
+    );
+  }
+
+  const { app } = await selectPlayApp({ userId: input.userId, packageName: input.packageName });
+  const discovery = await syncPackageTracks({
+    userId: input.userId,
+    packageName: input.packageName,
+  });
+  const playTrack = discovery.tracks.find((track) => track.track === input.track);
+  if (!playTrack) {
+    throw new AppError("That track is not in the latest Google Play configuration for this app.");
+  }
+  if (playTrack.typeGuess === "PRODUCTION") {
+    throw new AppError(
+      "Production is separate from testing. TestLoop will not publish this app to production from a testing action.",
+    );
+  }
+
+  const testingType = playTrack.typeGuess;
+  const testingLink = campaignTestingUrl({
+    testingType,
+    packageName: app.packageName,
+  }).url;
+
+  let trackRow = await prisma.testingTrack.findFirst({
+    where: { appId: app.id, trackId: playTrack.track },
+  });
+  if (!trackRow) {
+    trackRow = await prisma.testingTrack.create({
+      data: {
+        appId: app.id,
+        name: playTrack.displayName,
+        trackId: playTrack.track,
+        testingType,
+        testingLink,
+        syncedFromPlay: true,
+      },
+    });
+  }
+
+  const existing = await prisma.campaign.findFirst({
+    where: { userId: input.userId, appId: app.id, playTrack: playTrack.track },
+    include: { app: true },
+    orderBy: { updatedAt: "desc" },
+  });
+  if (existing) {
+    const campaign = await ensureCampaignPublicFields(existing);
+    await logActivity({
+      userId: input.userId,
+      campaignId: campaign.id,
+      action: "PLAY_CAMPAIGN_OPENED",
+      result: `${app.packageName} · ${playTrack.track}`,
+    });
+    return { campaignId: campaign.id, created: false, playTrack: playTrack.track };
+  }
+
+  const campaign = await createCampaign(input.userId, {
+    name: `${app.name} — ${playTrack.displayName}`,
+    appId: app.id,
+    trackId: trackRow.id,
+    playTrack: playTrack.track,
+    testingType,
+    published: true,
+  });
+  await logActivity({
+    userId: input.userId,
+    campaignId: campaign.id,
+    action: "PLAY_CAMPAIGN_CREATED",
+    result: `${app.packageName} · ${playTrack.track}`,
+  });
+  return { campaignId: campaign.id, created: true, playTrack: playTrack.track };
 }

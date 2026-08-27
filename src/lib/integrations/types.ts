@@ -38,8 +38,16 @@ export type PlayAppRecord = {
 export type PlayTrackRecord = {
   track: string;
   typeGuess: "INTERNAL" | "CLOSED" | "OPEN" | "PRODUCTION";
+  displayName: string;
   /** Real release state read back from Play, never inferred. */
   releaseName: string | null;
   versionCodes: string[];
   releaseStatus: string | null;
+  userFraction: number | null;
+  releaseNotes: string | null;
+  /**
+   * Count of Google Groups on the testers resource, or null when the API did
+   * not return tester configuration. Individual email lists are never present.
+   */
+  googleGroupCount: number | null;
 };

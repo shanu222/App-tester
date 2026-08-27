@@ -7,7 +7,7 @@ import { extractEmails } from "@/lib/email-extract";
 import { createOrGetTester, setTesterStatus } from "@/lib/services/testers";
 import { logActivity, notify } from "@/lib/audit";
 import { markIntegrationExpired } from "@/lib/integrations/store";
-import { verifyPlayConnection } from "@/lib/services/play-connection";
+import { verifyPlayConnection, refreshFromGooglePlay } from "@/lib/services/play-connection";
 
 const TIMEOUT = 25_000;
 
@@ -122,6 +122,12 @@ async function handleJob(
     case "integration_health":
       if (!userId) return "missing user";
       return checkIntegrationHealth(userId);
+    case "play_sync":
+      if (!userId) return "missing user";
+      {
+        const result = await refreshFromGooglePlay(userId);
+        return `apps=${result.apps.length}`;
+      }
     case "facebook_sync":
       if (!userId || !payload.sourceId) return "missing source";
       {
@@ -221,6 +227,12 @@ async function checkIntegrationHealth(userId: string) {
       const result = await verifyPlayConnection({ userId });
       if (result.connected) {
         notes += "play=ok;";
+        await enqueueJob({
+          userId,
+          type: "play_sync",
+          payload: {},
+          idempotencyKey: `play_sync:${userId}:${new Date().toISOString().slice(0, 13)}`,
+        });
       } else {
         notes += "play=error;";
         await notify({
@@ -284,6 +296,12 @@ export async function scheduleRecurringJobs(userId: string) {
     type: "integration_health",
     payload: {},
     idempotencyKey: `health:${userId}:${new Date().toISOString().slice(0, 10)}`,
+  });
+  await enqueueJob({
+    userId,
+    type: "play_sync",
+    payload: {},
+    idempotencyKey: `play_sync:${userId}:${new Date().toISOString().slice(0, 13)}`,
   });
 }
 

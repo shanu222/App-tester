@@ -146,8 +146,18 @@ export function CreateCampaignForm({
           <Label>Name</Label>
           <Input
             name="name"
-            key={selected?.id}
-            defaultValue={selected ? `${selected.name} — Closed Testing` : ""}
+            key={`${selected?.id}-${testingType}`}
+            defaultValue={
+              selected
+                ? `${selected.name} — ${
+                    testingType === "OPEN"
+                      ? "Open Testing"
+                      : testingType === "INTERNAL"
+                        ? "Internal Testing"
+                        : "Closed Testing"
+                  }`
+                : ""
+            }
             required
           />
         </div>

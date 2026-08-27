@@ -2,9 +2,10 @@ import { z } from "zod";
 import { handleRouteError, json, parseJson } from "@/lib/http";
 import { requireUser } from "@/auth";
 import {
-  discoverPlayApps,
   listDiscoveredApps,
+  refreshFromGooglePlay,
   selectPlayApp,
+  syncPackageTracks,
 } from "@/lib/services/play-connection";
 
 /** Cached list of applications Google reported for this developer. */
@@ -18,7 +19,7 @@ export async function GET() {
 }
 
 const postSchema = z.object({
-  action: z.enum(["refresh", "select"]).default("refresh"),
+  action: z.enum(["refresh", "select", "sync"]).default("refresh"),
   packageName: z.string().trim().optional(),
 });
 
@@ -33,14 +34,32 @@ export async function POST(request: Request) {
         return json({ error: "Choose an app to manage." }, 400);
       }
       const result = await selectPlayApp({ userId: user.id, packageName: body.packageName });
+      const discovery = await syncPackageTracks({
+        userId: user.id,
+        packageName: body.packageName,
+      }).catch(() => null);
       return json({
         selected: result.packageName,
         appId: result.app.id,
         apps: await listDiscoveredApps(user.id),
+        discovery,
       });
     }
 
-    return json({ apps: await discoverPlayApps(user.id) });
+    if (body.action === "sync") {
+      if (body.packageName) {
+        const discovery = await syncPackageTracks({
+          userId: user.id,
+          packageName: body.packageName,
+        });
+        return json({ discovery, apps: await listDiscoveredApps(user.id) });
+      }
+      const refreshed = await refreshFromGooglePlay(user.id);
+      return json(refreshed);
+    }
+
+    const refreshed = await refreshFromGooglePlay(user.id);
+    return json(refreshed);
   } catch (error) {
     return handleRouteError(error);
   }

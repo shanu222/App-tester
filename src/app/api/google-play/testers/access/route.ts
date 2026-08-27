@@ -8,9 +8,9 @@ const schema = z.object({ testerCampaignId: z.string().min(1) });
 /**
  * Give a confirmed tester access to the campaign's track.
  *
- * Open tracks complete immediately. Internal and closed tracks return 409 with
- * the exact Play Console steps, because Google's testers resource accepts
- * Google Groups only and cannot take an individual address.
+ * Open tracks complete immediately. Internal and closed tracks return 409
+ * because the Play testers resource cannot take an individual Gmail address.
+ * That is a Google Play limitation, not a TestLoop error.
  */
 export async function POST(request: Request) {
   try {

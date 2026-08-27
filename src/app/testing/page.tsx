@@ -176,9 +176,9 @@ export default async function MyTestingPage() {
                       {granted
                         ? "Access granted"
                         : waiting
-                          ? "Waiting for Google Play"
+                          ? "Registered"
                           : failed
-                            ? "Unable to add tester"
+                            ? "Unable to register"
                             : TESTER_STATUS_LABELS[row.status]}
                     </Badge>
                   </div>

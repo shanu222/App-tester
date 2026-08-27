@@ -77,7 +77,7 @@ export const TESTER_STATUS_LABELS: Record<TesterStatus, string> = {
   REPLIED: "Replied",
   EMAIL_RECEIVED: "Email received",
   EMAIL_CONFIRMED: "Email confirmed",
-  ADDING: "Awaiting Play Console",
+  ADDING: "Eligibility pending",
   ADDED: "Added to access",
   INVITATION_SENT: "Invitation sent",
   GROUP_MEMBER: "Group member (legacy)",

@@ -39,7 +39,7 @@ describe("integration honesty", () => {
   });
 
   it("explains the Play testers API limitation rather than claiming automation", () => {
-    expect(PLAY_TESTER_API_LIMITATION).toContain("Google Groups only");
+    expect(PLAY_TESTER_API_LIMITATION).toMatch(/Google Play controls eligibility/i);
     const steps = playConsoleTesterSteps("CLOSED");
     expect(steps.length).toBeGreaterThan(0);
     expect(steps.join(" ")).toContain("Closed testing");

@@ -4,9 +4,11 @@ import { AppError, NotFoundError, RateLimitError } from "@/lib/errors";
 import { describeEmail } from "@/lib/email-extract";
 import { env } from "@/lib/env";
 import {
+  PLAY_CLOSED_TESTING_TESTER_NOTE,
+  PLAY_INTERNAL_TESTING_TESTER_NOTE,
+  PLAY_OPEN_TESTER_READY,
   PLAY_TESTER_API_LIMITATION,
   campaignTestingUrl,
-  playConsoleTesterSteps,
   testerAccessMode,
 } from "@/lib/integrations/play-testers";
 import { grantTesterAccess } from "@/lib/services/invitations";
@@ -50,12 +52,12 @@ function publicJoinState(
   accessAdded: boolean,
 ): Pick<PublicJoinResult, "outcome" | "statusLabel"> {
   if (status === "ERROR") {
-    return { outcome: "FAILED", statusLabel: "Unable to add tester" };
+    return { outcome: "FAILED", statusLabel: "Unable to register tester" };
   }
   if (accessAdded || READY_STATUSES.includes(status)) {
-    return { outcome: "READY", statusLabel: "Access granted" };
+    return { outcome: "READY", statusLabel: "You're ready" };
   }
-  return { outcome: "WAITING", statusLabel: "Waiting for Google Play" };
+  return { outcome: "REGISTERED", statusLabel: "You're registered" };
 }
 
 export async function getPublicTestingPage(slug: string): Promise<PublicTestingPage> {
@@ -192,23 +194,24 @@ export async function joinPublicTest(input: {
     where: { id: testerCampaign.id },
   });
   const state = publicJoinState(after.status, after.accessAdded);
+  const testerDetail =
+    campaign.testingType === "OPEN"
+      ? PLAY_OPEN_TESTER_READY
+      : campaign.testingType === "INTERNAL"
+        ? PLAY_INTERNAL_TESTING_TESTER_NOTE
+        : PLAY_CLOSED_TESTING_TESTER_NOTE;
 
   return {
     ...state,
-    detail:
-      granted?.detail ||
-      (state.outcome === "WAITING"
-        ? PLAY_TESTER_API_LIMITATION
-        : testing.url
-          ? "Google Play testing access has been configured. Open Google Play to continue."
-          : testing.reason || "Access is recorded. The Play opt-in link is not available yet."),
+    statusLabel: state.outcome === "FAILED" ? state.statusLabel : campaign.testingType === "OPEN" ? "You're ready" : "You're registered",
+    detail: state.outcome === "FAILED" ? granted?.detail || PLAY_TESTER_API_LIMITATION : testerDetail,
     email: described.normalized,
     appName: page.appName,
     packageName: page.packageName,
     trackLabel: page.trackLabel,
     developerName: page.developerName,
     optInUrl: granted?.optInUrl ?? testing.url,
-    steps: granted?.steps ?? (state.outcome === "WAITING" ? playConsoleTesterSteps(campaign.testingType) : []),
+    steps: [],
     mode: granted?.mode ?? mode,
   };
 }

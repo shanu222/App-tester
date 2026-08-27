@@ -479,6 +479,7 @@ model GooglePlayConnection {
   scopes               String[]                   @default([])
   encryptedCredentials String?
   lastVerifiedAt       DateTime?
+  lastSyncAt           DateTime?
   lastError            String?
   errorCode            String?
   createdAt            DateTime                   @default(now())
@@ -495,19 +496,25 @@ model GooglePlayConnection {
  * links it to a managed App row rather than copying the application into TestLoop.
  */
 model GooglePlayApp {
-  id           String               @id @default(cuid())
-  connectionId String
-  userId       String
-  packageName  String
-  name         String
-  iconUrl      String?
-  appId        String?
-  selected     Boolean              @default(false)
-  discoveredAt DateTime             @default(now())
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  connection   GooglePlayConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  app          App?                 @relation(fields: [appId], references: [id], onDelete: SetNull)
+  id             String               @id @default(cuid())
+  connectionId   String
+  userId         String
+  packageName    String
+  name           String
+  iconUrl        String?
+  appId          String?
+  selected       Boolean              @default(false)
+  /**
+   * Latest tracks/releases reported by Google Play. Play remains the source of
+   * truth; this is a cache so the UI does not call Google on every render.
+   */
+  tracksSnapshot Json?
+  lastSyncAt     DateTime?
+  discoveredAt   DateTime             @default(now())
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  connection     GooglePlayConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  app            App?                 @relation(fields: [appId], references: [id], onDelete: SetNull)
 
   @@unique([connectionId, packageName])
   @@index([userId])

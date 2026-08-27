@@ -25,11 +25,11 @@ export function JoinTestForm({ slug }: { slug: string }) {
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "The tester could not be added to Google Play.");
+        throw new Error(data.error || "TestLoop could not register this tester.");
       }
       setResult(data.result as PublicJoinResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "The tester could not be added to Google Play.");
+      setError(err instanceof Error ? err.message : "TestLoop could not register this tester.");
     } finally {
       setPending(false);
     }
@@ -42,7 +42,7 @@ export function JoinTestForm({ slug }: { slug: string }) {
   return (
     <form onSubmit={onSubmit} className="mt-8 space-y-4">
       <div>
-        <Label htmlFor="gmail">Google account email</Label>
+        <Label htmlFor="gmail">Gmail</Label>
         <Input
           id="gmail"
           type="email"
@@ -54,7 +54,8 @@ export function JoinTestForm({ slug }: { slug: string }) {
           placeholder="you@gmail.com"
         />
         <p className="mt-1.5 text-xs leading-5 text-muted">
-          Enter the Gmail address you use with Google Play. TestLoop never hosts the APK.
+          Use the Google account you use with Google Play. TestLoop records your registration;
+          Google Play installs the app.
         </p>
       </div>
       {error ? (
@@ -63,7 +64,7 @@ export function JoinTestForm({ slug }: { slug: string }) {
         </p>
       ) : null}
       <Button type="submit" disabled={pending} aria-busy={pending}>
-        {pending ? "Connecting…" : "Join test"}
+        {pending ? "Joining…" : "Join test"}
       </Button>
     </form>
   );
@@ -76,22 +77,19 @@ function JoinResultCard({
   result: PublicJoinResult;
   onReset: () => void;
 }) {
-  const ready = result.outcome === "READY";
-  const waiting = result.outcome === "WAITING";
+  const success = result.outcome === "READY" || result.outcome === "REGISTERED";
 
   return (
     <div className="mt-8">
       <div
         className={
-          ready
+          success
             ? "rounded-card border border-emerald-200 bg-emerald-50 p-5"
-            : waiting
-              ? "rounded-card border border-amber-200 bg-amber-50 p-5"
-              : "rounded-card border border-red-200 bg-red-50 p-5"
+            : "rounded-card border border-red-200 bg-red-50 p-5"
         }
       >
         <div className="flex items-start gap-2.5">
-          {ready ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden /> : null}
+          {success ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden /> : null}
           <div>
             <h2 className="text-base font-semibold text-slate-900">{result.statusLabel}</h2>
             <p className="mt-2 text-sm leading-6 text-body">{result.detail}</p>
@@ -104,7 +102,7 @@ function JoinResultCard({
             <dd className="mt-0.5 font-medium text-slate-900">{result.appName}</dd>
           </div>
           <div>
-            <dt className="text-xs font-medium text-muted">Google account</dt>
+            <dt className="text-xs font-medium text-muted">Gmail</dt>
             <dd className="mt-0.5 break-all text-slate-900">{result.email}</dd>
           </div>
           <div>
@@ -117,14 +115,6 @@ function JoinResultCard({
           </div>
         </dl>
 
-        {result.steps.length > 0 ? (
-          <ol className="mt-4 list-decimal space-y-1 pl-5 text-sm leading-6 text-body">
-            {result.steps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
-        ) : null}
-
         {result.optInUrl ? (
           <div className="mt-5 flex flex-wrap gap-2">
             <a href={result.optInUrl} target="_blank" rel="noreferrer">
@@ -133,7 +123,7 @@ function JoinResultCard({
                 <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden />
               </Button>
             </a>
-            <CopyButton value={result.optInUrl} label="Copy testing link" />
+            <CopyButton value={result.optInUrl} label="Copy link" />
           </div>
         ) : null}
       </div>

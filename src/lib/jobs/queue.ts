@@ -6,8 +6,8 @@ import { decryptSecret } from "@/lib/encryption";
 import { extractEmails } from "@/lib/email-extract";
 import { createOrGetTester, setTesterStatus } from "@/lib/services/testers";
 import { logActivity, notify } from "@/lib/audit";
-import { readCredentials, markIntegrationExpired } from "@/lib/integrations/store";
-import { parseServiceAccount, runPlayDiagnostics } from "@/lib/integrations/play-diagnostics";
+import { markIntegrationExpired } from "@/lib/integrations/store";
+import { verifyPlayConnection } from "@/lib/services/play-connection";
 
 const TIMEOUT = 25_000;
 
@@ -213,45 +213,34 @@ async function syncReplies(userId: string) {
 }
 
 async function checkIntegrationHealth(userId: string) {
-  const integrations = await prisma.integration.findMany({ where: { userId } });
   let notes = "";
-  for (const integration of integrations) {
-    if (integration.status === "NOT_CONNECTED") continue;
-    if (integration.provider === "GOOGLE_PLAY") {
-      const creds = readCredentials(integration.encryptedCredentials);
-      if (!creds?.serviceAccountJson) continue;
-      const parsed = parseServiceAccount(creds.serviceAccountJson);
-      if (!parsed.ok) {
-        await prisma.integration.update({
-          where: { id: integration.id },
-          data: { status: "ERROR", lastError: parsed.message, lastTestAt: new Date() },
-        });
-        notes += `play=error;`;
-        continue;
-      }
-      const result = await runPlayDiagnostics(parsed.serviceAccount);
-      if (!result.connected) {
-        const reason = result.errorMessage || "Google Play authorization failed.";
-        await prisma.integration.update({
-          where: { id: integration.id },
-          data: { status: "ERROR", lastError: reason, lastTestAt: new Date() },
-        });
+
+  const playConnection = await prisma.googlePlayConnection.findUnique({ where: { userId } });
+  if (playConnection && playConnection.status !== "NOT_CONNECTED") {
+    try {
+      const result = await verifyPlayConnection({ userId });
+      if (result.connected) {
+        notes += "play=ok;";
+      } else {
+        notes += "play=error;";
         await notify({
           userId,
           type: "integration",
           title: "Google Play authorization error",
-          body: reason,
-          href: "/integrations",
+          body: result.errorMessage || "Google Play authorization failed.",
+          href: "/play",
         });
-        notes += `play=error;`;
-      } else {
-        await prisma.integration.update({
-          where: { id: integration.id },
-          data: { status: "CONNECTED", lastError: null, lastTestAt: new Date() },
-        });
-        notes += `play=ok;`;
       }
+    } catch (error) {
+      // verifyPlayConnection already recorded the failure on the connection.
+      notes += "play=error;";
+      console.error("Play health check failed", error);
     }
+  }
+
+  const integrations = await prisma.integration.findMany({ where: { userId } });
+  for (const integration of integrations) {
+    if (integration.status === "NOT_CONNECTED") continue;
     if (integration.provider === "FACEBOOK" && integration.lastError?.includes("expired")) {
       await markIntegrationExpired(userId, "FACEBOOK");
       notes += `facebook=expired;`;

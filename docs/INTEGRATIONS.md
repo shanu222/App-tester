@@ -39,36 +39,40 @@ Emails (invitation, feedback request) send **only** if Settings → Allow automa
 
 ## Google Play Developer API
 
-1. Google Cloud project → enable **Google Play Android Developer API** and **Google Play Developer Reporting API**.
-2. Create a **service account**. Download JSON.
-3. In Play Console → Users and permissions, invite the service account with app access (at least view app information / releases / testing as needed).
-4. In TesterBridge → Integrations, paste the JSON and optionally a package name. Status becomes **Connected only after a live API check** (`apps.search` and/or `edits.insert`).
+Each developer connects their own Play Console on **/play**. Two methods are supported and both are verified against the live API before the connection is marked Connected.
+
+**Option A � Google OAuth**
+
+1. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+2. Add `{APP_URL}/api/google-play/oauth/callback` as an authorised redirect URI.
+3. The developer clicks **Connect with Google**. Requested scopes: `androidpublisher`, plus `openid`/`email` only so the connected account can be named.
+4. The refresh token is encrypted with `ENCRYPTION_KEY` and stored server-side. It is never sent to the browser.
+
+**Option B � Service account**
+
+1. Google Cloud project ? enable **Google Play Android Developer API** and, for app discovery, **Google Play Developer Reporting API**.
+2. Create a service account and download its JSON key.
+3. In Play Console ? Users and permissions, invite the service account email with app access.
+4. Paste the key into the wizard on /play. The key is verified, then stored encrypted, and is never displayed again.
+
+This is a per-developer authorisation and is entirely separate from TestLoop sign-in, which is handled by Firebase.
 
 **Implemented official operations**
 
-- `GET https://playdeveloperreporting.googleapis.com/v1beta1/apps:search` — list accessible apps
-- `edits.insert` + `edits.tracks.list` — tracks
-- `edits.testers.get` / `update` — **Google Group emails only**
+- `GET https://playdeveloperreporting.googleapis.com/v1beta1/apps:search` � list accessible apps
+- `edits.insert` + `edits.tracks.list` + `edits.delete` � read real tracks and releases
+- A read-only `edits.get` probe against a nonexistent package to classify connection health
 - Reporting vitals with `userCohort=APP_TESTERS` are aggregate, not per-Gmail
 
-**Not implemented because the API does not support it**
+**Not possible through the API**
 
-- Adding individual emails to Play’s email-list tester UI (`edits.testers` JSON is `{ googleGroups: string[] }` only)
+- Listing the apps in a developer account. Android Publisher has no such endpoint (`applications` exposes only `dataSafety`), so discovery depends on the separate Reporting API.
+- Adding an individual tester email to a track. Verified against the v3 discovery document (rev 20260826): the whole `Testers` resource is `{ googleGroups: [string] }`, and Google documents that email lists are not supported by it.
 
-Preferred architecture: Google Group on the closed track + TesterBridge membership automation when Workspace allows it.
+**How TestLoop handles the tester gap honestly**
 
-## Google Groups
-
-If the user has Google Workspace:
-
-- Enable Admin SDK
-- Domain-wide delegation for `https://www.googleapis.com/auth/admin.directory.group.member`
-- Upload the service account JSON + admin email
-- `members.insert` then `members.hasMember`
-
-If not:
-
-The UI shows **Manual action required** with exact Groups UI steps. Membership is only marked `GROUP_MEMBER` after API verification or explicit user confirmation. Never faked.
+- **Open testing** requires no per-tester authorisation, so TestLoop completes it end to end and returns Google's official opt-in URL.
+- **Internal and closed testing** cannot be automated. TestLoop collects and de-duplicates the Gmail addresses, gives the developer the exact Play Console steps, and only marks a tester added once the developer confirms it. Nothing is ever reported as done that Google did not do.
 
 ## In-app tester telemetry (optional)
 

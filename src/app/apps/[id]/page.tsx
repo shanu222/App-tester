@@ -85,7 +85,8 @@ export default async function AppDetailPage({
                   <span className="font-medium text-slate-900">{track.name}</span>
                   <span className="text-muted">
                     {" "}
-                    · {track.testingType} · {track.googleGroupEmail || "no group"}
+                    · {track.testingType}
+                    {track.syncedFromPlay ? " · synced from Play" : ""}
                   </span>
                 </li>
               ))}

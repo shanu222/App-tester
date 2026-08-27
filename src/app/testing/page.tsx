@@ -9,10 +9,14 @@ import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/ui/card";
 import { CheckCircle2, ExternalLink } from "lucide-react";
 import Link from "next/link";
+import { normalizeEmail } from "@/lib/email-extract";
+import { campaignTestingUrl } from "@/lib/integrations/play-testers";
+import { TESTER_STATUS_LABELS } from "@/lib/status";
 
 export default async function MyTestingPage() {
   const user = await requireUser();
-  const [mine, incoming, apps] = await Promise.all([
+  const emails = [user.testingGmail, user.email].filter(Boolean).map((value) => normalizeEmail(value!));
+  const [mine, incoming, apps, joined] = await Promise.all([
     prisma.testingParticipation.findMany({
       where: { testerUserId: user.id },
       include: { campaign: { include: { app: true } }, owner: true },
@@ -24,6 +28,13 @@ export default async function MyTestingPage() {
       orderBy: { createdAt: "desc" },
     }),
     prisma.app.findMany({ where: { userId: user.id }, select: { id: true, name: true } }),
+    emails.length
+      ? prisma.testerCampaign.findMany({
+          where: { tester: { emailNormalized: { in: emails } } },
+          include: { campaign: { include: { app: true, user: true } } },
+          orderBy: { updatedAt: "desc" },
+        })
+      : Promise.resolve([]),
   ]);
 
   return (
@@ -66,7 +77,7 @@ export default async function MyTestingPage() {
                     {row.lastError}
                   </p>
                 ) : null}
-                {ready && row.campaign.webOptInUrl ? (
+                {ready && (row.campaign.testingUrl || row.campaign.webOptInUrl) ? (
                   <div className="mt-4 rounded-control border border-emerald-200 bg-emerald-50 p-4">
                     <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
                       <CheckCircle2 className="h-4.5 w-4.5" aria-hidden />
@@ -81,15 +92,15 @@ export default async function MyTestingPage() {
                     </ol>
                     <a
                       className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-800 hover:underline"
-                      href={row.campaign.webOptInUrl}
+                      href={row.campaign.testingUrl || row.campaign.webOptInUrl || undefined}
                       target="_blank"
                       rel="noreferrer"
                     >
-                      Join Google Play test
+                      Open Google Play
                       <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                     </a>
                   </div>
-                ) : ready && !row.campaign.webOptInUrl ? (
+                ) : ready && !row.campaign.webOptInUrl && !row.campaign.testingUrl ? (
                   <p className="mt-3 text-sm leading-6 text-muted">
                     Access is configured. A testing/opt-in URL has not been stored for this campaign, so TestLoop
                     will not show a join link yet.
@@ -137,6 +148,62 @@ export default async function MyTestingPage() {
           })}
         </div>
       )}
+
+      {joined.length > 0 ? (
+        <>
+          <SectionLabel className="mb-3 mt-10">My tests</SectionLabel>
+          <div className="space-y-4">
+            {joined.map((row) => {
+              const playUrl = campaignTestingUrl({
+                testingType: row.campaign.testingType,
+                packageName: row.campaign.app.packageName,
+                configuredUrl: row.campaign.testingUrl || row.campaign.webOptInUrl,
+              }).url;
+              const granted = row.accessAdded || ["ADDED", "INVITATION_SENT", "OPT_IN_PENDING", "OPTED_IN", "TESTING", "COMPLETED"].includes(row.status);
+              const waiting = row.status === "ADDING";
+              const failed = row.status === "ERROR";
+              return (
+                <div key={row.id} className="rounded-card border border-line bg-white p-5 shadow-card">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-slate-900">{row.campaign.app.name}</div>
+                      <div className="mt-0.5 text-sm text-muted">
+                        {row.campaign.testingType.toLowerCase()} testing
+                        {row.campaign.playTrack ? ` · ${row.campaign.playTrack}` : ""}
+                      </div>
+                    </div>
+                    <Badge tone={failed ? "warn" : granted ? "good" : "neutral"}>
+                      {granted
+                        ? "Access granted"
+                        : waiting
+                          ? "Waiting for Google Play"
+                          : failed
+                            ? "Unable to add tester"
+                            : TESTER_STATUS_LABELS[row.status]}
+                    </Badge>
+                  </div>
+                  {row.lastError ? (
+                    <p className="mt-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-800">
+                      {row.lastError}
+                    </p>
+                  ) : null}
+                  {granted && playUrl ? (
+                    <a
+                      className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
+                      href={playUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open Google Play
+                      <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                    </a>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
 
       <SectionLabel className="mb-3 mt-10">Reciprocal testing</SectionLabel>
       {incoming.length === 0 ? (

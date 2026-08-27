@@ -6,20 +6,16 @@ import { developerBadges } from "@/lib/services/network";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { percent } from "@/lib/utils";
+import { percent, timeAgo } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/ui/card";
 import { CheckCircle2, Circle } from "lucide-react";
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [stats, badges, play, unread, testing] = await Promise.all([
+  const [stats, badges, unread, testing] = await Promise.all([
     getDashboardStats(user.id),
     developerBadges(user.id),
-    prisma.integration.findFirst({
-      where: { userId: user.id, provider: "GOOGLE_PLAY" },
-      select: { status: true, lastError: true, displayName: true },
-    }),
     prisma.notification.count({ where: { userId: user.id, readAt: null } }),
     prisma.testingParticipation.findMany({
       where: { testerUserId: user.id, status: { notIn: ["DECLINED"] } },
@@ -28,7 +24,7 @@ export default async function DashboardPage() {
       take: 5,
     }),
   ]);
-  const playConnected = play?.status === "CONNECTED";
+  const playConnected = stats.play.connected;
   const steps = [
     { n: 1, label: "Account", done: true, href: "/profile" },
     { n: 2, label: "Profile", done: user.profileCompleted, href: "/profile" },
@@ -117,19 +113,19 @@ export default async function DashboardPage() {
         <section className="flex flex-col rounded-card border border-line bg-white p-5 shadow-card">
           <SectionLabel>Google Play</SectionLabel>
           <div className="mt-3">
-            <Badge tone={playConnected ? "good" : play?.status === "ERROR" ? "bad" : "neutral"}>
-              {playConnected ? "Connected" : play?.status === "ERROR" ? "Error" : "Not connected"}
+            <Badge tone={playConnected ? "good" : stats.play.status === "ERROR" ? "bad" : "neutral"}>
+              {playConnected ? "Connected" : stats.play.status === "ERROR" ? "Error" : "Not connected"}
             </Badge>
           </div>
-          {play?.lastError ? (
+          {stats.play.lastError ? (
             <p className="mt-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-              {play.lastError}
+              {stats.play.lastError}
             </p>
           ) : null}
           <p className="mt-3 flex-1 text-sm leading-6 text-muted">
             {playConnected
-              ? play.displayName || "Service account connected after a live API check."
-              : "Connect a Play Console service account to automate tester access where Google APIs allow it."}
+              ? `${stats.play.accountEmail || "Google Play"} · ${stats.play.method === "OAUTH" ? "OAuth" : "Service account"} · ${stats.playApps} app${stats.playApps === 1 ? "" : "s"}`
+              : "Connect Google Play with OAuth or a service account to manage testing for your real Console apps."}
           </p>
           <Link href="/play" className="mt-4 text-sm font-medium text-brand hover:underline">
             Open Google Play
@@ -162,6 +158,8 @@ export default async function DashboardPage() {
         <StatCard label="Active campaigns" value={stats.activeCampaigns} />
         <StatCard label="Testers needed" value={stats.testersNeeded} />
         <StatCard label="Testers received" value={stats.testersReceived} />
+        <StatCard label="Active testers" value={stats.activeTesters} />
+        <StatCard label="Pending testers" value={stats.pendingTesters} />
         <StatCard label="Testing for others" value={stats.testingForOthers} />
         <StatCard label="Pending incoming" value={stats.pendingParticipations} />
         <StatCard label="Completed tests" value={stats.completedTests} />
@@ -246,6 +244,33 @@ export default async function DashboardPage() {
           )}
         </section>
       </div>
+
+      <SectionLabel className="mb-3 mt-10">Testing activity</SectionLabel>
+      {stats.recentPlayActivity.length === 0 ? (
+        <EmptyState
+          title="No Google Play testing activity yet"
+          body="When testers join a campaign, their status appears here."
+        />
+      ) : (
+        <ul className="space-y-2">
+          {stats.recentPlayActivity.map((row) => (
+            <li
+              key={row.id}
+              className="flex flex-wrap items-start justify-between gap-3 rounded-card border border-line bg-white px-4 py-3 shadow-card"
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-slate-900">
+                  {row.action.replaceAll("_", " ")}
+                </div>
+                {row.result ? (
+                  <p className="mt-0.5 truncate text-sm text-muted">{row.result}</p>
+                ) : null}
+              </div>
+              <span className="shrink-0 text-xs text-muted">{timeAgo(row.createdAt)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </AppShell>
   );
 }

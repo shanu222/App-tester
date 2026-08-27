@@ -169,10 +169,9 @@ export async function setTesterStatus(input: {
     data.dateEmailConfirmed = row.dateEmailConfirmed ?? now;
     data.emailConfirmed = true;
   }
-  if (input.to === "ADDED" || input.to === "GROUP_MEMBER") {
+  if (input.to === "ADDED") {
     data.accessAdded = true;
     data.dateAdded = row.dateAdded ?? now;
-    if (input.to === "GROUP_MEMBER") data.dateGroupMember = now;
   }
   if (input.to === "INVITATION_SENT") data.dateInvitationSent = now;
   if (input.to === "OPTED_IN") {

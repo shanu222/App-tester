@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { facebookPageCapabilities, facebookManualGroupCapabilities } from "../src/lib/integrations/capabilities";
 import { groupDiscoveryUnavailable } from "../src/lib/integrations/facebook";
-import { manualGroupInstructions } from "../src/lib/integrations/groups";
 import { testingLinkForPackage } from "../src/lib/integrations/play";
+import {
+  PLAY_TESTER_API_LIMITATION,
+  playConsoleTesterSteps,
+  playOptInUrl,
+  testerAccessMode,
+} from "../src/lib/integrations/play-testers";
 
 describe("integration honesty", () => {
   it("does not claim Facebook Group APIs exist", () => {
@@ -27,9 +32,24 @@ describe("integration honesty", () => {
     );
   });
 
-  it("returns exact manual Google Group steps", () => {
-    const text = manualGroupInstructions("net360-testers@googlegroups.com", "tester@gmail.com");
-    expect(text).toContain("Manual action required");
-    expect(text).toContain("tester@gmail.com");
+  it("only automates tester access for open testing", () => {
+    expect(testerAccessMode("OPEN")).toBe("AUTOMATIC");
+    expect(testerAccessMode("CLOSED")).toBe("MANUAL_EMAIL_LIST");
+    expect(testerAccessMode("INTERNAL")).toBe("MANUAL_EMAIL_LIST");
+  });
+
+  it("explains the Play testers API limitation rather than claiming automation", () => {
+    expect(PLAY_TESTER_API_LIMITATION).toContain("Google Groups only");
+    const steps = playConsoleTesterSteps("CLOSED");
+    expect(steps.length).toBeGreaterThan(0);
+    expect(steps.join(" ")).toContain("Closed testing");
+    expect(playConsoleTesterSteps("INTERNAL").join(" ")).toContain("Internal testing");
+  });
+
+  it("uses Google's own opt-in URL and never a TestLoop-hosted download", () => {
+    expect(playOptInUrl("")).toBeNull();
+    expect(playOptInUrl("com.example.net360")).toBe(
+      "https://play.google.com/apps/testing/com.example.net360",
+    );
   });
 });

@@ -1,141 +1,105 @@
+import Link from "next/link";
+import { AlertTriangle, Info } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
-import { prisma } from "@/lib/db";
-import { PlayConnectForm } from "@/components/integrations/play-connect-form";
-import { WorkspaceForm } from "@/components/integrations/workspace-form";
-import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/ui/widgets";
-import { PLAY_EMAIL_LIST_LIMITATION, GROUPS_API_LIMITATION } from "@/lib/integrations/capabilities";
-import Link from "next/link";
+import { Card, CardHeader, SectionLabel } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { StatCard } from "@/components/ui/widgets";
+import { prisma } from "@/lib/db";
+import {
+  getPlayConnection,
+  listDiscoveredApps,
+  safePlayConnection,
+} from "@/lib/services/play-connection";
+import { PLAY_OPEN_TRACK_NOTE, PLAY_TESTER_API_LIMITATION } from "@/lib/integrations/play-testers";
+import { PlayConnectionPanel } from "@/components/play/play-connection-panel";
+import { PlayAppsPanel } from "@/components/play/play-apps-panel";
 
-export default async function PlayPage() {
+/** Short status codes set by the OAuth callback redirect. */
+const CALLBACK_NOTICES: Record<string, string> = {
+  denied: "You cancelled the Google authorisation, so nothing was connected.",
+  invalid: "Google's response was incomplete. Start the connection again.",
+  state:
+    "The authorisation could not be matched to your session. Start the connection again from this page.",
+  expired: "The authorisation request timed out. Start the connection again.",
+  error: "The authorisation could not be completed. Try again, or connect with a service account.",
+  unverified:
+    "Google authorised TestLoop, but the Play API check did not pass. The reason is shown below.",
+};
+
+export default async function PlayPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ play?: string }>;
+}) {
   const user = await requireUser();
-  const [play, workspace, apps, groups] = await Promise.all([
-    prisma.integration.findFirst({ where: { userId: user.id, provider: "GOOGLE_PLAY" } }),
-    prisma.integration.findFirst({ where: { userId: user.id, provider: "GOOGLE_WORKSPACE" } }),
-    prisma.app.findMany({ where: { userId: user.id }, include: { tracks: true } }),
-    prisma.googleGroup.findMany({ where: { userId: user.id } }),
+  const { play: callbackStatus } = await searchParams;
+
+  const [connectionRow, discoveredApps, campaignCount] = await Promise.all([
+    getPlayConnection(user.id),
+    listDiscoveredApps(user.id),
+    prisma.campaign.count({ where: { userId: user.id } }),
   ]);
-  const connected = play?.status === "CONNECTED";
-  const statusLabel =
-    play?.status === "CONNECTED"
-      ? "Connected"
-      : play?.status === "ERROR"
-        ? "Error"
-        : play?.status === "EXPIRED"
-          ? "Expired"
-          : play?.status === "CONNECTING"
-            ? "Connecting"
-            : "Not connected";
+  const connection = safePlayConnection(connectionRow);
+  const managed = discoveredApps.filter((app) => app.selected);
+  const notice = callbackStatus ? CALLBACK_NOTICES[callbackStatus] : undefined;
 
   return (
-    <AppShell title="Google Play">
-      <div className="mb-6 rounded-card border border-line bg-white p-5 shadow-card">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-[15px] font-semibold text-slate-900">Status</h2>
-          <Badge
-            tone={
-              connected
-                ? "good"
-                : play?.status === "ERROR" || play?.status === "EXPIRED"
-                  ? "bad"
-                  : play?.status === "CONNECTING"
-                    ? "warn"
-                    : "neutral"
-            }
-          >
-            {statusLabel}
-          </Badge>
+    <AppShell
+      title="Google Play"
+      description="Manage testing for your real Play Console apps through Google's official Play Developer API."
+    >
+      {notice ? (
+        <div className="mb-6 flex gap-2.5 rounded-card border border-amber-200 bg-amber-50 p-4">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+          <p className="text-sm leading-6 text-amber-900">{notice}</p>
         </div>
-        <p className="mt-2 text-sm leading-6 text-muted">
-          TestLoop never asks for your Google password. Connect a Play Console service account using least privilege.
-          Developer A cannot access Developer B&apos;s credentials.
-        </p>
-        {play?.lastError ? (
-          <p className="mt-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-800">
-            {play.lastError}
-          </p>
-        ) : null}
-        {connected ? (
-          <p className="mt-3 text-sm text-body">
-            Developer account: {play?.displayName || "Service account connected"} · Apps in TestLoop: {apps.length} ·
-            Testing groups: {groups.length}
-          </p>
-        ) : (
-          <p className="mt-3 text-sm text-muted">
-            Available actions: paste a Play Console service account JSON and run a live API check. TestLoop will not
-            show Connected until that check succeeds.
-          </p>
-        )}
-        <p className="mt-3 border-t border-line pt-3 text-xs leading-5 text-muted">
-          {PLAY_EMAIL_LIST_LIMITATION}
-        </p>
-      </div>
-      <div className="grid items-start gap-6 lg:grid-cols-2">
-        <PlayConnectForm />
-        <div>
-          <h2 className="text-[15px] font-semibold text-slate-900">Google Groups</h2>
-          <p className="mb-3 mt-1 text-sm leading-6 text-muted">{GROUPS_API_LIMITATION}</p>
-          <WorkspaceForm />
-        </div>
-      </div>
-      <h2 className="mb-3 mt-10 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">Per-app configuration</h2>
-      {apps.length === 0 ? (
-        <EmptyState
-          title="No apps yet"
-          body="Add an Android app before configuring a Google Play testing track or group."
-          action={
-            <Link href="/apps">
-              <Button>Add an app</Button>
-            </Link>
-          }
-        />
-      ) : (
-        <div className="space-y-3">
-          {apps.map((app) => (
-            <div key={app.id} className="rounded-card border border-line bg-white p-4 shadow-card sm:p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-medium text-slate-900">{app.name}</div>
-                  <div className="mt-0.5 font-mono text-xs text-muted">{app.packageName}</div>
-                </div>
-                <Badge tone={connected ? "good" : "neutral"}>
-                  {connected ? "Play connected" : "Play not connected"}
-                </Badge>
-              </div>
+      ) : null}
 
-              <dl className="mt-4 grid gap-3 border-t border-line pt-4 text-sm sm:grid-cols-2">
-                <div>
-                  <dt className="text-xs text-muted">Track</dt>
-                  <dd className="mt-0.5 font-medium text-slate-900">{app.testingType}</dd>
-                </div>
-                <div className="min-w-0">
-                  <dt className="text-xs text-muted">Google Group</dt>
-                  <dd className="mt-0.5 truncate font-medium text-slate-900">
-                    {app.tracks.map((track) => track.googleGroupEmail).filter(Boolean).join(", ") ||
-                      "Not configured"}
-                  </dd>
-                </div>
-              </dl>
+      <PlayConnectionPanel connection={connection} />
 
-              <p className="mt-3 text-xs leading-5 text-muted">
-                Store URL and testing/opt-in URL are stored separately. TestLoop will not treat a Play Store
-                listing URL as an opt-in link.
-              </p>
-              <Link
-                href={`/apps/${app.id}`}
-                className="mt-3 inline-block text-sm font-medium text-brand hover:underline"
-              >
-                Manage app
+      {connection.connected ? (
+        <>
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            <StatCard label="Apps discovered" value={discoveredApps.length} />
+            <StatCard label="Apps managed by TestLoop" value={managed.length} />
+            <StatCard label="Testing campaigns" value={campaignCount} />
+          </div>
+
+          <div className="mt-6">
+            <PlayAppsPanel apps={discoveredApps} />
+          </div>
+
+          <SectionLabel className="mb-3 mt-10">How testers get access</SectionLabel>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader title="Open testing" />
+              <p className="mt-3 text-sm leading-6 text-body">{PLAY_OPEN_TRACK_NOTE}</p>
+            </Card>
+            <Card>
+              <CardHeader title="Internal and closed testing" />
+              <p className="mt-3 text-sm leading-6 text-body">{PLAY_TESTER_API_LIMITATION}</p>
+            </Card>
+          </div>
+
+          <div className="mt-4 flex gap-2.5 rounded-card border border-line bg-surface p-4">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand" aria-hidden />
+            <p className="text-sm leading-6 text-body">
+              TestLoop reports exactly what the Play API returns. When an operation is not supported
+              or your account lacks permission, you will see Google&apos;s own reason rather than a
+              success message.
+            </p>
+          </div>
+
+          {managed.length > 0 ? (
+            <div className="mt-6">
+              <Link href="/campaigns">
+                <Button>Create a testing campaign</Button>
               </Link>
             </div>
-          ))}
-        </div>
-      )}
-      <p className="mt-4 text-sm text-muted">
-        Workspace status: {workspace?.status === "CONNECTED" ? "Groups automation may be available" : "Manual Google Group action required unless Workspace is connected."}
-      </p>
+          ) : null}
+        </>
+      ) : null}
     </AppShell>
   );
 }

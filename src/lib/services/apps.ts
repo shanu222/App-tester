@@ -72,7 +72,6 @@ export async function createApp(
     testingUrl?: string;
     googlePlayLink?: string;
     iconUrl?: string;
-    googleGroupEmail?: string;
     testerTarget?: number;
     googlePlayStatus?: GooglePlayStatus;
   },
@@ -129,7 +128,6 @@ export async function createApp(
               name: input.testingTrack,
               trackId: input.testingTrack,
               testingType,
-              googleGroupEmail: input.googleGroupEmail,
               testingLink: testingUrl,
             },
           }
@@ -137,20 +135,6 @@ export async function createApp(
     },
     include: { tracks: true },
   });
-  if (input.googleGroupEmail) {
-    await prisma.googleGroup.upsert({
-      where: { userId_email: { userId, email: input.googleGroupEmail.toLowerCase() } },
-      update: {},
-      create: {
-        userId,
-        email: input.googleGroupEmail.toLowerCase(),
-        name: `${app.name} testers`,
-        canManageMembers: false,
-        limitationNote:
-          "Membership management depends on Google Workspace Admin SDK access. Otherwise add members manually.",
-      },
-    });
-  }
   await logActivity({ userId, action: "APP_CREATED", result: app.packageName });
   return app;
 }

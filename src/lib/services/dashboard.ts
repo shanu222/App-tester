@@ -1,5 +1,18 @@
 import { prisma } from "@/lib/db";
 import { countReceivedTesters } from "@/lib/services/network";
+import { safePlayConnection } from "@/lib/services/play-connection";
+
+const PLAY_ACTIVITY = [
+  "TESTER_ACCESS_GRANTED",
+  "TESTER_AWAITING_PLAY_CONSOLE",
+  "TESTER_ADDED",
+  "TESTER_CREATED",
+  "CAMPAIGN_CREATED",
+  "PLAY_APP_SELECTED",
+  "PLAY_CONNECTED",
+  "PLAY_CONNECT_FAILED",
+  "PLAY_DISCONNECTED",
+];
 
 export async function getDashboardStats(userId: string) {
   const [
@@ -11,6 +24,11 @@ export async function getDashboardStats(userId: string) {
     completedTests,
     pendingReciprocal,
     campaigns,
+    playConnection,
+    playApps,
+    pendingTesters,
+    activeTesters,
+    recentPlayActivity,
   ] = await Promise.all([
     prisma.app.count({ where: { userId } }),
     prisma.campaign.count({ where: { userId, status: "ACTIVE" } }),
@@ -36,6 +54,20 @@ export async function getDashboardStats(userId: string) {
       include: { app: true, _count: { select: { testerCampaigns: true, participations: true } } },
       take: 8,
       orderBy: { updatedAt: "desc" },
+    }),
+    prisma.googlePlayConnection.findUnique({ where: { userId } }),
+    prisma.googlePlayApp.count({ where: { userId } }),
+    prisma.testerCampaign.count({
+      where: { userId, status: { in: ["ADDING", "EMAIL_CONFIRMED", "EMAIL_RECEIVED"] } },
+    }),
+    prisma.testerCampaign.count({
+      where: { userId, status: { in: ["ADDED", "INVITATION_SENT", "OPT_IN_PENDING", "OPTED_IN", "TESTING"] } },
+    }),
+    prisma.activityLog.findMany({
+      where: { userId, action: { in: PLAY_ACTIVITY } },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+      select: { id: true, action: true, result: true, createdAt: true },
     }),
   ]);
 
@@ -69,6 +101,11 @@ export async function getDashboardStats(userId: string) {
     completedTests,
     pendingReciprocal,
     campaigns: campaignCards,
+    play: safePlayConnection(playConnection),
+    playApps,
+    pendingTesters,
+    activeTesters,
+    recentPlayActivity,
   };
 }
 

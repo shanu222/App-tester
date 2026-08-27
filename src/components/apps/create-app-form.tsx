@@ -18,7 +18,6 @@ export function CreateAppForm() {
         testingType: form.get("testingType"),
         testingTrack: form.get("testingTrack"),
         googlePlayLink: form.get("googlePlayLink"),
-        googleGroupEmail: form.get("googleGroupEmail"),
         testerTarget: Number(form.get("testerTarget") || 12),
       }),
     });
@@ -56,10 +55,6 @@ export function CreateAppForm() {
         <div>
           <Label>Google Play testing link</Label>
           <Input name="googlePlayLink" placeholder="https://play.google.com/apps/testing/com.example.net360" />
-        </div>
-        <div>
-          <Label>Google Group email</Label>
-          <Input name="googleGroupEmail" placeholder="net360-testers@googlegroups.com" />
         </div>
         <div>
           <Label>Tester target</Label>

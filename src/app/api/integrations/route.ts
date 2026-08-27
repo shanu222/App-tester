@@ -1,6 +1,7 @@
 import { json, handleRouteError } from "@/lib/http";
 import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
+import { disconnectPlay } from "@/lib/services/play-connection";
 
 export async function GET() {
   try {
@@ -32,6 +33,11 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const provider = searchParams.get("provider");
     if (!provider) return json({ error: "provider required" }, 400);
+    // Play credentials live in their own table, so clearing the legacy
+    // Integration row alone would leave the connection usable.
+    if (provider === "GOOGLE_PLAY") {
+      await disconnectPlay(user.id);
+    }
     await prisma.integration.updateMany({
       where: { userId: user.id, provider: provider as never },
       data: {

@@ -37,11 +37,13 @@ vi.mock("google-auth-library", () => ({
 
 let parseServiceAccount: typeof import("../src/lib/integrations/play-diagnostics")["parseServiceAccount"];
 let runPlayDiagnostics: typeof import("../src/lib/integrations/play-diagnostics")["runPlayDiagnostics"];
+let runPlayOAuthDiagnostics: typeof import("../src/lib/integrations/play-diagnostics")["runPlayOAuthDiagnostics"];
 
 beforeEach(async () => {
   const mod = await import("../src/lib/integrations/play-diagnostics");
   parseServiceAccount = mod.parseServiceAccount;
   runPlayDiagnostics = mod.runPlayDiagnostics;
+  runPlayOAuthDiagnostics = mod.runPlayOAuthDiagnostics;
 });
 
 afterEach(() => {
@@ -241,6 +243,67 @@ describe("play diagnostics classification", () => {
     expect(serialized).not.toContain("BEGIN PRIVATE KEY");
     expect(serialized).not.toContain("MIIBVgIBADANBgkq");
     expect(serialized).not.toContain("test-access-token");
+  });
+});
+
+describe("oauth connections", () => {
+  it("verifies a developer's Google account against the real API", async () => {
+    stubFetch(() => ({ status: 404, body: { error: { code: 404, message: "Edit not found." } } }));
+    const result = await runPlayOAuthDiagnostics({
+      email: "developer@example.com",
+      mintAccessToken: async () => "oauth-access-token",
+    });
+    expect(result.connected).toBe(true);
+    expect(result.method).toBe("OAUTH");
+    expect(result.accountEmail).toBe("developer@example.com");
+    // A service-account field must stay empty for an OAuth connection.
+    expect(result.serviceAccountEmail).toBeNull();
+  });
+
+  it("reports a revoked grant instead of a generic failure", async () => {
+    const result = await runPlayOAuthDiagnostics({
+      email: "developer@example.com",
+      mintAccessToken: async () => {
+        throw Object.assign(new Error("bad grant"), {
+          response: { data: { error: "invalid_grant" } },
+        });
+      },
+    });
+    expect(result.connected).toBe(false);
+    expect(result.errorCode).toBe("OAUTH_AUTH_FAILED");
+    expect(result.errorMessage).toContain("revoked access");
+  });
+
+  it("treats a missing token as expired authorisation", async () => {
+    const result = await runPlayOAuthDiagnostics({
+      email: null,
+      mintAccessToken: async () => null,
+    });
+    expect(result.connected).toBe(false);
+    expect(result.errorCode).toBe("OAUTH_AUTH_FAILED");
+  });
+
+  it("explains the Play Console gap in account terms, not service-account terms", async () => {
+    stubFetch(() => ({
+      status: 401,
+      body: { error: { code: 401, message: "The current user has insufficient permissions." } },
+    }));
+    const result = await runPlayOAuthDiagnostics({
+      email: "developer@example.com",
+      mintAccessToken: async () => "oauth-access-token",
+    });
+    expect(result.errorCode).toBe("PLAY_CONSOLE_NOT_LINKED");
+    expect(result.errorMessage).toContain("Google account");
+    expect(result.errorMessage).not.toContain("service account");
+  });
+
+  it("never returns the access token in the payload", async () => {
+    stubFetch(() => ({ status: 404, body: { error: { code: 404, message: "Edit not found." } } }));
+    const result = await runPlayOAuthDiagnostics({
+      email: "developer@example.com",
+      mintAccessToken: async () => "super-secret-oauth-token",
+    });
+    expect(JSON.stringify(result)).not.toContain("super-secret-oauth-token");
   });
 });
 

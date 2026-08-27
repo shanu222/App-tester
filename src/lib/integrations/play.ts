@@ -1,40 +1,17 @@
-import { google } from "googleapis";
 import type { AdapterResult, PlayAppRecord, PlayTrackRecord } from "@/lib/integrations/types";
-import { PLAY_EMAIL_LIST_LIMITATION } from "@/lib/integrations/capabilities";
 import { parseGoogleApiError, readJsonBody, redactSecrets } from "@/lib/integrations/google-api-error";
-import { ANDROID_PUBLISHER_SCOPE } from "@/lib/integrations/play-diagnostics";
+import {
+  PLAY_REPORTING_SCOPE,
+  playAccessToken,
+  publisherClient,
+  type PlayCredentials,
+} from "@/lib/integrations/play-auth";
 
 export type ServiceAccountJson = {
   client_email: string;
   private_key: string;
   project_id?: string;
 };
-
-/** Play reporting is a separate API from Android Publisher and needs its own scope. */
-const PLAY_REPORTING_SCOPE = "https://www.googleapis.com/auth/playdeveloperreporting";
-
-function credentials(sa: ServiceAccountJson) {
-  return {
-    client_email: sa.client_email,
-    // A key pasted through a form can arrive with escaped newlines.
-    private_key: (sa.private_key || "").replace(/\\n/g, "\n"),
-  };
-}
-
-function publisherClient(sa: ServiceAccountJson) {
-  const auth = new google.auth.GoogleAuth({
-    credentials: credentials(sa),
-    scopes: [ANDROID_PUBLISHER_SCOPE],
-  });
-  return google.androidpublisher({ version: "v3", auth });
-}
-
-function reportingAuth(sa: ServiceAccountJson) {
-  return new google.auth.GoogleAuth({
-    credentials: credentials(sa),
-    scopes: [PLAY_REPORTING_SCOPE],
-  });
-}
 
 /**
  * googleapis wraps failures in a GaxiosError whose body still holds Google's
@@ -61,22 +38,21 @@ function describeGoogleError(error: unknown, fallback: string) {
  * it can fail while the Android Publisher connection is healthy.
  */
 export async function searchPlayApps(
-  sa: ServiceAccountJson,
+  creds: PlayCredentials,
 ): Promise<AdapterResult<PlayAppRecord[]>> {
   try {
-    const auth = await reportingAuth(sa).getClient();
-    const token = await auth.getAccessToken();
-    if (!token.token) {
+    const token = await playAccessToken(creds, [PLAY_REPORTING_SCOPE]);
+    if (!token) {
       return {
         ok: false,
-        error: "Could not obtain a Play Developer Reporting access token for this service account.",
+        error: "Could not obtain a Play Developer Reporting access token for this connection.",
         code: "PLAY_TOKEN",
         manualFallback: "Add apps manually by package name.",
       };
     }
     const response = await fetch(
       "https://playdeveloperreporting.googleapis.com/v1beta1/apps:search?pageSize=100",
-      { headers: { Authorization: `Bearer ${token.token}` }, cache: "no-store" },
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
     );
     const body = await readJsonBody(response);
     if (!response.ok) {
@@ -86,7 +62,7 @@ export async function searchPlayApps(
       return {
         ok: false,
         error: notEnabled
-          ? `The Google Play Developer Reporting API is not enabled for this service account's project, so apps cannot be listed automatically. ${parsed.message}`
+          ? `The Google Play Developer Reporting API is not enabled for this connection's Google Cloud project, so apps cannot be listed automatically. ${parsed.message}`
           : `${parsed.message}${parsed.status ? ` (${parsed.status})` : ""}`,
         code: notEnabled ? "PLAY_REPORTING_NOT_ENABLED" : "PLAY_APPS_SEARCH",
         manualFallback: "Add package names manually on My Apps. Android Publisher cannot list apps.",
@@ -113,11 +89,11 @@ export async function searchPlayApps(
 }
 
 export async function listPlayTracks(
-  sa: ServiceAccountJson,
+  creds: PlayCredentials,
   packageName: string,
 ): Promise<AdapterResult<PlayTrackRecord[]>> {
   try {
-    const publisher = publisherClient(sa);
+    const publisher = publisherClient(creds);
     const edit = await publisher.edits.insert({ packageName });
     const editId = edit.data.id;
     if (!editId) {
@@ -132,7 +108,16 @@ export async function listPlayTracks(
       else if (name === "beta") typeGuess = "OPEN";
       else if (name === "qa" || name === "internal") typeGuess = "INTERNAL";
       else if (name === "alpha") typeGuess = "CLOSED";
-      return { track: name, typeGuess };
+      // Play returns releases newest-last; the active one carries the version.
+      const releases = track.releases || [];
+      const current = releases.find((release) => release.status === "completed") || releases.at(-1);
+      return {
+        track: name,
+        typeGuess,
+        releaseName: current?.name ?? null,
+        versionCodes: (current?.versionCodes || []).map(String),
+        releaseStatus: current?.status ?? null,
+      };
     });
     return { ok: true, data: rows };
   } catch (error) {
@@ -141,65 +126,6 @@ export async function listPlayTracks(
       error: describeGoogleError(error, "Could not list tracks."),
       code: "PLAY_TRACKS",
       manualFallback: "Enter the track name from Play Console (for closed tests, use the custom track name).",
-    };
-  }
-}
-
-export async function getPlayTesterGroups(
-  sa: ServiceAccountJson,
-  packageName: string,
-): Promise<AdapterResult<{ googleGroups: string[] }>> {
-  try {
-    const publisher = publisherClient(sa);
-    const edit = await publisher.edits.insert({ packageName });
-    const editId = edit.data.id;
-    if (!editId) {
-      return { ok: false, error: "Could not open a Play Console edit.", code: "PLAY_EDIT" };
-    }
-    const testers = await publisher.edits.testers.get({ packageName, editId });
-    await publisher.edits.delete({ packageName, editId });
-    return {
-      ok: true,
-      data: { googleGroups: testers.data.googleGroups || [] },
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: `${describeGoogleError(error, "Could not read testers.")} ${PLAY_EMAIL_LIST_LIMITATION}`,
-      code: "PLAY_TESTERS",
-    };
-  }
-}
-
-export async function ensurePlayTesterGroup(
-  sa: ServiceAccountJson,
-  packageName: string,
-  groupEmail: string,
-): Promise<AdapterResult<{ googleGroups: string[] }>> {
-  try {
-    const publisher = publisherClient(sa);
-    const edit = await publisher.edits.insert({ packageName });
-    const editId = edit.data.id;
-    if (!editId) {
-      return { ok: false, error: "Could not open a Play Console edit.", code: "PLAY_EDIT" };
-    }
-    const current = await publisher.edits.testers.get({ packageName, editId });
-    const groups = new Set(current.data.googleGroups || []);
-    groups.add(groupEmail);
-    await publisher.edits.testers.update({
-      packageName,
-      editId,
-      requestBody: { googleGroups: [...groups] },
-    });
-    await publisher.edits.commit({ packageName, editId });
-    return { ok: true, data: { googleGroups: [...groups] } };
-  } catch (error) {
-    return {
-      ok: false,
-      error: describeGoogleError(error, "Could not attach the Google Group to the track testers resource."),
-      code: "PLAY_TESTERS_UPDATE",
-      manualFallback:
-        "In Play Console, open the closed test track → Testers → Google Groups, and add the group email.",
     };
   }
 }

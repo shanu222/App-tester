@@ -20,7 +20,7 @@ export default async function TesterDetailPage({
   const tester = await prisma.tester.findFirst({
     where: { id, userId: user.id },
     include: {
-      campaigns: { include: { campaign: { include: { app: true, googleGroup: true } } } },
+      campaigns: { include: { campaign: { include: { app: true } } } },
       statusHistory: { orderBy: { createdAt: "asc" } },
       feedback: true,
       invitations: true,
@@ -69,15 +69,15 @@ export default async function TesterDetailPage({
           {row ? (
             <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
               <JsonButton
-                url="/api/google/groups/members"
+                url="/api/google-play/testers/access"
                 body={{ testerCampaignId: row.id }}
-                label="Add to Google Group"
+                label="Grant testing access"
                 variant="secondary"
               />
               <JsonButton
-                url="/api/google/groups/members"
-                body={{ testerCampaignId: row.id, confirmManual: true }}
-                label="Confirm membership"
+                url="/api/google-play/testers/confirm"
+                body={{ testerCampaignId: row.id }}
+                label="Mark added in Play Console"
                 variant="ghost"
               />
               <JsonButton

@@ -9,20 +9,24 @@ import { ArrowRight, CheckCircle2 } from "lucide-react";
 
 export default async function OnboardingPage() {
   const user = await requireUser();
-  const integrations = await prisma.integration.findMany({ where: { userId: user.id } });
   const apps = await prisma.app.count({ where: { userId: user.id } });
   const campaigns = await prisma.campaign.count({ where: { userId: user.id } });
   const published = await prisma.campaign.count({ where: { userId: user.id, published: true } });
-  const groups = await prisma.googleGroup.count({ where: { userId: user.id } });
-  const status = (provider: string) =>
-    integrations.find((item) => item.provider === provider)?.status || "NOT_CONNECTED";
+  const playConnection = await prisma.googlePlayConnection.findUnique({
+    where: { userId: user.id },
+    select: { status: true },
+  });
+  const selectedPlayApps = await prisma.googlePlayApp.count({
+    where: { userId: user.id, selected: true },
+  });
+  const playConnected = playConnection?.status === "CONNECTED";
 
   const steps = [
     { n: 1, title: "Account", done: true, href: "/dashboard" },
     { n: 2, title: "Developer profile", done: user.profileCompleted, href: "/profile/complete" },
     { n: 3, title: "Add first Android app", done: apps > 0, href: "/apps" },
-    { n: 4, title: "Connect Google Play", done: status("GOOGLE_PLAY") === "CONNECTED", href: "/play" },
-    { n: 5, title: "Configure testing track / Google Group", done: groups > 0 || status("GOOGLE_PLAY") === "CONNECTED", href: "/play" },
+    { n: 4, title: "Connect Google Play", done: playConnected, href: "/play" },
+    { n: 5, title: "Select a Play Console app", done: selectedPlayApps > 0, href: "/play" },
     { n: 6, title: "Create first testing campaign", done: campaigns > 0 || published > 0, href: "/campaigns" },
   ];
 

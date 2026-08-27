@@ -40,7 +40,7 @@ const STEPS = [
   "Add an Android app and connect Google Play if you want automated access.",
   "Publish a testing request with your target tester count and duration.",
   "Another developer accepts the request and consents to share their Gmail.",
-  `${SITE_NAME} processes Play or Google Group access, or shows a manual fallback.`,
+  `${SITE_NAME} grants Play testing access automatically, or shows the exact manual step.`,
   "Feedback and reciprocal tests build a reputation score from real activity.",
 ];
 

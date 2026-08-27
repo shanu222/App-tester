@@ -38,11 +38,8 @@ export type PlayAppRecord = {
 export type PlayTrackRecord = {
   track: string;
   typeGuess: "INTERNAL" | "CLOSED" | "OPEN" | "PRODUCTION";
-};
-
-export type GroupMemberResult = {
-  email: string;
-  verified: boolean;
-  manualRequired: boolean;
-  detail: string;
+  /** Real release state read back from Play, never inferred. */
+  releaseName: string | null;
+  versionCodes: string[];
+  releaseStatus: string | null;
 };

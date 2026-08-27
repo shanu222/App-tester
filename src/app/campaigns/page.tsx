@@ -22,7 +22,6 @@ export default async function CampaignsPage({
     orderBy: { name: "asc" },
   });
   const sources = await prisma.facebookSource.findMany({ where: { userId: user.id } });
-  const groups = await prisma.googleGroup.findMany({ where: { userId: user.id } });
 
   return (
     <AppShell
@@ -40,10 +39,15 @@ export default async function CampaignsPage({
           iconUrl: app.iconUrl,
           testingType: app.testingType,
           testerTarget: app.testerTarget,
-          tracks: app.tracks.map((track) => ({ id: track.id, name: track.name })),
+          tracks: app.tracks.map((track) => ({
+            id: track.id,
+            name: track.name,
+            playTrack: track.trackId,
+            testingType: track.testingType,
+            syncedFromPlay: track.syncedFromPlay,
+          })),
         }))}
         sources={sources.map((item) => ({ id: item.id, name: item.name }))}
-        groups={groups.map((item) => ({ id: item.id, email: item.email }))}
       />
       <SectionLabel className="mb-3 mt-10">Published requests</SectionLabel>
       <div className="space-y-2.5">
@@ -62,8 +66,9 @@ export default async function CampaignsPage({
               <div className="min-w-0">
                 <div className="truncate font-medium text-slate-900">{campaign.name}</div>
                 <div className="mt-0.5 text-sm text-muted">
-                  {campaign.app.name} · target {campaign.targetTesters} ·{" "}
+                  {campaign.app.name} · {campaign.testingType.toLowerCase()} · target {campaign.targetTesters} ·{" "}
                   {campaign._count.testerCampaigns} testers
+                  {campaign.publicSlug ? ` · /test/${campaign.publicSlug}` : ""}
                 </div>
               </div>
               <Badge tone={campaign.status === "ACTIVE" ? "good" : "neutral"}>{campaign.status}</Badge>

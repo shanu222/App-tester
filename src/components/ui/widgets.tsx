@@ -8,7 +8,7 @@ export function StatusBadge({ status }: { status: TesterStatus }) {
   const tone =
     status === "BLOCKED" || status === "ERROR" || status === "DECLINED"
       ? "bad"
-      : status === "OPTED_IN" || status === "TESTING" || status === "COMPLETED" || status === "GROUP_MEMBER"
+      : status === "OPTED_IN" || status === "TESTING" || status === "COMPLETED"
         ? "good"
         : status === "OPT_IN_PENDING" || status === "INSTALL_STATUS_UNKNOWN"
           ? "warn"

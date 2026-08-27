@@ -5,202 +5,130 @@ import { assertOutreachAllowed, recordOutreach } from "@/lib/rate-limit";
 import { renderTemplate, DEFAULT_TEMPLATES } from "@/lib/templates";
 import { readCredentials } from "@/lib/integrations/store";
 import { sendGmail } from "@/lib/integrations/gmail";
-import { addGroupMember, manualGroupInstructions } from "@/lib/integrations/groups";
+import {
+  PLAY_OPEN_TRACK_NOTE,
+  PLAY_TESTER_API_LIMITATION,
+  playConsoleTesterSteps,
+  playOptInUrl,
+  testerAccessMode,
+  type TesterAccessMode,
+} from "@/lib/integrations/play-testers";
 import { setTesterStatus } from "@/lib/services/testers";
-import type { ServiceAccountJson } from "@/lib/integrations/play";
-import { isDemoMode } from "@/lib/env";
 
-export async function addTesterToGroup(input: {
+export type TesterAccessResult = {
+  ok: boolean;
+  mode: TesterAccessMode;
+  detail: string;
+  /** Official Google Play opt-in URL, or null when the campaign has no package. */
+  optInUrl: string | null;
+  /** Play Console steps, present only when a manual addition is required. */
+  steps: string[];
+};
+
+/**
+ * Give a confirmed tester access to the campaign's Play track.
+ *
+ * Open tracks complete here: opting in is all Google requires, so TestLoop
+ * marks the tester added and returns the official opt-in URL. Internal and
+ * closed tracks cannot be automated — the Play Developer API exposes no
+ * email-list write — so the tester is parked in ADDING and the developer is
+ * told exactly what to paste into Play Console. Nothing is reported as done
+ * that Google did not actually do.
+ */
+export async function grantTesterAccess(input: {
   userId: string;
   testerCampaignId: string;
-}) {
+}): Promise<TesterAccessResult> {
   const row = await prisma.testerCampaign.findFirst({
     where: { id: input.testerCampaignId, userId: input.userId },
     include: {
       tester: true,
-      campaign: { include: { googleGroup: true, app: true } },
+      campaign: { include: { app: true, track: true } },
     },
   });
   if (!row) throw new NotFoundError("Tester campaign not found.");
   if (!row.tester.emailNormalized) throw new AppError("Confirm a tester email first.");
   if (!row.emailConfirmed) throw new AppError("Confirm the email before adding the tester.");
-  const group = row.campaign.googleGroup;
-  if (!group) {
-    throw new AppError(
-      "This campaign has no Google Group. Add a group email on the campaign, or add the tester in Play Console / Google Groups and confirm membership manually.",
-    );
+
+  const testingType = row.campaign.track?.testingType ?? row.campaign.testingType;
+  const mode = testerAccessMode(testingType);
+  const optInUrl =
+    row.campaign.testingUrl ||
+    row.campaign.webOptInUrl ||
+    playOptInUrl(row.campaign.app.packageName);
+
+  if (mode === "AUTOMATIC") {
+    await setTesterStatus({
+      userId: input.userId,
+      testerCampaignId: row.id,
+      to: "ADDED",
+      note: PLAY_OPEN_TRACK_NOTE,
+    });
+    await logActivity({
+      userId: input.userId,
+      campaignId: row.campaignId,
+      testerId: row.testerId,
+      action: "TESTER_ACCESS_GRANTED",
+      result: `${row.tester.emailNormalized} · open testing · ${row.campaign.app.packageName}`,
+    });
+    return { ok: true, mode, detail: PLAY_OPEN_TRACK_NOTE, optInUrl, steps: [] };
   }
 
   await setTesterStatus({
     userId: input.userId,
     testerCampaignId: row.id,
     to: "ADDING",
-    note: "Starting Google Group membership",
+    note: "Waiting for the developer to add this address to the Play Console email list.",
   });
   await logActivity({
     userId: input.userId,
     campaignId: row.campaignId,
     testerId: row.testerId,
-    action: "GROUP_ADD_STARTED",
-    result: group.email,
+    action: "TESTER_AWAITING_PLAY_CONSOLE",
+    result: `${row.tester.emailNormalized} · ${testingType.toLowerCase()} testing · ${row.campaign.app.packageName}`,
   });
-
-  const workspace = await prisma.integration.findUnique({
-    where: { userId_provider: { userId: input.userId, provider: "GOOGLE_WORKSPACE" } },
-  });
-  const creds = readCredentials(workspace?.encryptedCredentials);
-  const sa = creds?.serviceAccountJson
-    ? (JSON.parse(creds.serviceAccountJson) as ServiceAccountJson)
-    : null;
-
-  if (isDemoMode()) {
-    await prisma.googleGroupMembership.upsert({
-      where: { groupId_email: { groupId: group.id, email: row.tester.emailNormalized } },
-      update: { status: "GROUP_MEMBER", verifiedAt: new Date(), testerId: row.testerId },
-      create: {
-        groupId: group.id,
-        testerId: row.testerId,
-        email: row.tester.emailNormalized,
-        status: "GROUP_MEMBER",
-        verifiedAt: new Date(),
-        manual: false,
-      },
-    });
-    await setTesterStatus({
-      userId: input.userId,
-      testerCampaignId: row.id,
-      to: "GROUP_MEMBER",
-      note: "DEMO MODE membership recorded — not a production Google Group change.",
-    });
-    return { ok: true, manual: false, detail: "DEMO MODE: membership recorded locally only." };
-  }
-
-  if (!sa || workspace?.status !== "CONNECTED") {
-    const instructions = manualGroupInstructions(group.email, row.tester.emailNormalized);
-    await prisma.googleGroupMembership.upsert({
-      where: { groupId_email: { groupId: group.id, email: row.tester.emailNormalized } },
-      update: { status: "MANUAL_REQUIRED", lastError: instructions, testerId: row.testerId },
-      create: {
-        groupId: group.id,
-        testerId: row.testerId,
-        email: row.tester.emailNormalized,
-        status: "MANUAL_REQUIRED",
-        lastError: instructions,
-        manual: true,
-      },
-    });
-    await setTesterStatus({
-      userId: input.userId,
-      testerCampaignId: row.id,
-      to: "ERROR",
-      note: "Manual action required",
-    });
-    return { ok: false, manual: true, detail: instructions };
-  }
-
-  const result = await addGroupMember({
-    sa,
-    groupEmail: group.email,
-    memberEmail: row.tester.emailNormalized,
-  });
-  if (!result.ok) {
-    await prisma.googleGroupMembership.upsert({
-      where: { groupId_email: { groupId: group.id, email: row.tester.emailNormalized } },
-      update: { status: "FAILED", lastError: result.error, testerId: row.testerId },
-      create: {
-        groupId: group.id,
-        testerId: row.testerId,
-        email: row.tester.emailNormalized,
-        status: "FAILED",
-        lastError: result.error,
-        manual: true,
-      },
-    });
-    await setTesterStatus({
-      userId: input.userId,
-      testerCampaignId: row.id,
-      to: "ERROR",
-      note: result.error,
-    });
-    return {
-      ok: false,
-      manual: true,
-      detail: result.manualFallback || result.error,
-    };
-  }
-
-  await prisma.googleGroupMembership.upsert({
-    where: { groupId_email: { groupId: group.id, email: row.tester.emailNormalized } },
-    update: {
-      status: result.data.verified ? "GROUP_MEMBER" : "UNVERIFIED",
-      verifiedAt: result.data.verified ? new Date() : null,
-      testerId: row.testerId,
-    },
-    create: {
-      groupId: group.id,
-      testerId: row.testerId,
-      email: row.tester.emailNormalized,
-      status: result.data.verified ? "GROUP_MEMBER" : "UNVERIFIED",
-      verifiedAt: result.data.verified ? new Date() : null,
-      manual: result.data.manualRequired,
-    },
-  });
-  await setTesterStatus({
+  await notify({
     userId: input.userId,
-    testerCampaignId: row.id,
-    to: result.data.verified ? "GROUP_MEMBER" : "ADDED",
-    note: result.data.detail,
+    type: "tester",
+    title: "Tester waiting for Play Console",
+    body: `${row.tester.emailNormalized} is ready. Add the address to the ${testingType.toLowerCase()} testing email list, then mark it added.`,
+    href: `/campaigns/${row.campaignId}`,
+    campaignId: row.campaignId,
   });
-  if (result.data.verified) {
-    await logActivity({
-      userId: input.userId,
-      campaignId: row.campaignId,
-      testerId: row.testerId,
-      action: "GROUP_MEMBER_CONFIRMED",
-      result: row.tester.emailNormalized,
-    });
-    await notify({
-      userId: input.userId,
-      type: "tester",
-      title: "Tester successfully added",
-      body: `${row.tester.emailNormalized} is a confirmed Google Group member.`,
-      href: `/testers/${row.testerId}`,
-      campaignId: row.campaignId,
-    });
-  }
-  return { ok: true, manual: result.data.manualRequired, detail: result.data.detail };
+  return {
+    ok: false,
+    mode,
+    detail: PLAY_TESTER_API_LIMITATION,
+    optInUrl,
+    steps: playConsoleTesterSteps(testingType),
+  };
 }
 
-export async function confirmManualMembership(userId: string, testerCampaignId: string) {
+/**
+ * Record that the developer really did add the address in Play Console. Only
+ * the developer can assert this, because Google exposes no way to read an
+ * email list back.
+ */
+export async function confirmTesterAdded(userId: string, testerCampaignId: string) {
   const row = await prisma.testerCampaign.findFirst({
     where: { id: testerCampaignId, userId },
-    include: { campaign: { include: { googleGroup: true } }, tester: true },
+    include: { tester: true, campaign: { include: { app: true } } },
   });
-  if (!row?.campaign.googleGroup || !row.tester.emailNormalized) {
-    throw new AppError("Google Group or tester email missing.");
-  }
-  await prisma.googleGroupMembership.upsert({
-    where: {
-      groupId_email: {
-        groupId: row.campaign.googleGroup.id,
-        email: row.tester.emailNormalized,
-      },
-    },
-    update: { status: "GROUP_MEMBER", verifiedAt: new Date(), manual: true },
-    create: {
-      groupId: row.campaign.googleGroup.id,
-      testerId: row.testerId,
-      email: row.tester.emailNormalized,
-      status: "GROUP_MEMBER",
-      verifiedAt: new Date(),
-      manual: true,
-    },
+  if (!row) throw new NotFoundError("Tester campaign not found.");
+  if (!row.tester.emailNormalized) throw new AppError("Tester email missing.");
+
+  await logActivity({
+    userId,
+    campaignId: row.campaignId,
+    testerId: row.testerId,
+    action: "TESTER_ADDED",
+    result: `${row.tester.emailNormalized} · ${row.campaign.app.packageName} · confirmed by developer`,
   });
   return setTesterStatus({
     userId,
     testerCampaignId,
-    to: "GROUP_MEMBER",
-    note: "Membership confirmed manually by the user.",
+    to: "ADDED",
+    note: "Developer confirmed the address was added to the Play Console email list.",
   });
 }
 
@@ -214,8 +142,8 @@ export async function sendInvitation(input: {
     include: { tester: true, campaign: { include: { app: true } } },
   });
   if (!row) throw new NotFoundError("Tester campaign not found.");
-  if (!row.accessAdded && row.status !== "GROUP_MEMBER" && row.status !== "ADDED") {
-    throw new AppError("Send the invitation only after tester access is added or membership is confirmed.");
+  if (!row.accessAdded && row.status !== "ADDED") {
+    throw new AppError("Send the invitation only after tester access has been added.");
   }
   const existing = await prisma.invitation.findFirst({
     where: { testerId: row.testerId, campaignId: row.campaignId, status: "sent" },

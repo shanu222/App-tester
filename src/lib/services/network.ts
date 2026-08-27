@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { AppError, ForbiddenError, NotFoundError, RateLimitError } from "@/lib/errors";
 import { logActivity, notify } from "@/lib/audit";
 import { createOrGetTester, setTesterStatus } from "@/lib/services/testers";
-import { addTesterToGroup, confirmManualMembership } from "@/lib/services/invitations";
+import { confirmTesterAdded, grantTesterAccess } from "@/lib/services/invitations";
 import { describeEmail } from "@/lib/email-extract";
 
 const RECEIVED_STATUSES = [
@@ -195,7 +195,7 @@ export async function listPublishedRequests(
         testersReceived,
         remaining,
         match,
-        groupConfigured: Boolean(campaign.googleGroupId),
+        automaticAccess: campaign.testingType === "OPEN",
         playConnected: playSet.has(campaign.userId),
         country: campaign.user.country,
         app: {
@@ -254,7 +254,7 @@ export async function getPublicRequest(viewerId: string, campaignId: string) {
         : null,
     testersReceived,
     remaining: Math.max(0, campaign.targetTesters - testersReceived),
-    groupConfigured: Boolean(campaign.googleGroupId),
+    automaticAccess: campaign.testingType === "OPEN",
     playConnected: Boolean(play),
     isOwner: campaign.userId === viewerId,
     owner: publicDeveloper(campaign.user),
@@ -410,60 +410,34 @@ export async function processTesterAccess(participationId: string) {
     data: { status: "ACCESS_PROCESSING", lastError: null },
   });
   try {
-    if (!participation.campaign.googleGroupId) {
-      const manual = await prisma.testingParticipation.update({
-        where: { id: participation.id },
-        data: {
-          status: "MANUAL_REQUIRED",
-          lastError:
-            "Automatic group membership is unavailable for this account. Add the tester in Google Groups or Play Console, then confirm membership.",
-        },
-      });
-      await notify({
-        userId: participation.ownerUserId,
-        type: "tester",
-        title: "Manual Google Group action required",
-        body: "A tester is waiting to be added. TestLoop did not change Google Group membership.",
-        href: `/campaigns/${participation.campaignId}`,
-        campaignId: participation.campaignId,
-      });
-      return manual;
-    }
-    const result = await addTesterToGroup({
+    const result = await grantTesterAccess({
       userId: participation.ownerUserId,
       testerCampaignId: participation.testerCampaignId,
     });
-    const nextStatus = result.ok ? "ADDED" : result.manual ? "MANUAL_REQUIRED" : "FAILED";
+    if (!result.ok) {
+      const manual = await prisma.testingParticipation.update({
+        where: { id: participation.id },
+        data: { status: "MANUAL_REQUIRED", lastError: result.detail },
+      });
+      return manual;
+    }
+
+    // Open testing: access is real as soon as the opt-in URL is available.
+    const optInUrl = participation.campaign.webOptInUrl || result.optInUrl;
     await prisma.testingParticipation.update({
       where: { id: participation.id },
-      data: {
-        status: nextStatus,
-        lastError: result.ok ? null : result.detail,
-      },
+      data: { status: optInUrl ? "INVITATION_READY" : "ADDED", lastError: null },
     });
-    if (nextStatus === "ADDED" && participation.campaign.webOptInUrl) {
-      await prisma.testingParticipation.update({
-        where: { id: participation.id },
-        data: { status: "INVITATION_READY" },
-      });
-      await notify({
-        userId: participation.testerUserId,
-        type: "tester",
-        title: "You're ready to test",
-        body: `${participation.campaign.app.name} testing access is configured.`,
-        href: "/testing",
-        campaignId: participation.campaignId,
-      });
-    } else if (nextStatus === "ADDED") {
-      await notify({
-        userId: participation.testerUserId,
-        type: "tester",
-        title: "Access granted",
-        body: `${participation.campaign.app.name} tester access was configured. A testing/opt-in link has not been stored for this campaign yet.`,
-        href: "/testing",
-        campaignId: participation.campaignId,
-      });
-    }
+    await notify({
+      userId: participation.testerUserId,
+      type: "tester",
+      title: optInUrl ? "You're ready to test" : "Access granted",
+      body: optInUrl
+        ? `${participation.campaign.app.name} testing access is configured.`
+        : `${participation.campaign.app.name} tester access was configured. No opt-in link is stored for this campaign yet.`,
+      href: "/testing",
+      campaignId: participation.campaignId,
+    });
     return prisma.testingParticipation.findUniqueOrThrow({ where: { id: participation.id } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Google Play action failed.";
@@ -480,16 +454,7 @@ export async function markParticipationManuallyAdded(ownerUserId: string, partic
     include: { campaign: true },
   });
   if (!participation?.testerCampaignId) throw new NotFoundError("Participation not found.");
-  if (participation.campaign.googleGroupId) {
-    await confirmManualMembership(ownerUserId, participation.testerCampaignId);
-  } else {
-    await setTesterStatus({
-      userId: ownerUserId,
-      testerCampaignId: participation.testerCampaignId,
-      to: "ADDED",
-      note: "Owner confirmed the tester was added manually.",
-    });
-  }
+  await confirmTesterAdded(ownerUserId, participation.testerCampaignId);
   const next = participation.campaign.webOptInUrl ? "INVITATION_READY" : "ADDED";
   const updated = await prisma.testingParticipation.update({
     where: { id: participation.id },

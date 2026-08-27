@@ -31,7 +31,7 @@ export default function TermsPage() {
               <p>
                 These Terms are an agreement between you and {SITE_NAME}. They apply to the website, developer
                 accounts, testing campaigns, messaging, integrations, and related features. Additional product notices
-                shown in the service — for example, that an API action failed or that manual Google Group action is
+                shown in the service — for example, that an API action failed or that a manual Play Console step is
                 required — also apply.
               </p>
             ),
@@ -113,8 +113,8 @@ export default function TermsPage() {
                 If you accept a testing request, you agree to test in good faith according to the campaign instructions
                 you are shown. Your Google Play Gmail is shared with the app owner only after you explicitly confirm.
                 You must not provide an email you are not authorized to use. Campaign owners must use consented emails
-                only to add testers to the relevant Play testing track or Google Group and related testing
-                communication, not for unrelated marketing.
+                only to add testers to the relevant Play testing track and for related testing communication, not for
+                unrelated marketing.
               </p>
             ),
           },
@@ -157,7 +157,8 @@ export default function TermsPage() {
               <p>
                 You remain solely responsible for complying with Google Play Developer Program Policies, testing-track
                 rules, data-safety disclosures, and any other Google requirements. {SITE_NAME} may help you coordinate
-                testers and, where you configure an official API, attempt to add testers to a Google Group. {SITE_NAME}{" "}
+                testers and, where you authorize the official Play Developer API and that API supports the operation,
+                grant testers access to a testing track. {SITE_NAME}{" "}
                 does not determine Google Play eligibility, production access, review outcomes, ratings, or policy
                 decisions. Success states in {SITE_NAME} reflect {SITE_NAME} records or API responses, not a promise
                 from Google.
@@ -193,10 +194,10 @@ export default function TermsPage() {
             title: "Third-party services",
             content: (
               <p>
-                Google Sign-In, Google Play, Google Groups, optional Gmail, optional Meta integrations, hosting
-                providers, and external testing links are third-party services. Your use of them is subject to those
-                providers’ terms and privacy policies. {SITE_NAME} is not those providers and does not control Play
-                Console, Google Group membership tools you use manually, or the availability of Google APIs.
+                Google Sign-In, Google Play, the Google Play Developer API, optional Gmail, optional Meta integrations,
+                hosting providers, and external testing links are third-party services. Your use of them is subject to
+                those providers’ terms and privacy policies. {SITE_NAME} is not those providers and does not control
+                Play Console or the availability of Google APIs.
               </p>
             ),
           },

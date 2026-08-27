@@ -20,6 +20,8 @@ const PUBLIC_PREFIXES = [
   "/api/health",
   "/api/cron",
   "/api/telemetry",
+  "/test",
+  "/api/test",
 ];
 
 function isPublic(pathname: string) {

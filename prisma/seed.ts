@@ -50,18 +50,6 @@ async function main() {
     },
   });
 
-  const group = await prisma.googleGroup.upsert({
-    where: { userId_email: { userId: user.id, email: "net360-testers@googlegroups.com" } },
-    update: {},
-    create: {
-      userId: user.id,
-      email: "net360-testers@googlegroups.com",
-      name: "NET360 testers",
-      canManageMembers: false,
-      limitationNote: "DEMO MODE group — membership is not applied to Google.",
-    },
-  });
-
   const source = await prisma.facebookSource.upsert({
     where: { userId_externalId: { userId: user.id, externalId: "demo-android-testing" } },
     update: {},
@@ -85,7 +73,6 @@ async function main() {
       userId: user.id,
       appId: app.id,
       sourceId: source.id,
-      googleGroupId: group.id,
       name: "NET360 Closed Testing — August 2026",
       status: "ACTIVE",
       testingType: "CLOSED",

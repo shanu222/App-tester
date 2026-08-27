@@ -24,9 +24,9 @@ export default function AboutPage() {
           </p>
           <p>
             Developers sign in with Google, complete a profile, publish a testing request, and accept requests from
-            others. A Google Play testing Gmail is shared only after explicit consent. Google Play and Google Group
-            automation run only when a developer has connected the official APIs; otherwise {SITE_NAME} shows a manual
-            fallback instead of a fake success.
+            others. A Google Play testing Gmail is shared only after explicit consent. Google Play automation runs only
+            when a developer has connected the official Play Developer API, and only for the operations that API
+            actually supports; otherwise {SITE_NAME} shows the exact manual step instead of a fake success.
           </p>
           <p>
             {SITE_NAME} does not guarantee testers, downloads, reviews, ratings, or Google Play approval. Reputation

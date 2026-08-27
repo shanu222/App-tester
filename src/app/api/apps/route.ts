@@ -12,7 +12,6 @@ const schema = z.object({
   testingUrl: z.string().optional(),
   googlePlayLink: z.string().optional(),
   iconUrl: z.string().optional(),
-  googleGroupEmail: z.string().optional(),
   testerTarget: z.number().optional(),
 });
 

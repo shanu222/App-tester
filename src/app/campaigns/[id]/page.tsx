@@ -12,6 +12,9 @@ import Link from "next/link";
 import { PasteReplyForm } from "@/components/messages/paste-reply-form";
 import { ManualTesterForm } from "@/components/testers/manual-tester-form";
 import { RecruitmentPostEditor } from "@/components/campaigns/recruitment-post-editor";
+import { CopyButton } from "@/components/ui/copy-button";
+import { campaignShareUrl } from "@/lib/services/campaigns";
+import { testerAccessMode } from "@/lib/integrations/play-testers";
 
 export default async function CampaignDetailPage({
   params,
@@ -23,6 +26,16 @@ export default async function CampaignDetailPage({
   const campaign = await getCampaign(user.id, id);
   const stats = await campaignStats(user.id, id);
   const remaining = Math.max(0, campaign.targetTesters - stats.optedIn);
+  const shareUrl = campaignShareUrl(campaign.publicSlug);
+  const accessMode = testerAccessMode(campaign.testingType);
+  const pendingEmails = campaign.testerCampaigns
+    .map((row) => row.detectedEmail || row.tester.email)
+    .filter((email): email is string => Boolean(email));
+  const uniqueEmails = [...new Set(pendingEmails)];
+  const waitingEmails = campaign.testerCampaigns
+    .filter((row) => row.status === "ADDING")
+    .map((row) => row.detectedEmail || row.tester.email)
+    .filter((email): email is string => Boolean(email));
 
   return (
     <AppShell
@@ -119,28 +132,68 @@ export default async function CampaignDetailPage({
           <CardHeader title="Testing links" description="Store and opt-in URLs are stored separately." />
           <dl className="mt-5 space-y-4 text-sm">
             <div>
+              <dt className="text-xs font-medium text-muted">TestLoop testing page</dt>
+              <dd className="mt-1 break-all text-slate-700">
+                {shareUrl || "A public testing page is created when this campaign is saved."}
+              </dd>
+              {shareUrl ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <CopyButton value={shareUrl} label="Copy TestLoop link" />
+                  <a
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
+                    href={shareUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open testing page
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                  </a>
+                </div>
+              ) : null}
+            </div>
+            <div>
               <dt className="text-xs font-medium text-muted">Store URL</dt>
               <dd className="mt-1 break-all text-slate-700">
                 {campaign.playStoreUrl || campaign.app.playStoreUrl || "Not stored"}
               </dd>
             </div>
             <div>
-              <dt className="text-xs font-medium text-muted">Testing / opt-in URL</dt>
+              <dt className="text-xs font-medium text-muted">Google Play opt-in URL</dt>
               <dd className="mt-1 break-all text-slate-700">
-                {campaign.webOptInUrl || "No testing link configured — do not invent one."}
+                {campaign.testingUrl || campaign.webOptInUrl || "No testing link configured — do not invent one."}
               </dd>
             </div>
+            {campaign.playTrack ? (
+              <div>
+                <dt className="text-xs font-medium text-muted">Play Console track</dt>
+                <dd className="mt-1 font-mono text-slate-700">{campaign.playTrack}</dd>
+              </div>
+            ) : null}
           </dl>
-          {campaign.webOptInUrl ? (
+          {campaign.testingUrl || campaign.webOptInUrl ? (
             <a
               className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
-              href={campaign.webOptInUrl}
+              href={campaign.testingUrl || campaign.webOptInUrl || undefined}
               target="_blank"
               rel="noreferrer"
             >
-              Open testing link
+              Open Google Play testing link
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
             </a>
+          ) : null}
+          {accessMode === "MANUAL_EMAIL_LIST" && uniqueEmails.length > 0 ? (
+            <div className="mt-4 border-t border-line pt-4">
+              <div className="text-xs font-medium text-muted">Copy-ready tester emails</div>
+              <p className="mt-1 text-xs leading-5 text-muted">
+                Paste these into Play Console → Testers. {waitingEmails.length} still waiting for that step.
+              </p>
+              <pre className="mt-2 max-h-40 overflow-auto rounded-control border border-line bg-surface p-3 text-xs leading-5 text-slate-700">
+                {uniqueEmails.join("\n")}
+              </pre>
+              <div className="mt-2">
+                <CopyButton value={uniqueEmails.join("\n")} label="Copy emails" />
+              </div>
+            </div>
           ) : null}
           <p className="mt-4 border-t border-line pt-4 text-xs leading-5 text-muted">
             In-app telemetry token:{" "}

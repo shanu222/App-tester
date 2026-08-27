@@ -3,6 +3,24 @@ import { prisma } from "@/lib/db";
 import { NotFoundError, AppError } from "@/lib/errors";
 import { logActivity } from "@/lib/audit";
 import { isDemoMode } from "@/lib/env";
+import { campaignTestingUrl } from "@/lib/integrations/play-testers";
+import { uniqueSlug } from "@/lib/slug";
+import { env } from "@/lib/env";
+
+/**
+ * Reserve the public /test/{slug} path for a campaign. Slugs are global because
+ * the testing page is public and unauthenticated, so the app name is used as
+ * the basis and a numeric suffix resolves collisions between developers.
+ */
+export async function allocateCampaignSlug(desired: string) {
+  return uniqueSlug(desired, async (candidate) => {
+    const existing = await prisma.campaign.findUnique({
+      where: { publicSlug: candidate },
+      select: { id: true },
+    });
+    return Boolean(existing);
+  });
+}
 
 const ALLOWED_CAMPAIGN: Record<CampaignStatus, CampaignStatus[]> = {
   DRAFT: ["ACTIVE", "ARCHIVED"],
@@ -18,7 +36,6 @@ export async function listCampaigns(userId: string) {
     include: {
       app: true,
       source: true,
-      googleGroup: true,
       _count: { select: { testerCampaigns: true, opportunities: true } },
     },
     orderBy: { updatedAt: "desc" },
@@ -32,7 +49,6 @@ export async function getCampaign(userId: string, id: string) {
       app: { include: { tracks: true } },
       track: true,
       source: true,
-      googleGroup: true,
       testerCampaigns: { include: { tester: true } },
       participations: {
         include: {
@@ -45,7 +61,48 @@ export async function getCampaign(userId: string, id: string) {
     },
   });
   if (!campaign) throw new NotFoundError("Campaign not found.");
-  return campaign;
+  return ensureCampaignPublicFields(campaign);
+}
+
+/**
+ * Older campaigns may predate publicSlug / testingUrl. Fill them in on read
+ * so every campaign detail page can share a real TestLoop testing URL.
+ */
+export async function ensureCampaignPublicFields<
+  T extends {
+    id: string;
+    name: string;
+    testingType: "INTERNAL" | "CLOSED" | "OPEN";
+    publicSlug: string | null;
+    testingUrl: string | null;
+    webOptInUrl: string | null;
+    app: { name: string; packageName: string };
+  },
+>(campaign: T): Promise<T> {
+  const data: { publicSlug?: string; testingUrl?: string } = {};
+  if (!campaign.publicSlug) {
+    data.publicSlug = await allocateCampaignSlug(campaign.app.name || campaign.name);
+  }
+  if (!campaign.testingUrl) {
+    const resolved = campaignTestingUrl({
+      testingType: campaign.testingType,
+      packageName: campaign.app.packageName,
+      configuredUrl: campaign.webOptInUrl,
+    });
+    if (resolved.url) data.testingUrl = resolved.url;
+  }
+  if (!Object.keys(data).length) return campaign;
+  const updated = await prisma.campaign.update({
+    where: { id: campaign.id },
+    data,
+    select: { publicSlug: true, testingUrl: true },
+  });
+  return { ...campaign, publicSlug: updated.publicSlug, testingUrl: updated.testingUrl };
+}
+
+export function campaignShareUrl(slug: string | null | undefined) {
+  if (!slug) return null;
+  return `${env.appUrl.replace(/\/$/, "")}/test/${slug}`;
 }
 
 export async function createCampaign(
@@ -54,8 +111,9 @@ export async function createCampaign(
     name: string;
     appId: string;
     trackId?: string;
+    /** Real Play Console track name, e.g. "internal" or "alpha". */
+    playTrack?: string;
     sourceId?: string;
-    googleGroupId?: string;
     targetTesters?: number;
     testingType?: "INTERNAL" | "CLOSED" | "OPEN";
     playStoreUrl?: string;
@@ -79,15 +137,24 @@ export async function createCampaign(
       throw new AppError("An active published testing request already exists for this app.");
     }
   }
+  const testingType = input.testingType || app.testingType;
+  const publicSlug = await allocateCampaignSlug(app.name || input.name);
+  const testingUrl = campaignTestingUrl({
+    testingType,
+    packageName: app.packageName,
+    configuredUrl: webOptInUrl,
+  }).url;
   const campaign = await prisma.campaign.create({
     data: {
       userId,
       appId: app.id,
       trackId: input.trackId,
+      playTrack: input.playTrack,
+      publicSlug,
+      testingUrl,
       sourceId: input.sourceId,
-      googleGroupId: input.googleGroupId,
       name: input.name,
-      testingType: input.testingType || app.testingType,
+      testingType,
       targetTesters: input.targetTesters ?? 12,
       requiredTesters: input.targetTesters ?? 12,
       durationDays: input.durationDays ?? 14,

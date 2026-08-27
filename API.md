@@ -8,8 +8,16 @@ There is no login. Routes use a single workspace user. Cron still requires `CRON
 | GET/POST/PATCH | `/api/campaigns` | Campaigns |
 | GET | `/api/campaigns/:id` | Campaign + stats |
 | GET/POST | `/api/apps` | Apps |
-| POST | `/api/google/play/apps` | Sync apps via Reporting API |
-| POST | `/api/google/play/tracks` | List tracks |
+| POST | `/api/google/play/apps` | Sync My Apps against Play |
+| GET | `/api/google-play/connect/oauth` | Start Play Console OAuth |
+| GET | `/api/google-play/oauth/callback` | Play OAuth callback |
+| POST | `/api/google-play/connect/service-account` | Verify + store a service account key |
+| POST | `/api/google-play/verify` | Re-run read-only Play checks |
+| POST | `/api/google-play/disconnect` | Remove stored Play credentials |
+| GET/POST | `/api/google-play/apps` | Discover / select Play apps |
+| POST | `/api/google-play/tracks` | Real tracks for a package |
+| POST | `/api/google-play/testers/access` | Grant tester access for a track |
+| GET/POST | `/api/test/:slug` | Public testing page metadata and tester join |
 | GET | `/api/testers` | Tester CRM |
 | GET/PATCH | `/api/testers/:id` | Tester detail / status |
 | POST | `/api/testers/manual` | Manual add |
@@ -22,9 +30,6 @@ There is no login. Routes use a single workspace user. Cron still requires `CRON
 | GET | `/api/integrations/facebook/start` | OAuth |
 | GET | `/api/gmail/connect` | Gmail OAuth |
 | POST | `/api/gmail/send` | Invitation / mail |
-| POST | `/api/google/connect` | Play service account + verify |
-| GET/POST | `/api/google/groups` | Store group |
-| POST | `/api/google/groups/members` | Add or confirm member |
 | POST | `/api/jobs/discovery` | Enqueue / run jobs |
 | GET/POST | `/api/feedback` | Feedback |
 | POST | `/api/telemetry` | In-app tester ping (campaign token) |

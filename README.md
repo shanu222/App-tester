@@ -12,7 +12,7 @@ TestLoop is a production web app for Android developers who need genuine Google 
 4. Post via the Page comments API when that is actually available; otherwise copy/paste.
 5. Detect a Gmail address from a reply (API or paste).
 6. Prevent duplicate testers and repeat outreach.
-7. Add confirmed emails to a **Google Group** when Workspace Admin SDK access exists.
+7. Grant tester access: automatic for **open testing**, or a guided Play Console step for internal/closed testing, which the API cannot automate.
 8. Send the campaign’s real testing/opt-in link after access is recorded.
 9. Track contacted → replied → Gmail → added → invited → opted in → testing activity → feedback.
 10. Show campaign analytics as **recorded activity**, not as Google’s eligibility decision.
@@ -61,10 +61,10 @@ Full Vercel/Neon checklist: [VERCEL_SETUP.md](VERCEL_SETUP.md)
 |---|---|
 | Facebook Group feed/search/comment/inbox | **Unavailable.** Meta deprecated the Groups API in Graph v19 (removed April 2024). Import posts and paste replies. |
 | Facebook Page feed + comments | Available with Page tokens (`pages_show_list`, `pages_read_engagement`, `pages_manage_engagement`). |
-| Play Console individual email-list testers | **Not in the API.** `edits.testers` only accepts Google Group emails. |
+| Play Console individual email-list testers | **Not in the API.** The whole `Testers` resource is `{ googleGroups: [string] }`; Google documents that email lists are unsupported. TestLoop collects the addresses and guides the one manual Play Console step. |
+| Open-testing tester registration | Fully automated. Open tracks need no per-tester authorisation, so TestLoop returns Google's official opt-in URL. |
 | Per-Gmail Play download confirmation | **Not available.** Use opt-in recorded by you + optional in-app telemetry (“tester activity detected”). |
-| Google Group member insert | Admin SDK Directory API / Cloud Identity — requires Workspace. Consumer groups need manual add. |
-| List Play apps | Play Developer Reporting `apps.search`, not Android Publisher `applications.list`. |
+| List Play apps | Play Developer Reporting `apps.search`. Android Publisher has no app-listing endpoint at all. |
 
 ## Scripts
 

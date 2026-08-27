@@ -7,10 +7,9 @@ export type Capability =
   | "facebook.inbox"
   | "play.apps.search"
   | "play.tracks.read"
-  | "play.testers.googleGroups"
+  | "play.tracks.write"
   | "play.testers.emailList"
   | "play.install.perTester"
-  | "groups.members.manage"
   | "gmail.send";
 
 export type CapabilityMap = Partial<Record<Capability, boolean>>;
@@ -23,9 +22,6 @@ export const PLAY_EMAIL_LIST_LIMITATION =
 
 export const PLAY_INSTALL_LIMITATION =
   "Google Play APIs do not confirm that a specific Gmail downloaded the app. Per-tester install status stays unknown unless the tester's app sends TestLoop telemetry.";
-
-export const GROUPS_API_LIMITATION =
-  "Automatic Google Group membership requires Google Workspace Admin SDK or Cloud Identity Groups API access. Consumer Google Groups cannot be managed through those APIs. Add the tester in groups.google.com, then confirm here.";
 
 export function facebookPageCapabilities(): CapabilityMap {
   return {

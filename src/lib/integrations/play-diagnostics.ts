@@ -5,8 +5,9 @@ import {
   redactSecrets,
   type GoogleApiError,
 } from "@/lib/integrations/google-api-error";
+import { ANDROID_PUBLISHER_SCOPE } from "@/lib/integrations/play-scopes";
 
-export const ANDROID_PUBLISHER_SCOPE = "https://www.googleapis.com/auth/androidpublisher";
+export { ANDROID_PUBLISHER_SCOPE };
 const API_BASE = "https://androidpublisher.googleapis.com/androidpublisher/v3";
 
 /**
@@ -26,6 +27,7 @@ export type PlayErrorCode =
   | "PLAY_CREDENTIALS_UNREADABLE"
   | "INVALID_SERVICE_ACCOUNT_JSON"
   | "SERVICE_ACCOUNT_AUTH_FAILED"
+  | "OAUTH_AUTH_FAILED"
   | "PLAY_API_NOT_ENABLED"
   | "PLAY_CONSOLE_NOT_LINKED"
   | "PLAY_CONSOLE_INSUFFICIENT_PERMISSIONS"
@@ -38,6 +40,10 @@ export type PlayErrorCode =
 /** Safe to return to the browser and to log: no key material, no tokens. */
 export type PlayDiagnostics = {
   connected: boolean;
+  method: "SERVICE_ACCOUNT" | "OAUTH";
+  /** The authorising account: a service account email, or the developer's Google account. */
+  accountEmail: string | null;
+  /** Populated only for service-account connections. */
   serviceAccountEmail: string | null;
   projectId: string | null;
   apiReachable: boolean;
@@ -214,12 +220,15 @@ type Verdict = {
 };
 
 /** Maps a Google error onto one actionable cause. */
-function classify(error: GoogleApiError): Verdict {
+function classify(error: GoogleApiError, method: PlayIdentity["method"] = "SERVICE_ACCOUNT"): Verdict {
+  const isServiceAccount = method === "SERVICE_ACCOUNT";
+
   if (isServiceDisabled(error)) {
     return {
       code: "PLAY_API_NOT_ENABLED",
-      message:
-        "The Google Play Android Developer API is not enabled for this service account's Google Cloud project. Enable it at console.cloud.google.com → APIs & Services → Library → Google Play Android Developer API, then retry.",
+      message: isServiceAccount
+        ? "The Google Play Android Developer API is not enabled for this service account's Google Cloud project. Enable it at console.cloud.google.com → APIs & Services → Library → Google Play Android Developer API, then retry."
+        : "The Google Play Android Developer API is not enabled for the Google Cloud project behind TestLoop's OAuth client. Enable it at console.cloud.google.com → APIs & Services → Library → Google Play Android Developer API, then retry.",
       apiReachable: false,
       playConsoleAuthorized: false,
     };
@@ -228,8 +237,9 @@ function classify(error: GoogleApiError): Verdict {
   if (error.httpStatus === 401) {
     return {
       code: "PLAY_CONSOLE_NOT_LINKED",
-      message:
-        "The service account signed in to Google, but Play Console does not grant it access to any app. In Play Console → Users and permissions, invite this service account's email and give it access to your app, then retry.",
+      message: isServiceAccount
+        ? "The service account signed in to Google, but Play Console does not grant it access to any app. In Play Console → Users and permissions, invite this service account's email and give it access to your app, then retry."
+        : "Google accepted the sign-in, but this Google account has no Play Console access. Sign in with the account that holds your Play Developer account, or have an admin invite it under Play Console → Users and permissions.",
       apiReachable: true,
       playConsoleAuthorized: false,
     };
@@ -238,8 +248,9 @@ function classify(error: GoogleApiError): Verdict {
   if (error.httpStatus === 403) {
     return {
       code: "PLAY_CONSOLE_INSUFFICIENT_PERMISSIONS",
-      message:
-        "Google denied permission. The service account is known but lacks the Play Console permissions this needs. Grant it at least release and testing permissions on the app in Play Console → Users and permissions.",
+      message: isServiceAccount
+        ? "Google denied permission. The service account is known but lacks the Play Console permissions this needs. Grant it at least release and testing permissions on the app in Play Console → Users and permissions."
+        : "Google denied permission. This Google account is known to Play Console but lacks the permissions this needs. Grant it at least release and testing permissions under Play Console → Users and permissions.",
       apiReachable: true,
       playConsoleAuthorized: false,
     };
@@ -271,11 +282,20 @@ function classify(error: GoogleApiError): Verdict {
   };
 }
 
-function baseResult(sa: ServiceAccount, packageName?: string): PlayDiagnostics {
+/** Who is authorising, independent of how the token was minted. */
+type PlayIdentity = {
+  method: "SERVICE_ACCOUNT" | "OAUTH";
+  email: string | null;
+  projectId: string | null;
+};
+
+function baseResult(identity: PlayIdentity, packageName?: string): PlayDiagnostics {
   return {
     connected: false,
-    serviceAccountEmail: sa.clientEmail,
-    projectId: sa.projectId,
+    method: identity.method,
+    accountEmail: identity.email,
+    serviceAccountEmail: identity.method === "SERVICE_ACCOUNT" ? identity.email : null,
+    projectId: identity.projectId,
     apiReachable: false,
     playConsoleAuthorized: false,
     packageAccessible: packageName ? false : null,
@@ -316,18 +336,81 @@ export async function runPlayDiagnostics(
   sa: ServiceAccount,
   packageName?: string,
 ): Promise<PlayDiagnostics> {
-  const result = baseResult(sa, packageName);
+  const identity: PlayIdentity = {
+    method: "SERVICE_ACCOUNT",
+    email: sa.clientEmail,
+    projectId: sa.projectId,
+  };
 
   let accessToken: string;
   try {
     accessToken = await requestAccessToken(sa);
   } catch (cause) {
     return {
-      ...result,
+      ...baseResult(identity, packageName),
       errorCode: "SERVICE_ACCOUNT_AUTH_FAILED",
       errorMessage: describeTokenError(cause),
     };
   }
+
+  return diagnoseWithToken(identity, accessToken, packageName);
+}
+
+/**
+ * Same read-only checks for a developer who authorised over OAuth. The token is
+ * minted by the caller so this module stays free of OAuth client wiring.
+ */
+export async function runPlayOAuthDiagnostics(
+  input: { email: string | null; mintAccessToken: () => Promise<string | null> },
+  packageName?: string,
+): Promise<PlayDiagnostics> {
+  const identity: PlayIdentity = { method: "OAUTH", email: input.email, projectId: null };
+
+  let accessToken: string | null;
+  try {
+    accessToken = await input.mintAccessToken();
+  } catch (cause) {
+    return {
+      ...baseResult(identity, packageName),
+      errorCode: "OAUTH_AUTH_FAILED",
+      errorMessage: describeOAuthError(cause),
+    };
+  }
+  if (!accessToken) {
+    return {
+      ...baseResult(identity, packageName),
+      errorCode: "OAUTH_AUTH_FAILED",
+      errorMessage:
+        "Google Play authorisation has expired or was revoked. Reconnect Google Play to grant access again.",
+    };
+  }
+
+  return diagnoseWithToken(identity, accessToken, packageName);
+}
+
+/** Turns a refresh-token failure into something the developer can act on. */
+function describeOAuthError(error: unknown): string {
+  const gaxios = error as {
+    response?: { data?: { error?: string; error_description?: string } };
+    message?: string;
+  };
+  const oauthError = gaxios.response?.data?.error;
+  if (oauthError === "invalid_grant") {
+    return "Google Play authorisation is no longer valid: the developer revoked access or the grant expired. Reconnect Google Play.";
+  }
+  if (oauthError === "invalid_client") {
+    return "Google rejected TestLoop's OAuth client credentials. Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on the server.";
+  }
+  const message = typeof gaxios.message === "string" ? redactSecrets(gaxios.message) : "";
+  return `Google Play authorisation failed${message ? `: ${message}` : "."}`;
+}
+
+async function diagnoseWithToken(
+  identity: PlayIdentity,
+  accessToken: string,
+  packageName?: string,
+): Promise<PlayDiagnostics> {
+  const result = baseResult(identity, packageName);
 
   const probe = await probeEdit(accessToken, PROBE_PACKAGE);
   if (probe.kind === "network") {
@@ -338,7 +421,7 @@ export async function runPlayDiagnostics(
     // A 404 is the success signal here: Play accepted the credentials and only
     // failed to find the deliberately nonexistent probe package.
     if (probe.error.httpStatus !== 404) {
-      const verdict = classify(probe.error);
+      const verdict = classify(probe.error, identity.method);
       return {
         ...withGoogleError(result, probe.error),
         apiReachable: verdict.apiReachable,
@@ -360,7 +443,7 @@ export async function runPlayDiagnostics(
       ...reachable,
       connected: true,
       packageAccessible: null,
-      detail: `Authenticated as ${sa.clientEmail}. The Google Play Developer API is enabled and Play Console accepts this service account. Add a package name to verify access to a specific app.`,
+      detail: `Authenticated as ${identity.email ?? "the authorised account"}. The Google Play Developer API is enabled and Play Console accepts this connection. Add a package name to verify access to a specific app.`,
     };
   }
 
@@ -387,10 +470,10 @@ export async function runPlayDiagnostics(
           checkedPackageName: target,
           packageAccessible: false,
           errorCode: "PLAY_PACKAGE_NOT_FOUND",
-          errorMessage: `Google Play does not expose "${target}" to this service account. Check the package name, confirm the app exists in this Play Console account, and grant the service account access to it.`,
+          errorMessage: `Google Play does not expose "${target}" to this connection. Check the package name, confirm the app exists in this Play Console account, and grant the authorised account access to it.`,
         };
       }
-      const verdict = classify(error);
+      const verdict = classify(error, identity.method);
       return {
         ...withGoogleError(reachable, error),
         checkedPackageName: target,
@@ -408,6 +491,6 @@ export async function runPlayDiagnostics(
     connected: true,
     checkedPackageName: target,
     packageAccessible: true,
-    detail: `Verified. Authenticated as ${sa.clientEmail} and confirmed read access to ${target} through the Google Play Developer API.`,
+    detail: `Verified. Authenticated as ${identity.email ?? "the authorised account"} and confirmed read access to ${target} through the Google Play Developer API.`,
   };
 }

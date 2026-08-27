@@ -19,7 +19,14 @@ enum IntegrationProvider {
   GOOGLE
   GOOGLE_PLAY
   GMAIL
-  GOOGLE_WORKSPACE
+}
+
+/**
+ * How a developer authorised TestLoop against their Play Console.
+ */
+enum GooglePlayConnectionMethod {
+  OAUTH
+  SERVICE_ACCOUNT
 }
 
 enum IntegrationStatus {
@@ -113,71 +120,71 @@ enum OutreachChannel {
 }
 
 model User {
-  id                   String    @id @default(cuid())
-  email                String    @unique
-  emailVerified        DateTime?
-  passwordHash         String?
-  name                 String?
-  developerName        String?
-  company              String?
-  image                String?
-  role                 UserRole  @default(USER)
-  onboardingStep       Int       @default(0)
-  onboardingCompleted  Boolean   @default(false)
-  demoMode             Boolean   @default(false)
-  github                 String?
-  linkedin               String?
-  website                String?
-  bio                    String?
-  country                String?
-  city                   String?
-  developerType          String?
-  yearsExperience        Int?
-  platforms              String[]  @default([])
-  technologies           String?
-  testingGmail           String?
-  profileCompleted       Boolean   @default(false)
-  suspendedAt            DateTime?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-  deletedAt            DateTime?
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  emailVerified       DateTime?
+  passwordHash        String?
+  name                String?
+  developerName       String?
+  company             String?
+  image               String?
+  role                UserRole  @default(USER)
+  onboardingStep      Int       @default(0)
+  onboardingCompleted Boolean   @default(false)
+  demoMode            Boolean   @default(false)
+  github              String?
+  linkedin            String?
+  website             String?
+  bio                 String?
+  country             String?
+  city                String?
+  developerType       String?
+  yearsExperience     Int?
+  platforms           String[]  @default([])
+  technologies        String?
+  testingGmail        String?
+  profileCompleted    Boolean   @default(false)
+  suspendedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
 
-  accounts               Account[]
-  sessions               Session[]
-  settings               UserSettings?
-  integrations           Integration[]
-  facebookSources        FacebookSource[]
-  facebookPosts          FacebookPost[]
-  opportunities          Opportunity[]
-  commentDrafts          CommentDraft[]
-  apps                   App[]
-  campaigns              Campaign[]
-  testers                Tester[]
-  testerCampaigns        TesterCampaign[]
-  messages               Message[]
-  emailEvents            EmailEvent[]
-  googleGroups           GoogleGroup[]
-  invitations            Invitation[]
-  feedback               Feedback[]
-  activityLogs           ActivityLog[]
-  notifications          Notification[]
-  jobs                   Job[]
-  blockList              BlockListEntry[]
-  templates              MessageTemplate[]
-  passwordResetTokens    PasswordResetToken[]
+  accounts                Account[]
+  sessions                Session[]
+  settings                UserSettings?
+  integrations            Integration[]
+  facebookSources         FacebookSource[]
+  facebookPosts           FacebookPost[]
+  opportunities           Opportunity[]
+  commentDrafts           CommentDraft[]
+  apps                    App[]
+  campaigns               Campaign[]
+  testers                 Tester[]
+  testerCampaigns         TesterCampaign[]
+  messages                Message[]
+  emailEvents             EmailEvent[]
+  playConnection          GooglePlayConnection?
+  invitations             Invitation[]
+  feedback                Feedback[]
+  activityLogs            ActivityLog[]
+  notifications           Notification[]
+  jobs                    Job[]
+  blockList               BlockListEntry[]
+  templates               MessageTemplate[]
+  passwordResetTokens     PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
-  dataExports            DataExport[]
-  telemetryEvents        TelemetryEvent[]
-  outreachUsages         OutreachUsage[]
-  participationsAsOwner  TestingParticipation[] @relation("ParticipationOwner")
-  participationsAsTester TestingParticipation[] @relation("ParticipationTester")
-  reciprocalAsRequester  ReciprocalTest[] @relation("ReciprocalRequester")
-  reciprocalAsTarget     ReciprocalTest[] @relation("ReciprocalTarget")
-  reportsFiled           DeveloperReport[] @relation("ReportAuthor")
-  reportsReceived        DeveloperReport[] @relation("ReportTarget")
-  developerBlocks        DeveloperBlock[] @relation("Blocker")
-  messagesSent           DeveloperMessage[] @relation("MessageSender")
-  messagesReceived       DeveloperMessage[] @relation("MessageRecipient")
+  dataExports             DataExport[]
+  telemetryEvents         TelemetryEvent[]
+  outreachUsages          OutreachUsage[]
+  participationsAsOwner   TestingParticipation[]   @relation("ParticipationOwner")
+  participationsAsTester  TestingParticipation[]   @relation("ParticipationTester")
+  reciprocalAsRequester   ReciprocalTest[]         @relation("ReciprocalRequester")
+  reciprocalAsTarget      ReciprocalTest[]         @relation("ReciprocalTarget")
+  reportsFiled            DeveloperReport[]        @relation("ReportAuthor")
+  reportsReceived         DeveloperReport[]        @relation("ReportTarget")
+  developerBlocks         DeveloperBlock[]         @relation("Blocker")
+  messagesSent            DeveloperMessage[]       @relation("MessageSender")
+  messagesReceived        DeveloperMessage[]       @relation("MessageRecipient")
 
   @@index([createdAt])
   @@index([deletedAt])
@@ -221,70 +228,69 @@ model VerificationToken {
 }
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  tokenHash String   @unique
+  tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model EmailVerificationToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  tokenHash String   @unique
+  tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model UserSettings {
-  id                       String   @id @default(cuid())
-  userId                   String   @unique
-  commentsPerHour          Int      @default(3)
-  commentsPerDay           Int      @default(8)
-  processedPostsPerDay     Int      @default(40)
-  messagesPerDay           Int      @default(15)
-  requireCommentApproval   Boolean  @default(true)
-  allowAutomatedEmail      Boolean  @default(false)
-  notifyOpportunities      Boolean  @default(true)
-  notifyReplies            Boolean  @default(true)
-  notifyTesters            Boolean  @default(true)
-  notifyIntegrations       Boolean  @default(true)
-  notifyFeedback           Boolean  @default(true)
-  defaultKeywords          String[] @default(["need testers", "looking for testers", "Android testers", "Google Play testing", "closed testing", "beta testers", "test my app", "I need Android testers", "app testing"])
-  playClosedTestTarget     Int      @default(12)
-  playClosedTestDays       Int      @default(14)
-  timezone                 String   @default("UTC")
-  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  commentsPerHour        Int      @default(3)
+  commentsPerDay         Int      @default(8)
+  processedPostsPerDay   Int      @default(40)
+  messagesPerDay         Int      @default(15)
+  requireCommentApproval Boolean  @default(true)
+  allowAutomatedEmail    Boolean  @default(false)
+  notifyOpportunities    Boolean  @default(true)
+  notifyReplies          Boolean  @default(true)
+  notifyTesters          Boolean  @default(true)
+  notifyIntegrations     Boolean  @default(true)
+  notifyFeedback         Boolean  @default(true)
+  defaultKeywords        String[] @default(["need testers", "looking for testers", "Android testers", "Google Play testing", "closed testing", "beta testers", "test my app", "I need Android testers", "app testing"])
+  playClosedTestTarget   Int      @default(12)
+  playClosedTestDays     Int      @default(14)
+  timezone               String   @default("UTC")
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Integration {
-  id                    String              @id @default(cuid())
-  userId                String
-  provider              IntegrationProvider
-  status                IntegrationStatus   @default(NOT_CONNECTED)
-  displayName           String?
-  encryptedCredentials  String?
-  scopes                String[]            @default([])
-  externalAccountId     String?
-  lastSyncAt            DateTime?
-  lastTestAt            DateTime?
-  lastError             String?
-  capabilities          Json?
-  metadata              Json?
-  isDemo                Boolean             @default(false)
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  facebookSources       FacebookSource[]
-  googleGroups          GoogleGroup[]
+  id                   String              @id @default(cuid())
+  userId               String
+  provider             IntegrationProvider
+  status               IntegrationStatus   @default(NOT_CONNECTED)
+  displayName          String?
+  encryptedCredentials String?
+  scopes               String[]            @default([])
+  externalAccountId    String?
+  lastSyncAt           DateTime?
+  lastTestAt           DateTime?
+  lastError            String?
+  capabilities         Json?
+  metadata             Json?
+  isDemo               Boolean             @default(false)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  facebookSources      FacebookSource[]
 
   @@unique([userId, provider])
   @@index([userId])
@@ -292,27 +298,27 @@ model Integration {
 }
 
 model FacebookSource {
-  id                   String              @id @default(cuid())
-  userId               String
-  integrationId        String?
-  type                 FacebookSourceType
-  externalId           String
-  name                 String
-  url                  String?
-  canReadPosts         Boolean             @default(false)
-  canComment           Boolean             @default(false)
-  canMonitorReplies    Boolean             @default(false)
-  limitationNote       String?
-  encryptedPageToken   String?
-  lastSyncAt           DateTime?
-  isDemo               Boolean             @default(false)
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
-  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  integration          Integration?        @relation(fields: [integrationId], references: [id], onDelete: SetNull)
-  posts                FacebookPost[]
-  opportunities        Opportunity[]
-  campaigns            Campaign[]
+  id                 String             @id @default(cuid())
+  userId             String
+  integrationId      String?
+  type               FacebookSourceType
+  externalId         String
+  name               String
+  url                String?
+  canReadPosts       Boolean            @default(false)
+  canComment         Boolean            @default(false)
+  canMonitorReplies  Boolean            @default(false)
+  limitationNote     String?
+  encryptedPageToken String?
+  lastSyncAt         DateTime?
+  isDemo             Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  integration        Integration?       @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  posts              FacebookPost[]
+  opportunities      Opportunity[]
+  campaigns          Campaign[]
 
   @@unique([userId, externalId])
   @@index([userId])
@@ -320,7 +326,7 @@ model FacebookSource {
 }
 
 model FacebookPost {
-  id            String    @id @default(cuid())
+  id            String         @id @default(cuid())
   userId        String
   sourceId      String
   sourcePostId  String
@@ -330,12 +336,12 @@ model FacebookPost {
   message       String
   permalink     String?
   postedAt      DateTime?
-  lastSeenAt    DateTime  @default(now())
+  lastSeenAt    DateTime       @default(now())
   processedAt   DateTime?
   rawPayload    Json?
-  isDemo        Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isDemo        Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   source        FacebookSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   opportunities Opportunity[]
 
@@ -347,7 +353,7 @@ model FacebookPost {
 }
 
 model Opportunity {
-  id                 String   @id @default(cuid())
+  id                 String          @id @default(cuid())
   userId             String
   campaignId         String?
   sourceId           String?
@@ -359,21 +365,21 @@ model Opportunity {
   postTimestamp      DateTime?
   postLink           String?
   relevanceScore     Int
-  matchedKeywords    String[] @default([])
+  matchedKeywords    String[]        @default([])
   testingIntent      String?
-  reciprocalLanguage Boolean  @default(false)
+  reciprocalLanguage Boolean         @default(false)
   whyMatched         Json?
-  skipped            Boolean  @default(false)
-  ignored            Boolean  @default(false)
+  skipped            Boolean         @default(false)
+  ignored            Boolean         @default(false)
   ignoreReason       String?
-  previousContact    Boolean  @default(false)
-  isDemo             Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  campaign           Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  previousContact    Boolean         @default(false)
+  isDemo             Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign           Campaign?       @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   source             FacebookSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  post               FacebookPost? @relation(fields: [postId], references: [id], onDelete: SetNull)
+  post               FacebookPost?   @relation(fields: [postId], references: [id], onDelete: SetNull)
   commentDrafts      CommentDraft[]
   testers            Tester[]
 
@@ -386,21 +392,21 @@ model Opportunity {
 }
 
 model CommentDraft {
-  id              String             @id @default(cuid())
-  userId          String
-  opportunityId   String
-  campaignId      String?
-  body            String
-  tone            String             @default("professional")
-  status          CommentDraftStatus @default(DRAFT)
-  postedAt        DateTime?
+  id                String             @id @default(cuid())
+  userId            String
+  opportunityId     String
+  campaignId        String?
+  body              String
+  tone              String             @default("professional")
+  status            CommentDraftStatus @default(DRAFT)
+  postedAt          DateTime?
   externalCommentId String?
-  failReason      String?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  opportunity     Opportunity        @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
-  campaign        Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  failReason        String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity       Opportunity        @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  campaign          Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([opportunityId])
@@ -408,29 +414,30 @@ model CommentDraft {
 }
 
 model App {
-  id                String           @id @default(cuid())
-  userId            String
-  name              String
-  packageName       String
-  platform          String           @default("Android")
-  testingType       TestingType      @default(CLOSED)
-  googlePlayStatus  GooglePlayStatus @default(NOT_CONFIGURED)
-  playStoreUrl      String?
-  webOptInUrl       String?
-  androidOptInUrl   String?
-  iconUrl           String?
-  testerTarget      Int              @default(12)
-  playConflictNote  String?
-  syncedFromPlay    Boolean          @default(false)
-  lastSyncedAt      DateTime?
-  isDemo            Boolean          @default(false)
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tracks            TestingTrack[]
-  campaigns         Campaign[]
-  feedback          Feedback[]
-  telemetryEvents   TelemetryEvent[]
+  id               String           @id @default(cuid())
+  userId           String
+  name             String
+  packageName      String
+  platform         String           @default("Android")
+  testingType      TestingType      @default(CLOSED)
+  googlePlayStatus GooglePlayStatus @default(NOT_CONFIGURED)
+  playStoreUrl     String?
+  webOptInUrl      String?
+  androidOptInUrl  String?
+  iconUrl          String?
+  testerTarget     Int              @default(12)
+  playConflictNote String?
+  syncedFromPlay   Boolean          @default(false)
+  lastSyncedAt     DateTime?
+  isDemo           Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tracks           TestingTrack[]
+  campaigns        Campaign[]
+  feedback         Feedback[]
+  telemetryEvents  TelemetryEvent[]
+  playApps         GooglePlayApp[]
 
   @@unique([userId, packageName])
   @@index([userId])
@@ -445,7 +452,6 @@ model TestingTrack {
   trackId        String
   testingType    TestingType
   testMethod     String?
-  googleGroupEmail String?
   testingLink    String?
   syncedFromPlay Boolean     @default(false)
   createdAt      DateTime    @default(now())
@@ -456,71 +462,114 @@ model TestingTrack {
   @@index([appId])
 }
 
-model GoogleGroup {
-  id              String   @id @default(cuid())
-  userId          String
-  integrationId   String?
-  email           String
-  name            String?
-  canManageMembers Boolean @default(false)
-  limitationNote  String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  integration     Integration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
-  campaigns       Campaign[]
-  memberships     GoogleGroupMembership[]
+/**
+ * One authorised link between a TestLoop developer and their real Play Console.
+ * Credentials are encrypted at rest and never leave the server.
+ */
+model GooglePlayConnection {
+  id                   String                     @id @default(cuid())
+  userId               String                     @unique
+  method               GooglePlayConnectionMethod
+  status               IntegrationStatus          @default(NOT_CONNECTED)
+  /**
+   * OAuth: the Google account that authorised. Service account: its client_email.
+   */
+  googleAccountEmail   String?
+  cloudProjectId       String?
+  scopes               String[]                   @default([])
+  encryptedCredentials String?
+  lastVerifiedAt       DateTime?
+  lastError            String?
+  errorCode            String?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  user                 User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apps                 GooglePlayApp[]
 
-  @@unique([userId, email])
+  @@index([status])
+}
+
+/**
+ * An application discovered in the developer's Play Console. This is a cache of
+ * what Google reports; Play Console remains the source of truth. Selecting one
+ * links it to a managed App row rather than copying the application into TestLoop.
+ */
+model GooglePlayApp {
+  id           String               @id @default(cuid())
+  connectionId String
+  userId       String
+  packageName  String
+  name         String
+  iconUrl      String?
+  appId        String?
+  selected     Boolean              @default(false)
+  discoveredAt DateTime             @default(now())
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  connection   GooglePlayConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  app          App?                 @relation(fields: [appId], references: [id], onDelete: SetNull)
+
+  @@unique([connectionId, packageName])
   @@index([userId])
+  @@index([packageName])
 }
 
 model Campaign {
-  id                   String         @id @default(cuid())
-  userId               String
-  appId                String
-  trackId              String?
-  sourceId             String?
-  googleGroupId        String?
-  name                 String
-  status               CampaignStatus @default(DRAFT)
-  testingType          TestingType    @default(CLOSED)
-  targetTesters        Int            @default(12)
-  playStoreUrl         String?
-  webOptInUrl          String?
-  androidOptInUrl      String?
-  telemetryToken       String         @unique @default(cuid())
-  requiredTesters      Int            @default(12)
-  requiredActiveDays   Int            @default(14)
-  durationDays         Int            @default(14)
-  published            Boolean        @default(false)
-  publishedAt          DateTime?
-  description          String?
-  testingInstructions  String?
-  reciprocalOpen       Boolean        @default(true)
-  startedAt            DateTime?
-  pausedAt             DateTime?
-  completedAt          DateTime?
-  isDemo               Boolean        @default(false)
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
-  user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  app                  App            @relation(fields: [appId], references: [id], onDelete: Cascade)
-  track                TestingTrack?  @relation(fields: [trackId], references: [id], onDelete: SetNull)
-  source               FacebookSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  googleGroup          GoogleGroup?   @relation(fields: [googleGroupId], references: [id], onDelete: SetNull)
-  opportunities        Opportunity[]
-  testerCampaigns      TesterCampaign[]
-  commentDrafts        CommentDraft[]
-  invitations          Invitation[]
-  feedback             Feedback[]
-  activityLogs         ActivityLog[]
-  notifications        Notification[]
-  messages             Message[]
-  emailEvents          EmailEvent[]
-  telemetryEvents      TelemetryEvent[]
-  templates            MessageTemplate[]
-  participations       TestingParticipation[]
+  id                  String                 @id @default(cuid())
+  userId              String
+  appId               String
+  trackId             String?
+  sourceId            String?
+  name                String
+  status              CampaignStatus         @default(DRAFT)
+  /**
+   * Real Play Console track name this campaign manages, e.g. "internal".
+   */
+  playTrack           String?
+  /**
+   * Public TestLoop testing page slug: /test/{publicSlug}.
+   */
+  publicSlug          String?                @unique
+  /**
+   * Official Google Play opt-in URL for the managed track. Never invented.
+   */
+  testingUrl          String?
+  testingType         TestingType            @default(CLOSED)
+  targetTesters       Int                    @default(12)
+  playStoreUrl        String?
+  webOptInUrl         String?
+  androidOptInUrl     String?
+  telemetryToken      String                 @unique @default(cuid())
+  requiredTesters     Int                    @default(12)
+  requiredActiveDays  Int                    @default(14)
+  durationDays        Int                    @default(14)
+  published           Boolean                @default(false)
+  publishedAt         DateTime?
+  description         String?
+  testingInstructions String?
+  reciprocalOpen      Boolean                @default(true)
+  startedAt           DateTime?
+  pausedAt            DateTime?
+  completedAt         DateTime?
+  isDemo              Boolean                @default(false)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app                 App                    @relation(fields: [appId], references: [id], onDelete: Cascade)
+  track               TestingTrack?          @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  source              FacebookSource?        @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  opportunities       Opportunity[]
+  testerCampaigns     TesterCampaign[]
+  commentDrafts       CommentDraft[]
+  invitations         Invitation[]
+  feedback            Feedback[]
+  activityLogs        ActivityLog[]
+  notifications       Notification[]
+  messages            Message[]
+  emailEvents         EmailEvent[]
+  telemetryEvents     TelemetryEvent[]
+  templates           MessageTemplate[]
+  participations      TestingParticipation[]
 
   @@index([userId])
   @@index([appId])
@@ -530,31 +579,30 @@ model Campaign {
 }
 
 model Tester {
-  id                 String   @id @default(cuid())
-  userId             String
-  email              String?
-  emailNormalized    String?
-  name               String?
-  facebookProfile    String?
-  facebookUserId     String?
-  sourceLabel        String?
-  opportunityId      String?
-  city               String?
-  country            String?
-  blocked            Boolean  @default(false)
-  notes              String?
-  isDemo             Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  opportunity        Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
-  campaigns          TesterCampaign[]
-  statusHistory      TesterStatusHistory[]
-  messages           Message[]
-  invitations        Invitation[]
-  feedback           Feedback[]
-  memberships        GoogleGroupMembership[]
-  emailEvents        EmailEvent[]
+  id              String                @id @default(cuid())
+  userId          String
+  email           String?
+  emailNormalized String?
+  name            String?
+  facebookProfile String?
+  facebookUserId  String?
+  sourceLabel     String?
+  opportunityId   String?
+  city            String?
+  country         String?
+  blocked         Boolean               @default(false)
+  notes           String?
+  isDemo          Boolean               @default(false)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity     Opportunity?          @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  campaigns       TesterCampaign[]
+  statusHistory   TesterStatusHistory[]
+  messages        Message[]
+  invitations     Invitation[]
+  feedback        Feedback[]
+  emailEvents     EmailEvent[]
 
   @@index([userId])
   @@index([emailNormalized])
@@ -562,12 +610,12 @@ model Tester {
 }
 
 model TesterCampaign {
-  id                 String       @id @default(cuid())
+  id                 String               @id @default(cuid())
   userId             String
   testerId           String
   campaignId         String
   appId              String?
-  status             TesterStatus @default(DISCOVERED)
+  status             TesterStatus         @default(DISCOVERED)
   dateContacted      DateTime?
   dateReplied        DateTime?
   dateEmailReceived  DateTime?
@@ -578,8 +626,8 @@ model TesterCampaign {
   dateOptedIn        DateTime?
   dateTesting        DateTime?
   dateFeedback       DateTime?
-  accessAdded        Boolean      @default(false)
-  optedIn            Boolean      @default(false)
+  accessAdded        Boolean              @default(false)
+  optedIn            Boolean              @default(false)
   lastActivityAt     DateTime?
   lastError          String?
   ourTestStatus      ReciprocalSideStatus @default(PENDING)
@@ -589,12 +637,12 @@ model TesterCampaign {
   theirInstructions  String?
   pastedReply        String?
   detectedEmail      String?
-  emailConfirmed     Boolean      @default(false)
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
-  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tester             Tester       @relation(fields: [testerId], references: [id], onDelete: Cascade)
-  campaign           Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  emailConfirmed     Boolean              @default(false)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tester             Tester               @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  campaign           Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@unique([testerId, campaignId])
   @@index([userId])
@@ -604,39 +652,21 @@ model TesterCampaign {
 }
 
 model TesterStatusHistory {
-  id               String       @id @default(cuid())
+  id               String        @id @default(cuid())
   testerId         String
   testerCampaignId String?
   fromStatus       TesterStatus?
   toStatus         TesterStatus
   note             String?
-  createdAt        DateTime     @default(now())
-  tester           Tester       @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  createdAt        DateTime      @default(now())
+  tester           Tester        @relation(fields: [testerId], references: [id], onDelete: Cascade)
 
   @@index([testerId])
   @@index([createdAt])
 }
 
-model GoogleGroupMembership {
-  id            String    @id @default(cuid())
-  groupId       String
-  testerId      String
-  email         String
-  status        String
-  verifiedAt    DateTime?
-  manual        Boolean   @default(false)
-  lastError     String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  group         GoogleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  tester        Tester      @relation(fields: [testerId], references: [id], onDelete: Cascade)
-
-  @@unique([groupId, email])
-  @@index([testerId])
-}
-
 model Invitation {
-  id               String    @id @default(cuid())
+  id               String          @id @default(cuid())
   userId           String
   campaignId       String
   testerId         String
@@ -647,11 +677,11 @@ model Invitation {
   testingLink      String?
   sentAt           DateTime?
   externalId       String?
-  status           String    @default("pending")
-  createdAt        DateTime  @default(now())
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  campaign         Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  tester           Tester    @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  status           String          @default("pending")
+  createdAt        DateTime        @default(now())
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign         Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  tester           Tester          @relation(fields: [testerId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([campaignId])
@@ -659,25 +689,25 @@ model Invitation {
 }
 
 model Feedback {
-  id              String   @id @default(cuid())
-  userId          String
-  campaignId      String
-  testerId        String
-  appId           String?
-  overall         Int?
-  bugs            String?
-  uiIssues        String?
-  performance     String?
-  suggestions     String?
-  device          String?
-  androidVersion  String?
-  screenshotUrl   String?
-  recordingUrl    String?
-  createdAt       DateTime @default(now())
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  campaign        Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  tester          Tester   @relation(fields: [testerId], references: [id], onDelete: Cascade)
-  app             App?     @relation(fields: [appId], references: [id], onDelete: SetNull)
+  id             String   @id @default(cuid())
+  userId         String
+  campaignId     String
+  testerId       String
+  appId          String?
+  overall        Int?
+  bugs           String?
+  uiIssues       String?
+  performance    String?
+  suggestions    String?
+  device         String?
+  androidVersion String?
+  screenshotUrl  String?
+  recordingUrl   String?
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  tester         Tester   @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  app            App?     @relation(fields: [appId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([campaignId])
@@ -685,18 +715,18 @@ model Feedback {
 }
 
 model Message {
-  id          String   @id @default(cuid())
-  userId      String
-  campaignId  String?
-  testerId    String?
-  direction   String
-  channel     OutreachChannel
-  body        String
+  id             String          @id @default(cuid())
+  userId         String
+  campaignId     String?
+  testerId       String?
+  direction      String
+  channel        OutreachChannel
+  body           String
   extractedEmail String?
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  campaign    Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  tester      Tester?   @relation(fields: [testerId], references: [id], onDelete: SetNull)
+  createdAt      DateTime        @default(now())
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign       Campaign?       @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  tester         Tester?         @relation(fields: [testerId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([campaignId])
@@ -704,7 +734,7 @@ model Message {
 }
 
 model EmailEvent {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   userId     String
   campaignId String?
   testerId   String?
@@ -713,8 +743,8 @@ model EmailEvent {
   subject    String?
   status     String
   error      String?
-  createdAt  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   tester     Tester?   @relation(fields: [testerId], references: [id], onDelete: SetNull)
 
@@ -723,16 +753,16 @@ model EmailEvent {
 }
 
 model MessageTemplate {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   userId     String
   campaignId String?
   key        String
   name       String
   subject    String?
   body       String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   @@unique([userId, campaignId, key])
@@ -753,15 +783,15 @@ model BlockListEntry {
 }
 
 model ActivityLog {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   userId     String
   campaignId String?
   testerId   String?
   action     String
   result     String?
   metadata   Json?
-  createdAt  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   @@index([userId])
@@ -771,7 +801,7 @@ model ActivityLog {
 }
 
 model Notification {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   userId     String
   campaignId String?
   type       String
@@ -779,8 +809,8 @@ model Notification {
   body       String
   href       String?
   readAt     DateTime?
-  createdAt  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   @@index([userId])
@@ -789,21 +819,21 @@ model Notification {
 }
 
 model Job {
-  id          String    @id @default(cuid())
-  userId      String?
-  type        String
-  payload     Json
-  status      JobStatus @default(PENDING)
-  runAt       DateTime  @default(now())
-  attempts    Int       @default(0)
-  maxAttempts Int       @default(5)
-  timeoutMs   Int       @default(25000)
-  lastError   String?
+  id             String    @id @default(cuid())
+  userId         String?
+  type           String
+  payload        Json
+  status         JobStatus @default(PENDING)
+  runAt          DateTime  @default(now())
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(5)
+  timeoutMs      Int       @default(25000)
+  lastError      String?
   idempotencyKey String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  runs        JobRun[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs           JobRun[]
 
   @@unique([idempotencyKey])
   @@index([status, runAt])
@@ -844,20 +874,20 @@ model OutreachUsage {
 }
 
 model TelemetryEvent {
-  id             String   @id @default(cuid())
-  userId         String?
-  campaignId     String
-  appId          String?
-  anonymousId    String
-  appVersion     String?
-  platform       String?
-  firstLaunchAt  DateTime?
-  lastActiveAt   DateTime?
-  payload        Json?
-  createdAt      DateTime @default(now())
-  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  app            App?     @relation(fields: [appId], references: [id], onDelete: SetNull)
+  id            String    @id @default(cuid())
+  userId        String?
+  campaignId    String
+  appId         String?
+  anonymousId   String
+  appVersion    String?
+  platform      String?
+  firstLaunchAt DateTime?
+  lastActiveAt  DateTime?
+  payload       Json?
+  createdAt     DateTime  @default(now())
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  campaign      Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  app           App?      @relation(fields: [appId], references: [id], onDelete: SetNull)
 
   @@unique([campaignId, anonymousId])
   @@index([campaignId])
@@ -898,20 +928,20 @@ enum ReciprocalStatus {
 }
 
 model TestingParticipation {
-  id              String              @id @default(cuid())
-  campaignId      String
-  ownerUserId     String
-  testerUserId    String
+  id               String              @id @default(cuid())
+  campaignId       String
+  ownerUserId      String
+  testerUserId     String
   testerCampaignId String?
-  gmail           String?
-  consentAt       DateTime?
-  status          ParticipationStatus @default(REQUESTED)
-  lastError       String?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  campaign        Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  owner           User                @relation("ParticipationOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
-  tester          User                @relation("ParticipationTester", fields: [testerUserId], references: [id], onDelete: Cascade)
+  gmail            String?
+  consentAt        DateTime?
+  status           ParticipationStatus @default(REQUESTED)
+  lastError        String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  campaign         Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  owner            User                @relation("ParticipationOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  tester           User                @relation("ParticipationTester", fields: [testerUserId], references: [id], onDelete: Cascade)
 
   @@unique([campaignId, testerUserId])
   @@index([ownerUserId])
@@ -920,16 +950,16 @@ model TestingParticipation {
 }
 
 model ReciprocalTest {
-  id             String           @id @default(cuid())
-  requesterId    String
-  targetId       String
-  requesterAppId String?
+  id               String           @id @default(cuid())
+  requesterId      String
+  targetId         String
+  requesterAppId   String?
   targetCampaignId String?
-  status         ReciprocalStatus @default(PENDING)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  requester      User             @relation("ReciprocalRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-  target         User             @relation("ReciprocalTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  status           ReciprocalStatus @default(PENDING)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  requester        User             @relation("ReciprocalRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  target           User             @relation("ReciprocalTarget", fields: [targetId], references: [id], onDelete: Cascade)
 
   @@index([requesterId])
   @@index([targetId])
@@ -966,14 +996,14 @@ model DeveloperBlock {
 }
 
 model DeveloperMessage {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   senderId    String
   recipientId String
   body        String
   readAt      DateTime?
-  createdAt   DateTime @default(now())
-  sender      User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  recipient   User     @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  sender      User      @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient   User      @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@index([senderId])
   @@index([recipientId])

@@ -78,7 +78,7 @@ export default function PrivacyPage() {
                 <p>
                   <strong className="text-slate-900">Testing campaign information.</strong> Campaign records may include
                   the selected app, testing type, target tester count, duration, description, testing instructions,
-                  publication status, Google Group configuration if you add one, and campaign progress derived from
+                  publication status, the Google Play testing track you select, and campaign progress derived from
                   recorded platform activity.
                 </p>
                 <p>
@@ -90,13 +90,12 @@ export default function PrivacyPage() {
                 </p>
                 <p>
                   <strong className="text-slate-900">Google Play and testing-related integrations.</strong> If you
-                  choose to connect a Google Play Developer API service account, optional Gmail sending, Google
-                  Workspace / Groups automation, or another supported integration, {SITE_NAME} stores the credentials
-                  and connection status you provide so the integration can run for your account. Play service-account
-                  keys and OAuth tokens are encrypted at rest and are not returned in ordinary frontend responses.
+                  choose to connect your Play Console with Google sign-in or a service-account key, optional Gmail
+                  sending, or another supported integration, {SITE_NAME} stores the credentials and connection status
+                  you provide so the integration can run for your account. Play service-account keys and OAuth refresh
+                  tokens are encrypted at rest and are never returned to the browser.
                   Connecting an integration is optional. If an official API cannot complete an action, {SITE_NAME}{" "}
-                  reports the failure or a manual fallback. It does not invent a successful Play or Google Group
-                  result.
+                  reports the failure or the exact manual step. It does not invent a successful Google Play result.
                 </p>
                 <p>
                   <strong className="text-slate-900">Messages, feedback, reports, and activity.</strong> {SITE_NAME}{" "}
@@ -131,7 +130,7 @@ export default function PrivacyPage() {
                   <li>display developer profiles, apps, and published testing requests to other signed-in developers;</li>
                   <li>operate testing campaigns, accept/consent flows, reciprocal requests, and participation status;</li>
                   <li>share a testing Gmail with a campaign owner only after the tester’s explicit confirmation;</li>
-                  <li>attempt Google Play or Google Group actions you configure, or show an honest manual fallback;</li>
+                  <li>attempt the Google Play actions you authorize, or show an honest manual fallback;</li>
                   <li>calculate reputation and match scores from recorded platform activity;</li>
                   <li>send in-app notifications you have not disabled in Settings;</li>
                   <li>protect the service against spam, abuse, fraud, and unauthorized access; and</li>
@@ -249,7 +248,7 @@ export default function PrivacyPage() {
                 official Google OAuth, optional Meta/Facebook connections if you enable them, and the hosting, database,
                 and deployment providers that run the application. Those providers process information according to
                 their own policies. {SITE_NAME} is not responsible for third-party sites or consoles you open from
-                testing links, Play Store URLs, or Google Group pages.
+                testing links, Play Store URLs, or Play Console pages.
               </p>
             ),
           },

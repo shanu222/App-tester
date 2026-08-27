@@ -5,10 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { facebookConfigured } from "@/lib/integrations/facebook";
 import { googleOAuthConfigured } from "@/lib/env";
 import { timeAgo } from "@/lib/utils";
-import { PlayConnectForm } from "@/components/integrations/play-connect-form";
-import { WorkspaceForm } from "@/components/integrations/workspace-form";
 import { JsonButton } from "@/components/ui/json-button";
-import { FACEBOOK_GROUP_LIMITATION, PLAY_EMAIL_LIST_LIMITATION, GROUPS_API_LIMITATION } from "@/lib/integrations/capabilities";
+import { FACEBOOK_GROUP_LIMITATION } from "@/lib/integrations/capabilities";
+import { PLAY_TESTER_API_LIMITATION } from "@/lib/integrations/play-testers";
 
 function statusLabel(status?: string) {
   if (status === "CONNECTED") return "Connected";
@@ -31,7 +30,16 @@ export default async function IntegrationsPage() {
   const byProvider = (provider: string) =>
     integrations.find((item) => item.provider === provider);
 
-  const cards = [
+  type IntegrationCard = {
+    provider: string;
+    title: string;
+    item: (typeof integrations)[number] | undefined;
+    note: string;
+    connectHref?: string;
+    manageHref?: string;
+  };
+
+  const cards: IntegrationCard[] = [
     {
       provider: "FACEBOOK",
       title: "Facebook / Meta",
@@ -44,7 +52,7 @@ export default async function IntegrationsPage() {
       title: "Google",
       item: byProvider("GOOGLE") || byProvider("GMAIL"),
       connectHref: googleOAuthConfigured() ? "/api/gmail/connect" : undefined,
-      note: "Optional Gmail send via official OAuth. Sign-in uses Google OAuth and never stores a Google password.",
+      note: "Optional Gmail send via official OAuth. TestLoop sign-in is handled by Firebase and never stores a Google password.",
     },
     {
       provider: "GMAIL",
@@ -57,13 +65,8 @@ export default async function IntegrationsPage() {
       provider: "GOOGLE_PLAY",
       title: "Google Play",
       item: byProvider("GOOGLE_PLAY"),
-      note: PLAY_EMAIL_LIST_LIMITATION,
-    },
-    {
-      provider: "GOOGLE_WORKSPACE",
-      title: "Google Workspace / Groups",
-      item: byProvider("GOOGLE_WORKSPACE"),
-      note: GROUPS_API_LIMITATION,
+      manageHref: "/play",
+      note: PLAY_TESTER_API_LIMITATION,
     },
   ];
 
@@ -98,6 +101,14 @@ export default async function IntegrationsPage() {
                   Connect / Reconnect
                 </a>
               ) : null}
+              {card.manageHref ? (
+                <a
+                  className="inline-flex h-9.5 items-center rounded-control bg-brand px-4 text-sm font-medium text-white shadow-card transition-colors hover:bg-brand-hover"
+                  href={card.manageHref}
+                >
+                  Manage
+                </a>
+              ) : null}
               <JsonButton
                 url={`/api/integrations?provider=${card.provider}`}
                 method="DELETE"
@@ -107,10 +118,6 @@ export default async function IntegrationsPage() {
             </div>
           </div>
         ))}
-      </div>
-      <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
-        <PlayConnectForm />
-        <WorkspaceForm />
       </div>
     </AppShell>
   );

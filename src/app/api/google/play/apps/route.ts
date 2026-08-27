@@ -1,26 +1,11 @@
 import { json, handleRouteError } from "@/lib/http";
 import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
-import { readCredentials } from "@/lib/integrations/store";
 import { searchPlayApps, listPlayTracks } from "@/lib/integrations/play";
-import type { ServiceAccountJson } from "@/lib/integrations/play";
-import { AppError } from "@/lib/errors";
 import { isDemoMode } from "@/lib/env";
 import { canonicalPlayStoreUrl } from "@/lib/play-url";
 import { statusFromPlayTracks } from "@/lib/services/apps";
-
-async function playClient(userId: string) {
-  const integration = await prisma.integration.findUnique({
-    where: { userId_provider: { userId, provider: "GOOGLE_PLAY" } },
-  });
-  const creds = readCredentials(integration?.encryptedCredentials);
-  if (!creds?.serviceAccountJson || integration?.status !== "CONNECTED") {
-    throw new AppError(
-      "Google Play is not connected. Upload a service account and grant it Play Console access first.",
-    );
-  }
-  return JSON.parse(creds.serviceAccountJson) as ServiceAccountJson;
-}
+import { resolvePlayCredentials } from "@/lib/services/play-connection";
 
 export async function GET() {
   try {
@@ -28,8 +13,8 @@ export async function GET() {
     if (isDemoMode()) {
       return json({ apps: [], newApps: [], demo: true, message: "DEMO MODE does not call Google Play." });
     }
-    const sa = await playClient(user.id);
-    const result = await searchPlayApps(sa);
+    const creds = await resolvePlayCredentials(user.id);
+    const result = await searchPlayApps(creds);
     if (!result.ok) {
       return json({ error: result.error, manualFallback: result.manualFallback, apps: [], newApps: [] }, 409);
     }
@@ -60,8 +45,8 @@ export async function POST(request: Request) {
     const addPackageNames = Array.isArray((body as { addPackageNames?: unknown }).addPackageNames)
       ? ((body as { addPackageNames: string[] }).addPackageNames)
       : [];
-    const sa = await playClient(user.id);
-    const result = await searchPlayApps(sa);
+    const creds = await resolvePlayCredentials(user.id);
+    const result = await searchPlayApps(creds);
     if (!result.ok) {
       return json({ error: result.error, manualFallback: result.manualFallback, apps: [], newApps: [] }, 409);
     }
@@ -76,7 +61,7 @@ export async function POST(request: Request) {
 
     for (const playApp of result.data) {
       const local = byPackage.get(playApp.packageName);
-      const tracks = await listPlayTracks(sa, playApp.packageName);
+      const tracks = await listPlayTracks(creds, playApp.packageName);
       const derived = tracks.ok ? statusFromPlayTracks(tracks.data) : null;
 
       if (!local) {

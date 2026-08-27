@@ -168,10 +168,10 @@ describe("play diagnostics classification", () => {
     expect(result.packageAccessible).toBeNull();
   });
 
-  it("confirms package access when only the probe edit is missing", async () => {
+  it("confirms package access when Play accepts an edit on that package", async () => {
     stubFetch((url) =>
       url.includes("com.example.app")
-        ? { status: 404, body: { error: { code: 404, status: "NOT_FOUND", message: "Edit not found." } } }
+        ? { status: 200, body: { id: "1234567890" } }
         : { status: 404, body: { error: { code: 404, message: "Package not found: probe." } } },
     );
     const result = await runPlayDiagnostics(await validAccount(), "com.example.app");
@@ -216,13 +216,13 @@ describe("play diagnostics classification", () => {
     expect(result.errorMessage).toContain("androidpublisher.googleapis.com");
   });
 
-  it("requests only the androidpublisher scope and only read-only GETs", async () => {
+  it("probes Play with edits.insert, never a made-up edit id", async () => {
     const calls: Array<{ url: string; method: string }> = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: string | URL, init?: RequestInit) => {
         calls.push({ url: String(input), method: init?.method ?? "GET" });
-        return new Response(JSON.stringify({ error: { code: 404, message: "Edit not found." } }), {
+        return new Response(JSON.stringify({ error: { code: 404, message: "Package not found." } }), {
           status: 404,
         });
       }),
@@ -232,13 +232,17 @@ describe("play diagnostics classification", () => {
     expect(calls.length).toBeGreaterThan(0);
     for (const call of calls) {
       expect(call.url).toContain("androidpublisher.googleapis.com");
-      expect(call.method).toBe("GET");
+      expect(call.url).not.toContain("testloop-readonly-probe");
     }
+    expect(calls.some((call) => call.method === "POST")).toBe(true);
   });
 
   it("never returns key material in the diagnostic payload", async () => {
-    stubFetch(() => ({ status: 404, body: { error: { code: 404, message: "Edit not found." } } }));
-    const result = await runPlayDiagnostics(await validAccount(), "com.example.app");
+    stubFetch(() => ({
+      status: 404,
+      body: { error: { code: 404, message: "Package not found: com.testloop.connectioncheck." } },
+    }));
+    const result = await runPlayDiagnostics(await validAccount());
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("BEGIN PRIVATE KEY");
     expect(serialized).not.toContain("MIIBVgIBADANBgkq");

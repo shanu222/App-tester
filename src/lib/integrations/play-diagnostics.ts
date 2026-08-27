@@ -13,14 +13,21 @@ const API_BASE = "https://androidpublisher.googleapis.com/androidpublisher/v3";
 /**
  * Android Publisher v3 has no account-level "list my apps" endpoint, so the only
  * way to ask Play whether it recognises these credentials is to request a
- * resource under some package. We use a package nobody owns and read the *error
- * class*: Play answers 401 when the service account was never invited to the
- * Play Console, but 404 once it is invited and merely cannot find the package.
- * Never treat this probe as evidence about a real app.
+ * resource under some package. We POST edits.insert against a package nobody
+ * owns and read the *error class*:
+ *
+ * - 401/403 — the account was never invited to Play Console (or lacks permission)
+ * - 404     — Play accepted the credentials and merely cannot find the package
+ *
+ * A GET against a made-up edit id does not work: Google validates the edit-id
+ * format first and returns HTTP 400 INVALID_ARGUMENT ("Invalid edit ID"), which
+ * is not a Play Console ACL signal.
+ *
+ * Never treat the dummy-package probe as evidence about a real app. If insert
+ * unexpectedly succeeds on a real package, the uncommitted edit is deleted
+ * immediately so nothing is published.
  */
 const PROBE_PACKAGE = "com.testloop.connectioncheck";
-/** Any edit id works; we expect "not found" and only care which error arrives. */
-const PROBE_EDIT_ID = "testloop-readonly-probe";
 
 export type PlayErrorCode =
   | "PLAY_NOT_CONNECTED"
@@ -180,20 +187,40 @@ type ProbeOutcome =
   | { kind: "google"; error: GoogleApiError }
   | { kind: "network"; message: string };
 
-/** Read-only GET. Never creates, mutates, or commits anything in Play Console. */
+/**
+ * Ask Play whether this account can see `packageName` by attempting to open an
+ * uncommitted edit. Uncommitted edits expire on their own; if insert succeeds we
+ * still delete it so the Console is left unchanged.
+ */
 async function probeEdit(accessToken: string, packageName: string): Promise<ProbeOutcome> {
-  const url = `${API_BASE}/applications/${encodeURIComponent(packageName)}/edits/${PROBE_EDIT_ID}`;
+  const editsUrl = `${API_BASE}/applications/${encodeURIComponent(packageName)}/edits`;
   let response: Response;
   try {
-    response = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+    response = await fetch(editsUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: "{}",
       cache: "no-store",
     });
   } catch (cause) {
     const message = cause instanceof Error ? redactSecrets(cause.message) : "Request failed.";
     return { kind: "network", message: `Could not reach androidpublisher.googleapis.com: ${message}` };
   }
-  if (response.ok) return { kind: "ok" };
+  if (response.ok) {
+    const body = (await readJsonBody(response)) as { id?: unknown };
+    const editId = typeof body.id === "string" ? body.id : null;
+    if (editId) {
+      await fetch(`${editsUrl}/${encodeURIComponent(editId)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      }).catch(() => undefined);
+    }
+    return { kind: "ok" };
+  }
   return { kind: "google", error: parseGoogleApiError(response.status, await readJsonBody(response)) };
 }
 
@@ -202,10 +229,6 @@ function isServiceDisabled(error: GoogleApiError) {
     error.reason === "SERVICE_DISABLED" ||
     /has not been used in project|is disabled|enable it by visiting/i.test(error.message)
   );
-}
-
-function mentionsMissingEdit(error: GoogleApiError) {
-  return /edit(\s|id)?.*not\s*found|editid|no such edit/i.test(error.message);
 }
 
 function mentionsMissingPackage(error: GoogleApiError) {
@@ -459,31 +482,37 @@ async function diagnoseWithToken(
     };
   }
 
+  if (appProbe.kind === "ok") {
+    return {
+      ...reachable,
+      connected: true,
+      checkedPackageName: target,
+      packageAccessible: true,
+      detail: `Verified. Authenticated as ${identity.email ?? "the authorised account"} and confirmed read access to ${target} through the Google Play Developer API.`,
+    };
+  }
+
   if (appProbe.kind === "google") {
     const error = appProbe.error;
-    const accessible = error.httpStatus === 404 && mentionsMissingEdit(error) && !mentionsMissingPackage(error);
-
-    if (!accessible) {
-      if (error.httpStatus === 404) {
-        return {
-          ...withGoogleError(reachable, error),
-          checkedPackageName: target,
-          packageAccessible: false,
-          errorCode: "PLAY_PACKAGE_NOT_FOUND",
-          errorMessage: `Google Play does not expose "${target}" to this connection. Check the package name, confirm the app exists in this Play Console account, and grant the authorised account access to it.`,
-        };
-      }
-      const verdict = classify(error, identity.method);
+    if (error.httpStatus === 404 || mentionsMissingPackage(error)) {
       return {
         ...withGoogleError(reachable, error),
         checkedPackageName: target,
         packageAccessible: false,
-        apiReachable: verdict.apiReachable,
-        playConsoleAuthorized: verdict.playConsoleAuthorized,
-        errorCode: verdict.code,
-        errorMessage: verdict.message,
+        errorCode: "PLAY_PACKAGE_NOT_FOUND",
+        errorMessage: `Google Play does not expose "${target}" to this connection. Check the package name, confirm the app exists in this Play Console account, and grant the authorised account access to it.`,
       };
     }
+    const verdict = classify(error, identity.method);
+    return {
+      ...withGoogleError(reachable, error),
+      checkedPackageName: target,
+      packageAccessible: false,
+      apiReachable: verdict.apiReachable,
+      playConsoleAuthorized: verdict.playConsoleAuthorized,
+      errorCode: verdict.code,
+      errorMessage: verdict.message,
+    };
   }
 
   return {

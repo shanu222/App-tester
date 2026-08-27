@@ -1,6 +1,6 @@
 import type { GooglePlayConnection, GooglePlayConnectionMethod } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { AppError, NotFoundError } from "@/lib/errors";
+import { AppError, NotFoundError, mapInfrastructureError } from "@/lib/errors";
 import { logActivity } from "@/lib/audit";
 import { decryptJson, encryptJson } from "@/lib/encryption";
 import {
@@ -78,7 +78,9 @@ export async function resolvePlayCredentials(userId: string): Promise<PlayCreden
     throw new AppError("Google Play is not connected. Connect it on the Google Play page first.");
   }
   if (!connection.encryptedCredentials) {
-    throw new AppError("Google Play credentials are missing. Reconnect Google Play.");
+    throw new AppError(
+      "Google Play credentials are missing. Reconnect Google Play with a service account or Google OAuth.",
+    );
   }
 
   let stored: StoredPlayCredentials;
@@ -116,7 +118,12 @@ async function persist(input: {
   scopes: string[];
 }) {
   const { userId, method, diagnostics, credentials, scopes } = input;
-  const encrypted = credentials ? encryptJson(credentials) : undefined;
+  let encrypted: string | undefined;
+  try {
+    encrypted = credentials ? encryptJson(credentials) : undefined;
+  } catch (error) {
+    throw mapInfrastructureError(error) ?? error;
+  }
   const shared = {
     method,
     status: diagnostics.connected ? ("CONNECTED" as const) : ("ERROR" as const),
@@ -131,6 +138,8 @@ async function persist(input: {
     where: { userId },
     update: { ...shared, ...(encrypted ? { encryptedCredentials: encrypted } : {}) },
     create: { userId, ...shared, encryptedCredentials: encrypted },
+  }).catch((error) => {
+    throw mapInfrastructureError(error) ?? error;
   });
 }
 
@@ -152,24 +161,36 @@ export async function connectServiceAccount(input: {
 
   const diagnostics = await runPlayDiagnostics(parsed.serviceAccount, input.packageName);
 
-  await persist({
-    userId: input.userId,
-    method: "SERVICE_ACCOUNT",
-    diagnostics,
-    // Re-serialising the parsed JSON drops any stray formatting from the paste.
-    credentials: diagnostics.connected
-      ? { serviceAccountJson: JSON.stringify(JSON.parse(input.serviceAccountJson.trim())) }
-      : undefined,
-    scopes: [ANDROID_PUBLISHER_SCOPE],
-  });
-
-  await logActivity({
-    userId: input.userId,
-    action: diagnostics.connected ? "PLAY_CONNECTED" : "PLAY_CONNECT_FAILED",
-    result: `service account · ${diagnostics.accountEmail ?? "unknown"}${
-      diagnostics.connected ? "" : ` · ${diagnostics.errorCode ?? "error"}`
-    }`,
-  });
+  try {
+    await persist({
+      userId: input.userId,
+      method: "SERVICE_ACCOUNT",
+      diagnostics,
+      // Re-serialising the parsed JSON drops any stray formatting from the paste.
+      credentials: diagnostics.connected
+        ? { serviceAccountJson: JSON.stringify(JSON.parse(input.serviceAccountJson.trim())) }
+        : undefined,
+      scopes: [ANDROID_PUBLISHER_SCOPE],
+    });
+    await logActivity({
+      userId: input.userId,
+      action: diagnostics.connected ? "PLAY_CONNECTED" : "PLAY_CONNECT_FAILED",
+      result: `service account · ${diagnostics.accountEmail ?? "unknown"}${
+        diagnostics.connected ? "" : ` · ${diagnostics.errorCode ?? "error"}`
+      }`,
+    });
+  } catch (error) {
+    const mapped = mapInfrastructureError(error) ?? (error instanceof AppError ? error : null);
+    if (!mapped) throw error;
+    // Google already answered. Do not hide that behind a generic 500 — report
+    // that the credentials worked (or failed) and that storing them did not.
+    return {
+      ...diagnostics,
+      connected: false,
+      errorCode: "PLAY_STORE_FAILED",
+      errorMessage: mapped.message,
+    };
+  }
 
   return diagnostics;
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { AppError, publicErrorMessage } from "@/lib/errors";
+import { AppError, mapInfrastructureError, publicErrorMessage } from "@/lib/errors";
 
 export function json<T>(data: T, init?: number | ResponseInit) {
   const responseInit = typeof init === "number" ? { status: init } : init;
@@ -16,6 +16,11 @@ export function handleRouteError(error: unknown) {
   }
   if (error instanceof AppError) {
     return json({ error: error.message, code: error.code }, error.status);
+  }
+  const mapped = mapInfrastructureError(error);
+  if (mapped) {
+    console.error(error);
+    return json({ error: mapped.message, code: mapped.code }, mapped.status);
   }
   console.error(error);
   return json({ error: publicErrorMessage(error) }, 500);

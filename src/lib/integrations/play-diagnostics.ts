@@ -42,6 +42,7 @@ export type PlayErrorCode =
   | "PLAY_QUOTA_EXCEEDED"
   | "PLAY_API_UNAVAILABLE"
   | "PLAY_NETWORK_ERROR"
+  | "PLAY_STORE_FAILED"
   | "PLAY_UNEXPECTED_RESPONSE";
 
 /** Safe to return to the browser and to log: no key material, no tokens. */

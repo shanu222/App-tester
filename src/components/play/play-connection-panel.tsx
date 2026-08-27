@@ -72,7 +72,9 @@ export function PlayConnectionPanel({ connection }: { connection: ConnectionView
     }
   }
 
-  if (!connection.connected && connection.status === "NOT_CONNECTED" && !showWizard) {
+  const disconnected = !connection.connected;
+
+  if (disconnected && !showWizard && connection.status === "NOT_CONNECTED") {
     return (
       <Card>
         <CardHeader
@@ -116,7 +118,7 @@ export function PlayConnectionPanel({ connection }: { connection: ConnectionView
     );
   }
 
-  if (!connection.connected && showWizard) {
+  if (disconnected && showWizard) {
     return (
       <Card>
         <CardHeader
@@ -193,6 +195,13 @@ export function PlayConnectionPanel({ connection }: { connection: ConnectionView
           onClick={() => post("/api/google-play/apps", "apps")}
         >
           {pending === "apps" ? "Refreshing…" : "Refresh apps"}
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={pending !== null}
+          onClick={() => setShowWizard(true)}
+        >
+          Connect again
         </Button>
         <Button
           variant="danger"

@@ -2,9 +2,20 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "crypt
 import { env } from "./env";
 
 const ALGO = "aes-256-gcm";
+const INSECURE_AUTH_SECRET = "dev-only-insecure-secret-change-me";
+
+function keyMaterial() {
+  const configured = env.encryptionKey.trim();
+  if (configured) return configured;
+  // Hosts that already have AUTH_SECRET (required for sessions) can encrypt
+  // Play credentials without a separate ENCRYPTION_KEY. Prefer setting
+  // ENCRYPTION_KEY explicitly; changing it later requires reconnecting Play.
+  if (env.authSecret && env.authSecret !== INSECURE_AUTH_SECRET) return env.authSecret;
+  return "";
+}
 
 function keyBuffer() {
-  const raw = env.encryptionKey;
+  const raw = keyMaterial();
   if (!raw) {
     if (env.nodeEnv === "production") {
       throw new Error("ENCRYPTION_KEY is required in production.");
@@ -15,6 +26,11 @@ function keyBuffer() {
     return Buffer.from(raw, "hex");
   }
   return scryptSync(raw, "testerbridge-encryption", 32);
+}
+
+/** True when Play/Gmail credentials can be encrypted at rest on this server. */
+export function credentialsEncryptionConfigured() {
+  return Boolean(keyMaterial()) || env.nodeEnv !== "production";
 }
 
 export function encryptSecret(plaintext: string) {

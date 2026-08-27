@@ -39,7 +39,6 @@ export const env = {
 export function assertProductionSecrets() {
   if (env.nodeEnv !== "production") return;
   requiredInProduction("DATABASE_URL", process.env.DATABASE_URL);
-  requiredInProduction("ENCRYPTION_KEY", process.env.ENCRYPTION_KEY);
   requiredInProduction("CRON_SECRET", process.env.CRON_SECRET);
   // Every session is a JWT signed with this secret, whichever way the user signed in.
   requiredInProduction("AUTH_SECRET", process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET);

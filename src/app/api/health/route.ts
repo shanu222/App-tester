@@ -1,6 +1,7 @@
 import { json } from "@/lib/http";
 import { googleOAuthConfigured, isDemoMode } from "@/lib/env";
 import { firebaseAuthConfigured } from "@/lib/firebase/config";
+import { credentialsEncryptionConfigured } from "@/lib/encryption";
 import { prisma } from "@/lib/db";
 
 /** Tables written while a Firebase login bootstraps its developer record. */
@@ -55,5 +56,6 @@ export async function GET() {
     // Login is Firebase-only. Google Cloud OAuth is for Gmail and Play access.
     signIn: { provider: "firebase", configured: firebaseAuthConfigured() },
     googleApiAccess: { configured: googleOAuthConfigured() },
+    credentialsAtRest: { configured: credentialsEncryptionConfigured() },
   });
 }

@@ -19,6 +19,13 @@ export function formatPkr(amount: number) {
   return `PKR ${new Intl.NumberFormat("en-PK").format(amount)}`;
 }
 
+export function formatPackageAmount(amount: number, currency: string) {
+  if (currency === "USD") {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 }).format(amount);
+  }
+  return formatPkr(amount);
+}
+
 export function publicPaymentId() {
   return randomId("mtpay_");
 }

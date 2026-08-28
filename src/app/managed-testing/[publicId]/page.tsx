@@ -2,11 +2,13 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
 import { getManagedCampaignForUser } from "@/lib/services/managed-testing";
 import { CampaignDashboardActions } from "@/components/managed-testing/campaign-dashboard-actions";
+import { UsdTwelveCampaignDashboard } from "@/components/managed-testing/usd-twelve-campaign-dashboard";
 import { ManagedTestingNotice } from "@/components/managed-testing/compliance-notice";
 import { StatCard } from "@/components/ui/widgets";
 import { Badge } from "@/components/ui/badge";
 import { TestingTypeBadge } from "@/components/ui/testing-type-badge";
 import { campaignStatusTone, CAMPAIGN_STATUS_LABELS } from "@/lib/managed-testing/labels";
+import { isUsdTwelvePackage } from "@/lib/managed-testing/usd-twelve";
 import { redirect } from "next/navigation";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +20,9 @@ export default async function ManagedCampaignDashboardPage({
   const user = await requireUser();
   const { publicId } = await params;
   const campaign = await getManagedCampaignForUser(user.id, publicId);
+  if (isUsdTwelvePackage(campaign.packageCode)) {
+    return <UsdTwelveCampaignDashboard campaign={campaign} />;
+  }
   if (campaign.status === "DRAFT") redirect(`/managed-testing/${publicId}/setup`);
   if (campaign.status === "READY") redirect(`/managed-testing/${publicId}/confirm`);
 

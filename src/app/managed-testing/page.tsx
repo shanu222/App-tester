@@ -3,12 +3,14 @@ import { requireUser } from "@/auth";
 import { listDeveloperManagedCampaigns, listDeveloperPayments, listManagedPackages } from "@/lib/services/managed-testing";
 import { PaymentsPackagesPanel } from "@/components/managed-testing/payments-packages-panel";
 import { PackageCards } from "@/components/managed-testing/package-cards";
+import { UsdTwelvePackageCard } from "@/components/managed-testing/usd-twelve-package-card";
 import { ManagedTestingNotice } from "@/components/managed-testing/compliance-notice";
 import { CardHeader, SectionLabel } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/widgets";
 import { campaignStatusTone, CAMPAIGN_STATUS_LABELS, paymentStatusTone, PAYMENT_STATUS_LABELS } from "@/lib/managed-testing/labels";
 import { TestingTypeBadge } from "@/components/ui/testing-type-badge";
+import { isUsdTwelvePackage } from "@/lib/managed-testing/usd-twelve";
 import Link from "next/link";
 
 export default async function ManagedTestingPage() {
@@ -58,12 +60,15 @@ export default async function ManagedTestingPage() {
           <SectionLabel className="mb-3">Your campaigns</SectionLabel>
           <div className="grid gap-3 md:grid-cols-2">
             {workspace.campaigns.map((campaign) => {
+              const usd = isUsdTwelvePackage(campaign.payment.package.code);
               const href =
-                campaign.status === "DRAFT"
-                  ? `/managed-testing/${campaign.publicId}/setup`
-                  : campaign.status === "READY"
-                    ? `/managed-testing/${campaign.publicId}/confirm`
-                    : `/managed-testing/${campaign.publicId}`;
+                usd || campaign.status === "ACTIVE" || campaign.status === "COMPLETED"
+                  ? `/managed-testing/${campaign.publicId}`
+                  : campaign.status === "DRAFT"
+                    ? `/managed-testing/${campaign.publicId}/setup`
+                    : campaign.status === "READY"
+                      ? `/managed-testing/${campaign.publicId}/confirm`
+                      : `/managed-testing/${campaign.publicId}`;
               return (
                 <Link
                   key={campaign.publicId}
@@ -94,12 +99,19 @@ export default async function ManagedTestingPage() {
           title="Choose a tester package"
           description="Managed testers are real people who have consented to participate. Outcomes on Google Play are not guaranteed."
         />
-        <div className="mt-5">
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {packages
+            .filter((pack) => isUsdTwelvePackage(pack.code))
+            .map((pack) => (
+              <UsdTwelvePackageCard key={pack.code} amount={pack.amountPkr} />
+            ))}
+        </div>
+        <div className="mt-8">
           {packages.length === 0 ? (
             <EmptyState title="Packages unavailable" body="Managed testing packages are not listed yet." />
-          ) : (
+          ) : packages.some((pack) => !isUsdTwelvePackage(pack.code)) ? (
             <PackageCards packages={packages} />
-          )}
+          ) : null}
         </div>
       </div>
     </AppShell>

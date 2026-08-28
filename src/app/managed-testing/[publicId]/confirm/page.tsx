@@ -7,6 +7,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { TestingTypeBadge } from "@/components/ui/testing-type-badge";
 import { redirect } from "next/navigation";
 import { testingTypeLabel } from "@/lib/campaign-autofill";
+import { isUsdTwelvePackage } from "@/lib/managed-testing/usd-twelve";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
@@ -18,7 +19,7 @@ export default async function ManagedCampaignConfirmPage({
   const user = await requireUser();
   const { publicId } = await params;
   const campaign = await getManagedCampaignForUser(user.id, publicId);
-  if (campaign.status === "ACTIVE" || campaign.status === "COMPLETED") {
+  if (isUsdTwelvePackage(campaign.packageCode) || campaign.status === "ACTIVE" || campaign.status === "COMPLETED") {
     redirect(`/managed-testing/${publicId}`);
   }
   if (!campaign.app) redirect(`/managed-testing/${publicId}/setup`);

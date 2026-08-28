@@ -386,6 +386,161 @@ export function developerPaymentRejectedEmail(input: {
   return { subject: `Payment not approved · ${input.packageName}`, html, text };
 }
 
+function kvTable(rows: Array<[string, string]>) {
+  const htmlRows = rows
+    .map(
+      ([label, value]) =>
+        `<tr><td style="padding:6px 0;color:#64748b;width:180px">${escapeHtml(label)}</td><td style="padding:6px 0;font-weight:600">${escapeHtml(value)}</td></tr>`,
+    )
+    .join("");
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;font-size:14px;line-height:1.5">${htmlRows}</table>`;
+}
+
+export function usdTwelveTesterInviteEmail(input: {
+  appName: string;
+  developerName: string;
+  testingTypeLabel: string;
+  joinUrl: string;
+  confirmUrl: string;
+  whatsappHref: string;
+  whatsappDisplay: string;
+}) {
+  const html = wrapEmail(
+    `<p>You have been invited to participate in testing:</p>
+    <p style="font-size:18px;font-weight:600;margin:16px 0">${escapeHtml(input.appName)}</p>
+    <p>Developer: ${escapeHtml(input.developerName)}<br>Testing period: 14 days<br>Testing type: ${escapeHtml(input.testingTypeLabel)}</p>
+    ${emailButton(input.joinUrl, "JOIN / DOWNLOAD TEST APP")}
+    <p>After installing and using the test app, please confirm your testing activity on TestLoop.</p>
+    ${emailButton(input.confirmUrl, "Confirm testing")}
+    <p style="margin-top:24px;font-weight:700;letter-spacing:0.06em;font-size:12px;color:#2563eb">WHATSAPP TESTING REPORT</p>
+    <p>After testing the app, please send your daily testing screenshot/usage evidence through WhatsApp:</p>
+    ${emailButton(input.whatsappHref, input.whatsappDisplay)}`,
+  );
+  const text = [
+    `You have been invited to participate in testing:`,
+    input.appName,
+    "",
+    `Developer: ${input.developerName}`,
+    "Testing period: 14 days",
+    `Testing type: ${input.testingTypeLabel}`,
+    "",
+    `JOIN / DOWNLOAD TEST APP: ${input.joinUrl}`,
+    "",
+    "After installing and using the test app, please confirm your testing activity on TestLoop.",
+    `Confirm testing: ${input.confirmUrl}`,
+    "",
+    "WHATSAPP TESTING REPORT",
+    `After testing the app, please send your daily testing screenshot/usage evidence through WhatsApp: ${input.whatsappDisplay}`,
+    input.whatsappHref,
+  ].join("\n");
+  return { subject: `You're invited to test ${input.appName} on TestLoop`, html, text };
+}
+
+export function usdTwelveAdminPurchasedEmail(input: {
+  developerName: string;
+  developerEmail: string;
+  appName: string;
+  amountLabel: string;
+  paymentStatus: string;
+  campaignId: string;
+  purchaseDate: string;
+  startDate: string;
+  endDate: string;
+  campaignUrl: string;
+}) {
+  const rows: Array<[string, string]> = [
+    ["Developer", input.developerName],
+    ["Developer email", input.developerEmail],
+    ["App", input.appName],
+    ["Package", "12 Testers / 14 Days"],
+    ["Amount", input.amountLabel],
+    ["Payment status", input.paymentStatus],
+    ["Campaign ID", input.campaignId],
+    ["Purchase date", input.purchaseDate],
+    ["Testing start date", input.startDate],
+    ["Testing end date", input.endDate],
+  ];
+  const html = wrapEmail(
+    `<p><strong>New TestLoop Paid Testing Package Purchased</strong></p>${kvTable(rows)}${emailButton(input.campaignUrl, "Open campaign")}`,
+  );
+  const text = ["New TestLoop Paid Testing Package Purchased", "", ...rows.map(([k, v]) => `${k}: ${v}`), "", input.campaignUrl].join("\n");
+  return { subject: "New TestLoop Paid Testing Package Purchased", html, text };
+}
+
+export function usdTwelveAdminTesterUpdateEmail(input: {
+  kind: "confirmed" | "screenshot" | "all12";
+  developerName: string;
+  appName: string;
+  testerLabel: string;
+  confirmed: number;
+  screenshots: number;
+  startDate: string;
+  endDate: string;
+  campaignUrl: string;
+}) {
+  if (input.kind === "all12") {
+    const rows: Array<[string, string]> = [
+      ["Developer", input.developerName],
+      ["App", input.appName],
+      ["Confirmation", "12/12 testers confirmed"],
+      ["Screenshots received", `${input.screenshots} / 12`],
+      ["Campaign start", input.startDate],
+      ["Campaign end", input.endDate],
+    ];
+    const html = wrapEmail(`<p><strong>12/12 TESTERS CONFIRMED</strong></p>${kvTable(rows)}${emailButton(input.campaignUrl, "Review screenshots")}`);
+    const text = ["TestLoop — All 12 Testers Confirmed", "", ...rows.map(([k, v]) => `${k}: ${v}`), "", input.campaignUrl].join("\n");
+    return { subject: "TestLoop — All 12 Testers Confirmed", html, text };
+  }
+  const title = input.kind === "screenshot" ? "A tester submitted a screenshot" : "A tester confirmed testing";
+  const rows: Array<[string, string]> = [
+    ["Developer", input.developerName],
+    ["App", input.appName],
+    ["Tester", input.testerLabel],
+    ["Confirmed", `${input.confirmed} / 12`],
+    ["Screenshots", `${input.screenshots} / 12`],
+  ];
+  const html = wrapEmail(`<p>${escapeHtml(title)}.</p>${kvTable(rows)}${emailButton(input.campaignUrl, "Open campaign")}`);
+  const text = [title, "", ...rows.map(([k, v]) => `${k}: ${v}`), "", input.campaignUrl].join("\n");
+  return { subject: `TestLoop — ${title}`, html, text };
+}
+
+export function usdTwelveAdminCompletedEmail(input: {
+  developerName: string;
+  appName: string;
+  confirmed: number;
+  screenshots: number;
+  startDate: string;
+  endDate: string;
+  campaignUrl: string;
+}) {
+  const rows: Array<[string, string]> = [
+    ["Developer", input.developerName],
+    ["App", input.appName],
+    ["Status", "Testing Completed"],
+    ["Confirmed", `${input.confirmed} / 12`],
+    ["Screenshots", `${input.screenshots} / 12`],
+    ["Start", input.startDate],
+    ["End", input.endDate],
+  ];
+  const html = wrapEmail(`<p>A 14-day TestLoop paid testing campaign has reached completion.</p>${kvTable(rows)}${emailButton(input.campaignUrl, "Open campaign")}`);
+  const text = ["A 14-day TestLoop paid testing campaign has reached completion.", "", ...rows.map(([k, v]) => `${k}: ${v}`), "", input.campaignUrl].join("\n");
+  return { subject: "TestLoop — 14-day paid testing campaign completed", html, text };
+}
+
+export function usdTwelveDeveloperApprovedEmail(input: {
+  packageName: string;
+  amountLabel: string;
+  campaignUrl: string;
+}) {
+  const html = wrapEmail(
+    `<p>Your ${escapeHtml(input.packageName)} payment was approved.</p>
+    <p>Managed Beta Testing is now active: 12 testers / 14 days (${escapeHtml(input.amountLabel)}).</p>
+    ${emailButton(input.campaignUrl, "Open managed testing")}`,
+  );
+  const text = `Your ${input.packageName} payment was approved.\n\nManaged Beta Testing is now active: 12 testers / 14 days (${input.amountLabel}).\n\nOpen managed testing:\n${input.campaignUrl}\n`;
+  return { subject: `Payment approved · ${input.packageName}`, html, text };
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")

@@ -6,6 +6,7 @@ import { ManagedTestingNotice } from "@/components/managed-testing/compliance-no
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { paymentIsActivated } from "@/lib/managed-testing/methods";
+import { isUsdTwelvePackage } from "@/lib/managed-testing/usd-twelve";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -18,6 +19,9 @@ export default async function ManagedPaymentPage({
   const { publicId } = await params;
   const view = await getPaymentCheckoutForUser(user.id, publicId);
   if (paymentIsActivated(view.payment.status) && view.campaignPublicId) {
+    if (isUsdTwelvePackage(view.payment.packageCode)) {
+      redirect(`/managed-testing/${view.campaignPublicId}`);
+    }
     redirect(`/managed-testing/${view.campaignPublicId}/setup`);
   }
 

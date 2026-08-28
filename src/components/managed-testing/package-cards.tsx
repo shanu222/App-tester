@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { MANAGED_TESTING_INCLUDED, formatPkr, packageHeadline } from "@/lib/managed-testing/catalog";
+import { isUsdTwelvePackage } from "@/lib/managed-testing/usd-twelve";
 import { cn } from "@/lib/utils";
 
 type Pack = {
@@ -18,6 +19,7 @@ export function PackageCards({ packages }: { packages: Pack[] }) {
   const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const listed = packages.filter((pack) => !isUsdTwelvePackage(pack.code));
 
   async function buy(pack: Pack) {
     if (pack.contactOnly) {
@@ -48,7 +50,7 @@ export function PackageCards({ packages }: { packages: Pack[] }) {
         </p>
       ) : null}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {packages.map((pack) => {
+        {listed.map((pack) => {
           const featured = pack.testerCount === 20;
           return (
             <article

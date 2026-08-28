@@ -1177,6 +1177,17 @@ model ManagedTestingPackage {
   payments    ManagedTestingPayment[]
 }
 
+model ManagedFixedPoolEmail {
+  id          String   @id @default(cuid())
+  packageCode String
+  email       String
+  sortOrder   Int
+  createdAt   DateTime @default(now())
+
+  @@unique([packageCode, email])
+  @@index([packageCode, sortOrder])
+}
+
 model ManagedTestingPayment {
   id                   String                 @id @default(cuid())
   publicId             String                 @unique
@@ -1197,6 +1208,7 @@ model ManagedTestingPayment {
   adminNote            String?
   reviewedAt           DateTime?
   reviewedById         String?
+  fulfillment          Json?
   paidAt               DateTime?
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
@@ -1254,12 +1266,14 @@ model ManagedTester {
   consentStatus       ManagedConsentStatus @default(PENDING)
   availableForTesting Boolean              @default(false)
   currentlyAssigned   Boolean              @default(false)
+  reservedPackageCode String?
   campaignsTested     Int                  @default(0)
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   assignments         ManagedCampaignTester[]
 
   @@index([consentStatus, availableForTesting, currentlyAssigned])
+  @@index([reservedPackageCode])
 }
 
 model ManagedCampaignTester {

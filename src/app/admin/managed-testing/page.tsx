@@ -1,19 +1,22 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { requireAdmin } from "@/auth";
 import { adminListManagedTesting } from "@/lib/services/managed-testing";
+import { listUsdTwelveAdminCampaigns } from "@/lib/services/usd-twelve-package";
 import { Badge } from "@/components/ui/badge";
 import { SectionLabel } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/widgets";
 import { Table, TableWrap, Td, Th, Tr } from "@/components/ui/table";
 import { JsonButton } from "@/components/ui/json-button";
-import { formatPkr } from "@/lib/managed-testing/catalog";
+import { formatPackageAmount } from "@/lib/managed-testing/catalog";
+import { isUsdTwelvePackage } from "@/lib/managed-testing/usd-twelve";
 import { CAMPAIGN_STATUS_LABELS, PAYMENT_STATUS_LABELS, campaignStatusTone, paymentStatusTone } from "@/lib/managed-testing/labels";
 import { AdminAddTesterForm } from "@/components/managed-testing/admin-add-tester-form";
+import { PaidTestingCampaigns } from "@/components/managed-testing/paid-testing-campaigns";
 import Link from "next/link";
 
 export default async function AdminManagedTestingPage() {
   await requireAdmin();
-  const data = await adminListManagedTesting();
+  const [data, paidCampaigns] = await Promise.all([adminListManagedTesting(), listUsdTwelveAdminCampaigns()]);
 
   return (
     <AppShell title="Managed Testing" description="Package purchases, tester allocation, and campaign status.">
@@ -46,7 +49,7 @@ export default async function AdminManagedTestingPage() {
               <Tr key={payment.publicId}>
                 <Td>{payment.user.developerName || payment.user.name || payment.user.email}</Td>
                 <Td>{payment.package.name}</Td>
-                <Td>{formatPkr(payment.amountPkr)}</Td>
+                <Td>{formatPackageAmount(payment.amountPkr, payment.package.currency)}</Td>
                 <Td>
                   <Badge tone={paymentStatusTone(payment.status)}>{PAYMENT_STATUS_LABELS[payment.status]}</Badge>
                 </Td>
@@ -63,6 +66,8 @@ export default async function AdminManagedTestingPage() {
         </Table>
       </TableWrap>
 
+      <PaidTestingCampaigns campaigns={paidCampaigns} />
+
       <SectionLabel className="mb-3 mt-10">Campaigns</SectionLabel>
       <TableWrap>
         <Table>
@@ -76,7 +81,9 @@ export default async function AdminManagedTestingPage() {
             </tr>
           </thead>
           <tbody>
-            {data.campaigns.map((campaign) => (
+            {data.campaigns
+              .filter((campaign) => !isUsdTwelvePackage(campaign.payment.package.code))
+              .map((campaign) => (
               <Tr key={campaign.publicId}>
                 <Td className="font-medium">{campaign.app?.name || "—"}</Td>
                 <Td>{campaign.user.developerName || campaign.user.name || campaign.user.email}</Td>

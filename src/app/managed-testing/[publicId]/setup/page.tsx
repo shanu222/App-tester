@@ -5,6 +5,7 @@ import { CampaignSetupForm } from "@/components/managed-testing/campaign-setup-f
 import { Card, CardHeader } from "@/components/ui/card";
 import { redirect } from "next/navigation";
 import { paymentIsActivated } from "@/lib/managed-testing/methods";
+import { isUsdTwelvePackage } from "@/lib/managed-testing/usd-twelve";
 
 export default async function ManagedCampaignSetupPage({
   params,
@@ -18,7 +19,7 @@ export default async function ManagedCampaignSetupPage({
     listSelectableApps(user.id),
   ]);
   if (!paymentIsActivated(campaign.paymentStatus)) redirect(`/managed-testing/payments/${campaign.paymentPublicId}`);
-  if (campaign.status === "ACTIVE" || campaign.status === "COMPLETED") {
+  if (isUsdTwelvePackage(campaign.packageCode) || campaign.status === "ACTIVE" || campaign.status === "COMPLETED") {
     redirect(`/managed-testing/${publicId}`);
   }
 

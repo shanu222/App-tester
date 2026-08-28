@@ -10,6 +10,7 @@ import {
   adminMarkPaymentPaid,
   adminRejectPayment,
 } from "@/lib/services/managed-testing";
+import { adminFulfillUsdTwelveCampaign, retryUsdTwelveFailedInvites } from "@/lib/services/usd-twelve-package";
 
 export async function GET() {
   try {
@@ -27,7 +28,16 @@ export async function POST(request: Request) {
     const body = await parseJson(
       request,
       z.object({
-        action: z.enum(["mark-paid", "mark-failed", "add-tester", "allocate", "approve", "reject"]),
+        action: z.enum([
+          "mark-paid",
+          "mark-failed",
+          "add-tester",
+          "allocate",
+          "approve",
+          "reject",
+          "retry-usd-invites",
+          "fulfill-usd-twelve",
+        ]),
         paymentPublicId: z.string().optional(),
         campaignPublicId: z.string().optional(),
         adminNote: z.string().optional(),
@@ -65,6 +75,16 @@ export async function POST(request: Request) {
     if (body.action === "allocate") {
       if (!body.campaignPublicId) return json({ error: "Campaign required." }, 400);
       const result = await adminAllocateTesters(body.campaignPublicId);
+      return json({ ok: true, ...result });
+    }
+    if (body.action === "retry-usd-invites") {
+      if (!body.campaignPublicId) return json({ error: "Campaign required." }, 400);
+      const result = await retryUsdTwelveFailedInvites(body.campaignPublicId);
+      return json({ ok: true, ...result });
+    }
+    if (body.action === "fulfill-usd-twelve") {
+      if (!body.campaignPublicId) return json({ error: "Campaign required." }, 400);
+      const result = await adminFulfillUsdTwelveCampaign(body.campaignPublicId);
       return json({ ok: true, ...result });
     }
     if (!body.name || !body.email) return json({ error: "Name and email are required." }, 400);

@@ -9,7 +9,7 @@ import { sendDeveloperNotification } from "@/lib/services/notifications";
 import { testingTypeLabel } from "@/lib/campaign-autofill";
 import {
   MANAGED_TESTING_DURATION_DAYS,
-  formatPkr,
+  formatPackageAmount,
   paymentReference,
   publicAssignmentId,
   publicCampaignId,
@@ -36,6 +36,9 @@ import {
   type PaymentMethodId,
 } from "@/lib/managed-testing/methods";
 import { testerDisplayLabel, validateManagedCampaignSetup } from "@/lib/managed-testing/setup";
+import { isUsdTwelvePackage } from "@/lib/managed-testing/usd-twelve";
+import { fulfillUsdTwelvePackage } from "@/lib/services/usd-twelve-package";
+import { usdTwelveDeveloperApprovedEmail } from "@/lib/notifications/templates";
 import {
   isScheduledSendDue,
   parseNotificationTime,
@@ -117,6 +120,9 @@ export async function startCheckout(userId: string, packageCode: string) {
     where: { code: packageCode, active: true },
   });
   if (!pack) throw new NotFoundError("That tester package is not available.");
+  if (isUsdTwelvePackage(pack.code)) {
+    throw new AppError("Purchase the 12-tester package from the dedicated checkout page.");
+  }
   if (pack.contactOnly) {
     throw new AppError("Contact us to arrange a custom managed testing package.", 400, "CONTACT_SALES");
   }
@@ -211,10 +217,16 @@ async function markPaymentPaid(paymentId: string, provider: "STUB" | "MANUAL", r
   });
   if (!payment) throw new NotFoundError("Payment not found.");
   if (paymentIsActivated(payment.status) && payment.campaign) {
+    if (isUsdTwelvePackage(payment.package.code) && payment.campaign.status !== "COMPLETED") {
+      await fulfillUsdTwelvePackage(payment.id);
+    }
     return { campaignPublicId: payment.campaign.publicId, alreadyPaid: true as const };
   }
   if (paymentIsActivated(payment.status)) {
     const campaign = await createDraftCampaign(payment);
+    if (isUsdTwelvePackage(payment.package.code)) {
+      await fulfillUsdTwelvePackage(payment.id);
+    }
     return { campaignPublicId: campaign.publicId, alreadyPaid: true as const };
   }
   if (
@@ -237,11 +249,33 @@ async function markPaymentPaid(paymentId: string, provider: "STUB" | "MANUAL", r
     include: { package: true },
   });
   const campaign = await createDraftCampaign(updated);
+  if (isUsdTwelvePackage(updated.package.code)) {
+    const fulfilled = await fulfillUsdTwelvePackage(updated.id);
+    const href = `/managed-testing/${fulfilled?.campaignPublicId || campaign.publicId}`;
+    const campaignLink = `${env.appUrl.replace(/\/$/, "")}${href}`;
+    const approvedMail = usdTwelveDeveloperApprovedEmail({
+      packageName: payment.package.name,
+      amountLabel: formatPackageAmount(payment.amountPkr, payment.currency),
+      campaignUrl: campaignLink,
+    });
+    await notifyDeveloper(payment.userId, {
+      type: "managed_payment_paid",
+      eventKey: `managed_paid:${payment.id}`,
+      title: "Managed testing package active",
+      body: `${payment.package.name} is active. 12 testers are being coordinated for a 14-day programme.`,
+      href,
+    });
+    const user = await prisma.user.findUnique({ where: { id: payment.userId }, select: { email: true } });
+    if (user?.email) {
+      await sendSmtpEmail({ to: user.email, ...approvedMail });
+    }
+    return { campaignPublicId: fulfilled?.campaignPublicId || campaign.publicId, alreadyPaid: false as const };
+  }
   const setupUrl = `${env.appUrl.replace(/\/$/, "")}/managed-testing/${campaign.publicId}/setup`;
   const approvedMail = developerPaymentApprovedEmail({
     packageName: payment.package.name,
     testerCount: payment.package.testerCount,
-    amountLabel: formatPkr(payment.amountPkr),
+    amountLabel: formatPackageAmount(payment.amountPkr, payment.currency),
     setupUrl,
   });
   await notifyDeveloper(payment.userId, {
@@ -301,7 +335,7 @@ function publicPaymentView(payment: {
   const method = paymentMethodById(payment.method);
   return {
     publicId: payment.publicId,
-    amountLabel: formatPkr(payment.amountPkr),
+    amountLabel: formatPackageAmount(payment.amountPkr, payment.currency),
     amountPkr: payment.amountPkr,
     currency: payment.currency,
     status: payment.status,
@@ -317,6 +351,7 @@ function publicPaymentView(payment: {
     adminNote: payment.status === "REJECTED" ? payment.adminNote ?? null : null,
     paidAt: payment.paidAt?.toISOString() ?? null,
     createdAt: payment.createdAt.toISOString(),
+    packageCode: payment.package.code,
     packageName: payment.package.name,
     testerCount: payment.package.testerCount,
     campaignPublicId: payment.campaign?.publicId ?? null,
@@ -400,7 +435,7 @@ export async function submitPaymentProof(input: {
     developerEmail: payment.user.email,
     packageName: payment.package.name,
     testerCount: payment.package.testerCount,
-    amountLabel: formatPkr(payment.amountPkr),
+    amountLabel: formatPackageAmount(payment.amountPkr, payment.currency),
     methodLabel: method.label,
     transactionReference: payment.transactionReference,
     developerReference: updated.developerReference,
@@ -478,7 +513,7 @@ export async function adminRejectPayment(input: {
   const retryUrl = `${env.appUrl.replace(/\/$/, "")}/managed-testing/payments/${payment.publicId}`;
   const mail = developerPaymentRejectedEmail({
     packageName: payment.package.name,
-    amountLabel: formatPkr(payment.amountPkr),
+    amountLabel: formatPackageAmount(payment.amountPkr, payment.currency),
     note,
     retryUrl,
   });
@@ -613,6 +648,9 @@ export async function saveManagedCampaignSetup(
   },
 ) {
   const campaign = await ownedCampaign(userId, publicId);
+  if (isUsdTwelvePackage(campaign.payment.package.code)) {
+    throw new AppError("This package is configured at purchase and cannot be edited.");
+  }
   if (!paymentIsActivated(campaign.payment.status)) {
     throw new AppError("Payment must be confirmed before creating a campaign.");
   }
@@ -645,6 +683,9 @@ export async function saveManagedCampaignSetup(
 
 export async function startManagedCampaign(userId: string, publicId: string) {
   const campaign = await ownedCampaign(userId, publicId);
+  if (isUsdTwelvePackage(campaign.payment.package.code)) {
+    throw new AppError("This package starts automatically after payment is approved.");
+  }
   if (!paymentIsActivated(campaign.payment.status)) throw new AppError("Payment is not confirmed.");
   if (campaign.status === "ACTIVE") return toDashboardView(campaign);
   if (campaign.status !== "READY" && campaign.status !== "DRAFT") {
@@ -686,6 +727,7 @@ async function assignConsentingTesters(campaignId: string, needed: number) {
       consentStatus: "CONSENTED",
       availableForTesting: true,
       currentlyAssigned: false,
+      reservedPackageCode: null,
       id: { notIn: already.map((row) => row.testerId) },
     },
     orderBy: { createdAt: "asc" },
@@ -966,17 +1008,28 @@ export async function saveCampaignReportPrefs(
 
 export async function exportCampaignReportCsv(userId: string, publicId: string) {
   const campaign = await ownedCampaign(userId, publicId);
+  const usd = isUsdTwelvePackage(campaign.payment.package.code);
   const lines = [
-    ["Tester", "Play email", "Invitation", "Opt-in", "Confirmation", "Status"].join(","),
+    usd
+      ? ["Tester", "Invitation", "Confirmation", "Status", "Screenshot"].join(",")
+      : ["Tester", "Play email", "Invitation", "Opt-in", "Confirmation", "Status"].join(","),
     ...campaign.assignments.map((row) =>
-      [
-        csv(row.displayLabel),
-        csv(row.tester.googleAccountEmail || row.tester.email),
-        csv(row.invitationStatus),
-        csv(row.optInStatus),
-        csv(row.confirmationStatus),
-        csv(row.testingStatus),
-      ].join(","),
+      usd
+        ? [
+            csv(row.displayLabel),
+            csv(row.invitationStatus),
+            csv(row.confirmationStatus === "CONFIRMED" ? "Tester confirmed testing" : "Pending"),
+            csv(row.testingStatus),
+            csv(row.confirmation?.screenshotMime ? "Received" : "None"),
+          ].join(",")
+        : [
+            csv(row.displayLabel),
+            csv(row.tester.googleAccountEmail || row.tester.email),
+            csv(row.invitationStatus),
+            csv(row.optInStatus),
+            csv(row.confirmationStatus),
+            csv(row.testingStatus),
+          ].join(","),
     ),
   ];
   return {
@@ -993,9 +1046,12 @@ function csv(value: string) {
 export async function getAssignmentScreenshot(userId: string, assignmentPublicId: string) {
   const assignment = await prisma.managedCampaignTester.findFirst({
     where: { publicId: assignmentPublicId, campaign: { userId } },
-    include: { confirmation: true },
+    include: { confirmation: true, campaign: { include: { payment: { include: { package: true } } } } },
   });
   if (!assignment?.confirmation?.screenshotBytes) throw new NotFoundError("No screenshot uploaded.");
+  if (isUsdTwelvePackage(assignment.campaign.payment.package.code)) {
+    throw new NotFoundError("No screenshot uploaded.");
+  }
   return {
     mime: assignment.confirmation.screenshotMime || "image/jpeg",
     bytes: Buffer.from(assignment.confirmation.screenshotBytes),
@@ -1022,9 +1078,10 @@ function toDashboardView(
     testingInstructions: campaign.testingInstructions,
     app: campaign.app ? { name: campaign.app.name, iconUrl: campaign.app.iconUrl } : null,
     packageName: campaign.payment.package.name,
+    packageCode: campaign.payment.package.code,
     testerCount: campaign.payment.package.testerCount,
     paymentStatus: campaign.payment.status,
-    amountLabel: formatPkr(campaign.payment.amountPkr),
+    amountLabel: formatPackageAmount(campaign.payment.amountPkr, campaign.payment.currency),
     startedAt: campaign.startedAt?.toISOString() ?? null,
     endsAt: campaign.endsAt?.toISOString() ?? null,
     progress,
@@ -1040,7 +1097,9 @@ function toDashboardView(
       publicId: row.publicId,
       label: row.displayLabel,
       name: row.tester.name,
-      playEmail: row.tester.googleAccountEmail || row.tester.email,
+      playEmail: isUsdTwelvePackage(campaign.payment.package.code)
+        ? ""
+        : row.tester.googleAccountEmail || row.tester.email,
       invitationStatus: row.invitationStatus,
       optInStatus: row.optInStatus,
       confirmationStatus: row.confirmationStatus,
@@ -1252,8 +1311,12 @@ export async function adminAddManagedTester(input: {
 export async function adminAllocateTesters(campaignPublicId: string) {
   const campaign = await prisma.managedTestingCampaign.findUnique({
     where: { publicId: campaignPublicId },
+    include: { payment: { include: { package: true } } },
   });
   if (!campaign) throw new NotFoundError("Campaign not found.");
+  if (isUsdTwelvePackage(campaign.payment.package.code)) {
+    throw new AppError("This campaign uses a fixed tester pool.");
+  }
   if (campaign.status !== "ACTIVE") throw new AppError("Testers can only be allocated to an active campaign.");
   const assigned = await assignConsentingTesters(campaign.id, campaign.testerTarget);
   await sendAssignmentInvites(campaign.id);

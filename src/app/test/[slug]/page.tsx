@@ -6,6 +6,7 @@ import { AppMark } from "@/components/brand/app-mark";
 import { getPublicTestingPage } from "@/lib/services/public-testing";
 import { NotFoundError } from "@/lib/errors";
 import { SITE_NAME } from "@/lib/site";
+import { testingTypeExplanation, testingTypeLabel } from "@/lib/campaign-autofill";
 
 export async function generateMetadata({
   params,
@@ -23,12 +24,6 @@ export async function generateMetadata({
   } catch {
     return { title: `Testing page | ${SITE_NAME}`, robots: { index: false, follow: false } };
   }
-}
-
-function testingTypeLabel(type: string) {
-  if (type === "OPEN") return "Open Testing";
-  if (type === "INTERNAL") return "Internal Testing";
-  return "Closed Testing";
 }
 
 export default async function PublicTestPage({
@@ -88,9 +83,9 @@ export default async function PublicTestPage({
         <section className="mt-8 border-t border-line pt-8">
           <h2 className="text-base font-semibold text-slate-900">Join this test</h2>
           <p className="mt-1 text-sm leading-6 text-muted">
-            Enter the Gmail account you use on Google Play.
+            {testingTypeExplanation(page.testingType).body}
           </p>
-          <JoinTestForm slug={page.slug} />
+          <JoinTestForm slug={page.slug} testingType={page.testingType} />
         </section>
       </main>
     </PublicChrome>

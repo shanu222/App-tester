@@ -15,7 +15,10 @@ export function handleRouteError(error: unknown) {
     );
   }
   if (error instanceof AppError) {
-    return json({ error: error.message, code: error.code }, error.status);
+    return json(
+      { error: error.message, code: error.code, ...(error.details || {}) },
+      error.status,
+    );
   }
   const mapped = mapInfrastructureError(error);
   if (mapped) {

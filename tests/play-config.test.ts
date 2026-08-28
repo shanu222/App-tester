@@ -5,6 +5,7 @@ import {
   detectTestingConfiguration,
   playTrackDisplayName,
   playTrackUiStatus,
+  preferDetectedTrack,
   recommendTestingMode,
 } from "../src/lib/integrations/play-config";
 
@@ -117,6 +118,38 @@ describe("recommendTestingMode", () => {
   it("reports that no testing track was found", () => {
     const rec = recommendTestingMode(detectTestingConfiguration([track("production")]));
     expect(rec.primary).toBe("NONE");
+  });
+});
+
+describe("preferDetectedTrack", () => {
+  it("does not invent a track when only production exists", () => {
+    expect(preferDetectedTrack(detectTestingConfiguration([track("production")]))).toBeNull();
+  });
+
+  it("selects the only open testing track", () => {
+    const preferred = preferDetectedTrack(detectTestingConfiguration([track("beta")]));
+    expect(preferred?.testingType).toBe("OPEN");
+    expect(preferred?.track.track).toBe("beta");
+  });
+
+  it("selects the closed track with the most current active release", () => {
+    const preferred = preferDetectedTrack(
+      detectTestingConfiguration([
+        track("partners", { releaseStatus: "draft", versionCodes: ["2"] }),
+        track("alpha", { releaseStatus: "completed", versionCodes: ["9"] }),
+      ]),
+    );
+    expect(preferred?.testingType).toBe("CLOSED");
+    expect(preferred?.track.track).toBe("alpha");
+    expect(preferred?.ambiguous).toBe(true);
+  });
+
+  it("prefers open testing when multiple modes exist at once", () => {
+    const preferred = preferDetectedTrack(
+      detectTestingConfiguration([track("internal"), track("alpha"), track("beta")]),
+    );
+    expect(preferred?.testingType).toBe("OPEN");
+    expect(preferred?.track.track).toBe("beta");
   });
 });
 

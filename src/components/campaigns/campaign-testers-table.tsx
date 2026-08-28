@@ -18,6 +18,7 @@ export type CampaignTesterRow = {
   status: TesterStatus;
   joinedAt: string | null;
   lastActivityAt: string | null;
+  downloadStatus?: string | null;
 };
 
 export function CampaignTestersTable({ testers }: { testers: CampaignTesterRow[] }) {
@@ -62,6 +63,7 @@ export function CampaignTestersTable({ testers }: { testers: CampaignTesterRow[]
             <tr>
               <Th>Gmail</Th>
               <Th>Status</Th>
+              <Th>Download</Th>
               <Th>Joined</Th>
               <Th>Last activity</Th>
               <Th>Actions</Th>
@@ -77,6 +79,9 @@ export function CampaignTestersTable({ testers }: { testers: CampaignTesterRow[]
                 </Td>
                 <Td>
                   <StatusBadge status={row.status} />
+                </Td>
+                <Td className="text-muted">
+                  {row.downloadStatus || "Not available through Google Play API"}
                 </Td>
                 <Td className="text-muted">{formatPlayTimestamp(row.joinedAt) || "—"}</Td>
                 <Td className="text-muted">{formatPlayTimestamp(row.lastActivityAt) || "—"}</Td>

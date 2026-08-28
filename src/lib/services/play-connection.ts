@@ -959,6 +959,7 @@ export async function managePlayTrack(input: {
     playTrack: playTrack.track,
     testingType,
     published: true,
+    skipPlayRefresh: true,
   });
   await logActivity({
     userId: input.userId,

@@ -344,3 +344,98 @@ export function parseTracksSnapshot(value: unknown): PlayTrackRecord[] {
     };
   });
 }
+
+function maxVersionCode(track: PlayTrackRecord) {
+  const codes = track.versionCodes.map(Number).filter((value) => !Number.isNaN(value));
+  return codes.length ? Math.max(...codes) : 0;
+}
+
+/** Prefer a live release, then configured evidence, then highest version, then name. */
+export function comparePlayTracks(a: PlayTrackRecord, b: PlayTrackRecord) {
+  const aActive = isReleaseActive(a.releaseStatus) ? 1 : 0;
+  const bActive = isReleaseActive(b.releaseStatus) ? 1 : 0;
+  if (bActive !== aActive) return bActive - aActive;
+  const aDetected = trackHasDetectedConfiguration(a) ? 1 : 0;
+  const bDetected = trackHasDetectedConfiguration(b) ? 1 : 0;
+  if (bDetected !== aDetected) return bDetected - aDetected;
+  const version = maxVersionCode(b) - maxVersionCode(a);
+  if (version !== 0) return version;
+  return a.track.localeCompare(b.track);
+}
+
+function pickRankedTrack(tracks: PlayTrackRecord[]) {
+  if (!tracks.length) return null;
+  return tracks.slice().sort(comparePlayTracks)[0] || null;
+}
+
+export type PreferredTestingTrack = {
+  track: PlayTrackRecord;
+  testingType: Exclude<PlayTrackKind, "PRODUCTION">;
+  reason: string;
+  ambiguous: boolean;
+};
+
+/**
+ * Deterministically choose the testing track TestLoop should publish against.
+ * Never invents a track. Returns null when Play reported no testing tracks.
+ */
+export function preferDetectedTrack(config: TestingConfiguration): PreferredTestingTrack | null {
+  const recommendation = recommendTestingMode(config);
+  if (recommendation.primary === "NONE") return null;
+
+  if (recommendation.primary === "OPEN") {
+    const track = pickRankedTrack(config.openTesting.tracks);
+    if (!track) return null;
+    return {
+      track,
+      testingType: "OPEN",
+      reason: recommendation.reason,
+      ambiguous: recommendation.ambiguous,
+    };
+  }
+
+  if (recommendation.primary === "INTERNAL") {
+    const track = pickRankedTrack(config.internalTesting.tracks);
+    if (!track) return null;
+    return {
+      track,
+      testingType: "INTERNAL",
+      reason: recommendation.reason,
+      ambiguous: recommendation.ambiguous,
+    };
+  }
+
+  const closed = pickRankedTrack(config.closedTesting.tracks);
+  if (closed) {
+    return {
+      track: closed,
+      testingType: "CLOSED",
+      reason:
+        recommendation.primary === "CHOOSE"
+          ? "Multiple closed testing tracks were detected. TestLoop selected the track with the most current active release from Google Play."
+          : recommendation.reason,
+      ambiguous: recommendation.primary === "CHOOSE" || recommendation.ambiguous,
+    };
+  }
+
+  const fallback =
+    pickRankedTrack(config.openTesting.tracks) || pickRankedTrack(config.internalTesting.tracks);
+  if (!fallback || fallback.typeGuess === "PRODUCTION") return null;
+  return {
+    track: fallback,
+    testingType: fallback.typeGuess,
+    reason: recommendation.reason,
+    ambiguous: recommendation.ambiguous,
+  };
+}
+
+/** Stable snapshot of Play-reported track fields used to detect stale publish data. */
+export function playTrackFingerprint(track: PlayTrackRecord) {
+  return [
+    track.track,
+    track.typeGuess,
+    track.releaseStatus ?? "",
+    track.releaseName ?? "",
+    [...track.versionCodes].sort().join(","),
+  ].join("|");
+}

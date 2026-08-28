@@ -2,12 +2,19 @@ export class AppError extends Error {
   status: number;
   code: string;
   expose: boolean;
+  details?: Record<string, unknown>;
 
-  constructor(message: string, status = 400, code = "APP_ERROR") {
+  constructor(
+    message: string,
+    status = 400,
+    code = "APP_ERROR",
+    details?: Record<string, unknown>,
+  ) {
     super(message);
     this.status = status;
     this.code = code;
     this.expose = true;
+    this.details = details;
   }
 }
 

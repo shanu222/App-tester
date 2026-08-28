@@ -6,10 +6,14 @@ import { isDemoMode } from "@/lib/env";
 import { campaignTestingUrl } from "@/lib/integrations/play-testers";
 import { uniqueSlug } from "@/lib/slug";
 import { env } from "@/lib/env";
+import { PLAY_NOT_CONNECTED_FIRST } from "@/lib/play-disconnect";
 import {
-  PLAY_NOT_CONNECTED_FIRST,
-  campaignDependsOnPlayConnection,
-} from "@/lib/play-disconnect";
+  detectTestingConfiguration,
+  parseTracksSnapshot,
+  playTrackFingerprint,
+  preferDetectedTrack,
+} from "@/lib/integrations/play-config";
+import type { PlayTrackRecord } from "@/lib/integrations/types";
 
 /**
  * Reserve the public /test/{slug} path for a campaign. Slugs are global because
@@ -119,14 +123,90 @@ export function campaignShareUrl(slug: string | null | undefined) {
   return `${env.appUrl.replace(/\/$/, "")}/test/${slug}`;
 }
 
+const PLAY_CONFIG_CHANGED =
+  "Google Play configuration changed. TestLoop refreshed the testing configuration. Please review the updated information.";
+
+function playConfigChangedDetails(track: PlayTrackRecord | null) {
+  return {
+    preferredTrack: track?.track,
+    testingType: track && track.typeGuess !== "PRODUCTION" ? track.typeGuess : undefined,
+    fingerprint: track ? playTrackFingerprint(track) : undefined,
+  };
+}
+
+async function loadPlayAppSnapshot(userId: string, packageName: string) {
+  return prisma.googlePlayApp.findFirst({
+    where: { userId, packageName },
+  });
+}
+
+async function resolvePlayTestingTrack(input: {
+  userId: string;
+  packageName: string;
+  playTrack?: string;
+  fingerprint?: string;
+  refresh: boolean;
+  skipPlayRefresh?: boolean;
+}) {
+  if (input.refresh && !input.skipPlayRefresh) {
+    const { syncPackageTracks } = await import("@/lib/services/play-connection");
+    await syncPackageTracks({ userId: input.userId, packageName: input.packageName });
+  }
+
+  const playApp = await loadPlayAppSnapshot(input.userId, input.packageName);
+  if (!playApp) {
+    throw new AppError(
+      "This application is not in the apps discovered from Google Play Console. Connect Google Play and refresh apps first.",
+      409,
+      "PLAY_APP_REQUIRED",
+    );
+  }
+
+  const tracks = parseTracksSnapshot(playApp.tracksSnapshot);
+  const config = detectTestingConfiguration(tracks);
+  const preferred = preferDetectedTrack(config);
+  if (!preferred) {
+    throw new AppError(
+      "No testing configuration was detected from Google Play Console. Configure testing in Play Console, then refresh TestLoop.",
+      409,
+      "PLAY_NO_TESTING",
+    );
+  }
+
+  const requested =
+    (input.playTrack
+      ? tracks.find((track) => track.track === input.playTrack && track.typeGuess !== "PRODUCTION")
+      : null) || preferred.track;
+
+  if (requested.typeGuess === "PRODUCTION") {
+    throw new AppError(
+      "Production is separate from testing. TestLoop will not publish a testing request for the production track.",
+      409,
+      "PLAY_PRODUCTION_TRACK",
+    );
+  }
+
+  if (input.refresh && input.playTrack && requested.track !== input.playTrack) {
+    throw new AppError(PLAY_CONFIG_CHANGED, 409, "PLAY_CONFIG_CHANGED", playConfigChangedDetails(preferred.track));
+  }
+
+  if (input.refresh && input.fingerprint && playTrackFingerprint(requested) !== input.fingerprint) {
+    throw new AppError(PLAY_CONFIG_CHANGED, 409, "PLAY_CONFIG_CHANGED", playConfigChangedDetails(requested));
+  }
+
+  return { playApp, tracks, preferred, requested };
+}
+
 export async function createCampaign(
   userId: string,
   input: {
     name: string;
-    appId: string;
+    appId?: string;
+    packageName?: string;
     trackId?: string;
     /** Real Play Console track name, e.g. "internal" or "alpha". */
     playTrack?: string;
+    playFingerprint?: string;
     sourceId?: string;
     targetTesters?: number;
     testingType?: "INTERNAL" | "CLOSED" | "OPEN";
@@ -138,13 +218,48 @@ export async function createCampaign(
     testingInstructions?: string;
     reciprocalOpen?: boolean;
     published?: boolean;
+    /** Internal: skip a second Play API round-trip when the caller just synced. */
+    skipPlayRefresh?: boolean;
   },
 ) {
-  const app = await prisma.app.findFirst({ where: { id: input.appId, userId } });
-  if (!app) throw new NotFoundError("App not found.");
-  if (campaignDependsOnPlayConnection({ playTrack: input.playTrack ?? null, app })) {
-    await requirePlayConnectionForPost(userId);
+  await requirePlayConnectionForPost(userId);
+
+  let app = input.appId
+    ? await prisma.app.findFirst({ where: { id: input.appId, userId } })
+    : null;
+  const packageName = input.packageName || app?.packageName;
+  if (!packageName) throw new NotFoundError("App not found.");
+
+  if (!app) {
+    const { selectPlayApp } = await import("@/lib/services/play-connection");
+    const selected = await selectPlayApp({ userId, packageName });
+    app = selected.app;
   }
+
+  const { requested } = await resolvePlayTestingTrack({
+    userId,
+    packageName: app.packageName,
+    playTrack: input.playTrack,
+    fingerprint: input.playFingerprint,
+    refresh: Boolean(input.published),
+    skipPlayRefresh: input.skipPlayRefresh,
+  });
+
+  const testingType = requested.typeGuess as "INTERNAL" | "CLOSED" | "OPEN";
+  let trackId = input.trackId;
+  if (trackId) {
+    const owned = await prisma.testingTrack.findFirst({
+      where: { id: trackId, appId: app.id, trackId: requested.track },
+    });
+    if (!owned) trackId = undefined;
+  }
+  if (!trackId) {
+    const linked = await prisma.testingTrack.findFirst({
+      where: { appId: app.id, trackId: requested.track },
+    });
+    trackId = linked?.id;
+  }
+
   const webOptInUrl = input.webOptInUrl || app.webOptInUrl || undefined;
   if (input.published) {
     const duplicate = await prisma.campaign.findFirst({
@@ -153,16 +268,20 @@ export async function createCampaign(
         appId: app.id,
         published: true,
         status: "ACTIVE",
-        playTrack: input.playTrack ?? null,
+        playTrack: requested.track,
+        testingType,
       },
     });
     if (duplicate) {
       throw new AppError(
-        "An active published testing request already exists for this app and track.",
+        "An active testing request already exists for this application and testing track.",
+        409,
+        "CAMPAIGN_DUPLICATE",
+        { existingCampaignId: duplicate.id },
       );
     }
   }
-  const testingType = input.testingType || app.testingType;
+
   const publicSlug = await allocateCampaignSlug(app.name || input.name);
   const testingUrl = campaignTestingUrl({
     testingType,
@@ -173,8 +292,8 @@ export async function createCampaign(
     data: {
       userId,
       appId: app.id,
-      trackId: input.trackId,
-      playTrack: input.playTrack,
+      trackId,
+      playTrack: requested.track,
       publicSlug,
       testingUrl,
       sourceId: input.sourceId,
@@ -209,21 +328,44 @@ export async function createCampaign(
 export async function publishCampaign(userId: string, id: string) {
   const campaign = await prisma.campaign.findFirst({
     where: { id, userId },
-    include: { app: { select: { syncedFromPlay: true } } },
+    include: { app: true },
   });
   if (!campaign) throw new NotFoundError("Campaign not found.");
   if (campaign.status === "ARCHIVED" || campaign.status === "COMPLETED") {
     throw new AppError("This campaign cannot be published.");
   }
-  if (campaignDependsOnPlayConnection(campaign)) {
-    await requirePlayConnectionForPost(userId);
-  }
+  await requirePlayConnectionForPost(userId);
+  const { requested } = await resolvePlayTestingTrack({
+    userId,
+    packageName: campaign.app.packageName,
+    playTrack: campaign.playTrack || undefined,
+    refresh: true,
+  });
+  const testingType = requested.typeGuess as "INTERNAL" | "CLOSED" | "OPEN";
   const duplicate = await prisma.campaign.findFirst({
-    where: { userId, appId: campaign.appId, published: true, status: "ACTIVE", id: { not: id } },
+    where: {
+      userId,
+      appId: campaign.appId,
+      published: true,
+      status: "ACTIVE",
+      playTrack: requested.track,
+      testingType,
+      id: { not: id },
+    },
   });
   if (duplicate) {
-    throw new AppError("An active published testing request already exists for this app.");
+    throw new AppError(
+      "An active testing request already exists for this application and testing track.",
+      409,
+      "CAMPAIGN_DUPLICATE",
+      { existingCampaignId: duplicate.id },
+    );
   }
+  const testingUrl = campaignTestingUrl({
+    testingType,
+    packageName: campaign.app.packageName,
+    configuredUrl: campaign.webOptInUrl,
+  }).url;
   const updated = await prisma.campaign.update({
     where: { id },
     data: {
@@ -231,6 +373,9 @@ export async function publishCampaign(userId: string, id: string) {
       publishedAt: campaign.publishedAt ?? new Date(),
       status: campaign.status === "DRAFT" || campaign.status === "PAUSED" ? "ACTIVE" : campaign.status,
       startedAt: campaign.startedAt ?? new Date(),
+      playTrack: requested.track,
+      testingType,
+      testingUrl: testingUrl || campaign.testingUrl,
     },
   });
   await logActivity({ userId, campaignId: id, action: "CAMPAIGN_PUBLISHED", result: updated.name });
@@ -254,6 +399,44 @@ export async function removeTestingPost(userId: string, id: string) {
     result: updated.name,
   });
   return updated;
+}
+
+export async function stopTestingRequest(userId: string, id: string) {
+  const campaign = await prisma.campaign.findFirst({ where: { id, userId } });
+  if (!campaign) throw new NotFoundError("Campaign not found.");
+  if (campaign.status === "ARCHIVED" || campaign.status === "COMPLETED") {
+    throw new AppError("This testing request has already been closed.");
+  }
+  const updated = await prisma.campaign.update({
+    where: { id },
+    data: {
+      published: false,
+      status: "PAUSED",
+      pausedAt: new Date(),
+    },
+  });
+  await logActivity({
+    userId,
+    campaignId: id,
+    action: "CAMPAIGN_STOPPED",
+    result: updated.name,
+  });
+  return updated;
+}
+
+export async function deleteTestingPost(userId: string, id: string) {
+  const campaign = await prisma.campaign.findFirst({ where: { id, userId } });
+  if (!campaign) throw new NotFoundError("Campaign not found.");
+  if (campaign.status !== "ARCHIVED" && campaign.status !== "COMPLETED") {
+    throw new AppError("Archive this testing request before deleting it permanently.");
+  }
+  await prisma.campaign.delete({ where: { id } });
+  await logActivity({
+    userId,
+    action: "CAMPAIGN_DELETED",
+    result: campaign.name,
+  });
+  return { id, deleted: true as const };
 }
 
 export async function transitionCampaign(

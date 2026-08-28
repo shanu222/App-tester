@@ -78,7 +78,8 @@ export async function getPublicTestingPage(slug: string): Promise<PublicTestingP
     !campaign ||
     !campaign.published ||
     campaign.status === "ARCHIVED" ||
-    campaign.status === "COMPLETED"
+    campaign.status === "COMPLETED" ||
+    campaign.status === "PAUSED"
   ) {
     throw new NotFoundError("This testing page is not available.");
   }

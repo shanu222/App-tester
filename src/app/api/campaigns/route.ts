@@ -1,14 +1,16 @@
 import { z } from "zod";
 import { json, handleRouteError, parseJson } from "@/lib/http";
 import { requireCompleteProfile, requireUser } from "@/auth";
-import { createCampaign, listCampaigns, publishCampaign, removeTestingPost, transitionCampaign } from "@/lib/services/campaigns";
+import { createCampaign, listCampaigns, publishCampaign, removeTestingPost, stopTestingRequest, deleteTestingPost, transitionCampaign } from "@/lib/services/campaigns";
 import type { CampaignStatus } from "@prisma/client";
 
 const createSchema = z.object({
   name: z.string().min(2),
-  appId: z.string().min(1),
+  appId: z.string().optional(),
+  packageName: z.string().trim().min(1).optional(),
   trackId: z.string().optional(),
   playTrack: z.string().max(120).optional(),
+  playFingerprint: z.string().max(500).optional(),
   sourceId: z.string().optional(),
   targetTesters: z.number().int().min(1).max(200).optional(),
   testingType: z.enum(["INTERNAL", "CLOSED", "OPEN"]).optional(),
@@ -20,6 +22,8 @@ const createSchema = z.object({
   testingInstructions: z.string().max(4000).optional(),
   reciprocalOpen: z.boolean().optional(),
   published: z.boolean().optional(),
+}).refine((value) => Boolean(value.appId || value.packageName), {
+  message: "Choose a Google Play app.",
 });
 
 export async function GET() {
@@ -53,8 +57,18 @@ export async function PATCH(request: Request) {
         status: z.enum(["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"]).optional(),
         publish: z.boolean().optional(),
         remove: z.boolean().optional(),
+        stop: z.boolean().optional(),
+        deletePermanently: z.boolean().optional(),
       }),
     );
+    if (body.deletePermanently) {
+      const result = await deleteTestingPost(user.id, body.id);
+      return json(result);
+    }
+    if (body.stop) {
+      const campaign = await stopTestingRequest(user.id, body.id);
+      return json({ campaign });
+    }
     if (body.remove) {
       const campaign = await removeTestingPost(user.id, body.id);
       return json({ campaign });

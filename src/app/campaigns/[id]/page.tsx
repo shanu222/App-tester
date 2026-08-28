@@ -5,8 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState, StatCard } from "@/components/ui/widgets";
 import { JsonButton } from "@/components/ui/json-button";
 import { Card, CardHeader, SectionLabel } from "@/components/ui/card";
-import { percent } from "@/lib/utils";
-import { ExternalLink, Info } from "lucide-react";
+import { percent, formatDateTime } from "@/lib/utils";
+import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { RecruitmentPostEditor } from "@/components/campaigns/recruitment-post-editor";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -14,13 +14,16 @@ import { campaignShareUrl } from "@/lib/services/campaigns";
 import { PLAY_TESTER_API_LIMITATION } from "@/lib/integrations/play-testers";
 import { CampaignTestersTable } from "@/components/campaigns/campaign-testers-table";
 import { TesterRequestActions } from "@/components/campaigns/tester-request-actions";
-import { RemoveTestingPostButton } from "@/components/campaigns/remove-testing-post";
+import { TestingRequestActionButton } from "@/components/campaigns/testing-request-actions";
 import { prisma } from "@/lib/db";
 import { parseTracksSnapshot, PLAY_API_UNAVAILABLE, playTrackDisplayName, playTrackUiStatus } from "@/lib/integrations/play-config";
 import { PlayStatusMark } from "@/components/play/play-status";
 import { SourceBadge } from "@/components/ui/source-badge";
 import { canonicalPlayStoreUrl } from "@/lib/play-url";
+import { formatPlayTimestamp } from "@/components/play/play-connection-panel";
 import { getPlayConnection } from "@/lib/services/play-connection";
+import { testingTypeExplanation, testingTypeLabel } from "@/lib/campaign-autofill";
+import { PLAY_INSTALL_LIMITATION } from "@/lib/integrations/capabilities";
 import {
   PLAY_NOT_CONNECTED_FEATURE,
   PLAY_REMOVED_NOTE,
@@ -38,7 +41,10 @@ export default async function CampaignDetailPage({
   const shareUrl = campaignShareUrl(campaign.publicSlug);
 
   const playApp = await prisma.googlePlayApp.findFirst({
-    where: { userId: user.id, appId: campaign.appId },
+    where: {
+      userId: user.id,
+      OR: [{ appId: campaign.appId }, { packageName: campaign.app.packageName }],
+    },
   });
   const playTracks = parseTracksSnapshot(playApp?.tracksSnapshot);
   const playTrack =
@@ -52,9 +58,8 @@ export default async function CampaignDetailPage({
     exists: Boolean(playTrack || campaign.playTrack),
     releaseStatus: playTrack?.releaseStatus,
   });
-  const version =
-    playTrack?.releaseName ||
-    (playTrack?.versionCodes[0] ? `Version code ${playTrack.versionCodes[0]}` : PLAY_API_UNAVAILABLE);
+  const versionName = playTrack?.releaseName || null;
+  const versionCode = playTrack?.versionCodes[0] || null;
   const registeredTesters = campaign.participations.filter((row) => Boolean(row.consentAt)).length;
   const pendingTesters = campaign.participations.filter((row) =>
     ["FAILED", "MANUAL_REQUIRED", "ACCESS_PROCESSING", "ACCEPTED"].includes(row.status),
@@ -65,6 +70,16 @@ export default async function CampaignDetailPage({
   const googlePlayTesters = PLAY_API_UNAVAILABLE;
   const playConnection = await getPlayConnection(user.id);
   const playConnected = playConnection?.status === "CONNECTED";
+  const lastSyncAt = playApp?.lastSyncAt || playConnection?.lastSyncAt || null;
+  const typeExplainer = testingTypeExplanation(campaign.testingType);
+  const requestStatus =
+    campaign.status === "ARCHIVED" || campaign.status === "COMPLETED"
+      ? "ARCHIVED"
+      : campaign.status === "PAUSED" || !campaign.published
+        ? campaign.status === "DRAFT"
+          ? "DRAFT"
+          : "STOPPED"
+        : "ACTIVE";
   const playDependent = campaignDependsOnPlayConnection(campaign);
   const playRemoved =
     Boolean(campaign.description?.includes(PLAY_REMOVED_NOTE)) ||
@@ -78,32 +93,59 @@ export default async function CampaignDetailPage({
       title={campaign.name}
       actions={
         <div className="flex gap-2">
-          {!campaign.published && !(playDependent && !playConnected) ? (
+          {!campaign.published && !(playDependent && !playConnected) && campaign.status !== "ARCHIVED" && campaign.status !== "COMPLETED" ? (
             <JsonButton url="/api/campaigns" method="PATCH" body={{ id, publish: true }} label="Publish request" />
           ) : null}
-          {campaign.status === "DRAFT" || campaign.status === "PAUSED" ? (
-            <JsonButton url="/api/campaigns" method="PATCH" body={{ id, status: "ACTIVE" }} label="Start" />
+          {playConnected && campaign.app.packageName ? (
+            <JsonButton
+              url="/api/google-play/apps"
+              method="POST"
+              body={{ action: "sync", packageName: campaign.app.packageName }}
+              label="Refresh from Google Play"
+              variant="secondary"
+            />
           ) : null}
-          {campaign.status === "ACTIVE" ? (
-            <JsonButton url="/api/campaigns" method="PATCH" body={{ id, status: "PAUSED" }} label="Pause" variant="secondary" />
+          {campaign.status === "ACTIVE" && campaign.published ? (
+            <TestingRequestActionButton campaignId={id} action="stop" variant="secondary" />
+          ) : null}
+          {campaign.status === "PAUSED" ? (
+            <JsonButton url="/api/campaigns" method="PATCH" body={{ id, publish: true }} label="Resume testing request" />
+          ) : null}
+          {campaign.status === "DRAFT" && campaign.published ? (
+            <JsonButton url="/api/campaigns" method="PATCH" body={{ id, status: "ACTIVE" }} label="Start" />
           ) : null}
           {campaign.status === "ACTIVE" || campaign.status === "PAUSED" ? (
             <JsonButton url="/api/campaigns" method="PATCH" body={{ id, status: "COMPLETED" }} label="Complete" variant="ghost" />
           ) : null}
-          {campaign.published || campaign.status === "ACTIVE" || campaign.status === "PAUSED" ? (
-            <RemoveTestingPostButton campaignId={id} />
-          ) : null}
+          {campaign.status !== "ARCHIVED" && campaign.status !== "COMPLETED" ? (
+            <TestingRequestActionButton campaignId={id} action="archive" variant="secondary" />
+          ) : (
+            <TestingRequestActionButton campaignId={id} action="delete" redirectTo="/campaigns" />
+          )}
         </div>
       }
     >
       <section className="mb-6 rounded-card border border-line bg-white p-5 shadow-card">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone={campaign.published ? "good" : "neutral"}>
-            {campaign.published ? "Published" : "Unpublished"}
+        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">Testing request</p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Badge tone={requestStatus === "ACTIVE" ? "good" : requestStatus === "STOPPED" ? "warn" : "neutral"}>
+            {requestStatus}
           </Badge>
-          <Badge tone="accent">{trackLabel}</Badge>
-          <Badge tone={campaign.status === "ACTIVE" ? "good" : "neutral"}>{campaign.status}</Badge>
           {playRemoved ? <Badge tone="bad">{PLAY_REMOVED_NOTE}</Badge> : null}
+        </div>
+        <h2 className="mt-3 text-xl font-semibold text-slate-900">{campaign.app.name}</h2>
+        <p className="font-mono text-xs text-muted">{campaign.app.packageName}</p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <SourceBadge source="google-play" />
+          <span className="text-sm font-medium text-slate-700">
+            {playConnected ? "✓ Connected" : "Not connected"}
+          </span>
+          {formatPlayTimestamp(lastSyncAt?.toISOString()) ? (
+            <span className="text-xs text-muted">
+              Last synchronized: {formatPlayTimestamp(lastSyncAt?.toISOString())}
+            </span>
+          ) : null}
         </div>
 
         {playDependent && !playConnected ? (
@@ -115,73 +157,127 @@ export default async function CampaignDetailPage({
           </p>
         ) : null}
 
-        <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <dt className="text-xs font-medium text-muted">App</dt>
-            <dd className="mt-1 font-medium text-slate-900">{campaign.app.name}</dd>
+        <div className="mt-5 border-t border-line pt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+              Testing configuration
+            </p>
+            <SourceBadge source="google-play" />
           </div>
-          <div>
-            <dt className="text-xs font-medium text-muted">Package</dt>
-            <dd className="mt-1 font-mono text-xs text-slate-700">{campaign.app.packageName}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-muted">Track</dt>
-            <dd className="mt-1 text-slate-900">{trackLabel}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-muted">Status</dt>
-            <dd className="mt-1">
-              <PlayStatusMark status={trackStatus} />
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-muted">Version</dt>
-            <dd className="mt-1 text-slate-900">{version}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-muted">TestLoop campaign</dt>
-            <dd className="mt-1 text-slate-900">{campaign.status}</dd>
-          </div>
-        </dl>
-
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          <SourceBadge source="testloop" />
-          {playConnected ? <SourceBadge source="google-play" /> : null}
+          <dl className="mt-3 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <dt className="text-xs font-medium text-muted">Testing type</dt>
+              <dd className="mt-1 font-medium text-slate-900">{testingTypeLabel(campaign.testingType)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-muted">Track</dt>
+              <dd className="mt-1 font-mono text-slate-900">{campaign.playTrack || trackLabel}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-muted">Status</dt>
+              <dd className="mt-1">
+                <PlayStatusMark status={trackStatus} />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-muted">Release</dt>
+              <dd className="mt-1 text-slate-900">{versionName || PLAY_API_UNAVAILABLE}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-muted">Version code</dt>
+              <dd className="mt-1 text-slate-900">{versionCode || PLAY_API_UNAVAILABLE}</dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-xs font-medium text-muted">Google Play testing link</dt>
+              <dd className="mt-1 break-all text-slate-700">
+                {playTestingUrl || "Not available through Google Play API"}
+              </dd>
+              {playTestingUrl ? (
+                <a
+                  className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
+                  href={playTestingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open Google Play
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                </a>
+              ) : null}
+            </div>
+          </dl>
+          <p className="mt-3 text-sm leading-6 text-slate-700">
+            <span className="font-medium">{typeExplainer.title}. </span>
+            {typeExplainer.body}
+          </p>
         </div>
 
-        <div className="mt-4">
-          <div className="mb-1.5 flex justify-between text-xs">
-            <span className="text-muted">
-              {registeredTesters} of {campaign.targetTesters} testers registered in TestLoop
-            </span>
-            <span className="font-semibold text-slate-900 tabular-nums">
-              {percent(registeredTesters, campaign.targetTesters)}%
-            </span>
+        <div className="mt-5 border-t border-line pt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">Testers</p>
+            <SourceBadge source="testloop" />
           </div>
-          <div
-            className="h-2 overflow-hidden rounded-full bg-surface-strong"
-            role="progressbar"
-            aria-valuenow={percent(registeredTesters, campaign.targetTesters)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <span
-              className="block h-full rounded-full bg-brand"
-              style={{ width: `${Math.min(100, percent(registeredTesters, campaign.targetTesters))}%` }}
-            />
+          <dl className="mt-3 grid gap-4 text-sm sm:grid-cols-4">
+            <div>
+              <dt className="text-xs text-muted">Currently detected</dt>
+              <dd className="mt-1 font-medium text-slate-900">{registeredTesters + pendingTesters}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">TestLoop testers</dt>
+              <dd className="mt-1 font-medium text-slate-900">{registeredTesters}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Pending TestLoop testers</dt>
+              <dd className="mt-1 font-medium text-slate-900">{pendingTesters}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Google Play testers</dt>
+              <dd className="mt-1 text-slate-900">{googlePlayTesters}</dd>
+            </div>
+          </dl>
+          <p className="mt-3 text-xs leading-5 text-muted">
+            Individual tester email list is not available through the Google Play Developer API. Manage
+            individual testers in Google Play Console.
+          </p>
+          <div className="mt-4">
+            <div className="mb-1.5 flex justify-between text-xs">
+              <span className="text-muted">
+                TestLoop campaign target: {registeredTesters} of {campaign.targetTesters}
+              </span>
+              <span className="font-semibold text-slate-900 tabular-nums">
+                {percent(registeredTesters, campaign.targetTesters)}%
+              </span>
+            </div>
+            <div
+              className="h-2 overflow-hidden rounded-full bg-surface-strong"
+              role="progressbar"
+              aria-valuenow={percent(registeredTesters, campaign.targetTesters)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <span
+                className="block h-full rounded-full bg-brand"
+                style={{ width: `${Math.min(100, percent(registeredTesters, campaign.targetTesters))}%` }}
+              />
+            </div>
           </div>
         </div>
 
+        <div className="mt-5 border-t border-line pt-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+            TestLoop activity
+          </p>
+          <dl className="mt-3 grid gap-4 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-xs text-muted">Request published</dt>
+              <dd className="mt-1 text-slate-900">{formatDateTime(campaign.publishedAt)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Last synchronized</dt>
+              <dd className="mt-1 text-slate-900">{formatDateTime(lastSyncAt)}</dd>
+            </div>
+          </dl>
+        </div>
       </section>
-
-      <div className="mb-6 flex gap-3 rounded-card border border-blue-200 bg-brand-soft p-4">
-        <Info className="mt-0.5 h-4.5 w-4.5 shrink-0 text-brand" aria-hidden />
-        <p className="text-sm leading-6 text-blue-900">
-          Target testers: {campaign.requiredTesters} · Registered in TestLoop: {registeredTesters} ·
-          Pending Play Console action: {pendingTesters}. These are TestLoop records. Verify official Play
-          Console status before applying for production access.
-        </p>
-      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="TestLoop testers" value={registeredTesters} />
@@ -269,15 +365,8 @@ export default async function CampaignDetailPage({
         </Card>
 
         <Card>
-          <CardHeader
-            title="How testers join"
-            description="You do not enter tester Gmail addresses. Other developers accept this request and confirm the Google account they will use."
-          />
-          <p className="mt-4 text-sm leading-6 text-body">
-            Publish this request, then wait for developers on TestLoop. Open testing testers receive
-            the Google Play testing link. Closed and internal testers submit a Gmail request that you
-            complete in Play Console, then confirm here as Developer confirmed.
-          </p>
+          <CardHeader title={typeExplainer.title} description="TestLoop workflow for this Google Play configuration." />
+          <p className="mt-4 text-sm leading-6 text-body">{typeExplainer.body}</p>
         </Card>
       </div>
 
@@ -355,6 +444,7 @@ export default async function CampaignDetailPage({
           lists, opt-in status, and per-tester installs are not returned by the connected Google Play API.
         </p>
         <p className="mt-2">{PLAY_TESTER_API_LIMITATION}</p>
+        <p className="mt-2">{PLAY_INSTALL_LIMITATION}</p>
       </div>
       <CampaignTestersTable
         testers={campaign.testerCampaigns.map((row) => ({
@@ -365,6 +455,7 @@ export default async function CampaignDetailPage({
           status: row.status,
           joinedAt: (row.dateEmailConfirmed || row.createdAt).toISOString(),
           lastActivityAt: (row.lastActivityAt || row.updatedAt).toISOString(),
+          downloadStatus: "Not available through Google Play API",
         }))}
       />
     </AppShell>

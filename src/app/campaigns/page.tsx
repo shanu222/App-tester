@@ -2,11 +2,12 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
 import { listCampaigns } from "@/lib/services/campaigns";
 import { prisma } from "@/lib/db";
-import { EmptyState } from "@/components/ui/widgets";
-import { Badge } from "@/components/ui/badge";
-import { SectionLabel } from "@/components/ui/card";
-import Link from "next/link";
 import { CreateCampaignForm } from "@/components/campaigns/create-campaign-form";
+import { PublishedRequestsList } from "@/components/campaigns/published-requests-list";
+import { getPlayConnection } from "@/lib/services/play-connection";
+import { parseTracksSnapshot } from "@/lib/integrations/play-config";
+import { canonicalPlayStoreUrl } from "@/lib/play-url";
+import { isPlayConnectionActive } from "@/lib/play-disconnect";
 
 export default async function CampaignsPage({
   searchParams,
@@ -15,67 +16,62 @@ export default async function CampaignsPage({
 }) {
   const user = await requireUser();
   const params = await searchParams;
-  const campaigns = await listCampaigns(user.id);
-  const apps = await prisma.app.findMany({
-    where: { userId: user.id },
-    include: { tracks: true },
-    orderBy: { name: "asc" },
-  });
-  const sources = await prisma.facebookSource.findMany({ where: { userId: user.id } });
+  const [campaigns, playConnection, googlePlayApps, sources] = await Promise.all([
+    listCampaigns(user.id),
+    getPlayConnection(user.id),
+    prisma.googlePlayApp.findMany({
+      where: { userId: user.id },
+      include: { app: { include: { tracks: true } } },
+      orderBy: { name: "asc" },
+    }),
+    prisma.facebookSource.findMany({ where: { userId: user.id } }),
+  ]);
+  const playConnected = isPlayConnectionActive(playConnection?.status);
 
   return (
     <AppShell
       title="My testing requests"
-      description="Publish a request, set a tester target, and track who accepts."
+      description="Publish a TestLoop request for an app already discovered from Google Play Console. Play remains the source of truth for tracks and releases."
     >
       <CreateCampaignForm
         initialAppId={params.appId}
-        apps={apps.map((app) => ({
-          id: app.id,
-          name: app.name,
-          packageName: app.packageName,
-          playStoreUrl: app.playStoreUrl,
-          webOptInUrl: app.webOptInUrl,
-          iconUrl: app.iconUrl,
-          testingType: app.testingType,
-          testerTarget: app.testerTarget,
-          tracks: app.tracks.map((track) => ({
+        playConnected={playConnected}
+        lastSyncAt={playConnection?.lastSyncAt?.toISOString() ?? null}
+        apps={googlePlayApps.map((row) => ({
+          id: row.appId || "",
+          name: row.app?.name || row.name,
+          packageName: row.packageName,
+          playStoreUrl: row.app?.playStoreUrl || canonicalPlayStoreUrl(row.packageName),
+          webOptInUrl: row.app?.webOptInUrl || null,
+          iconUrl: row.iconUrl || row.app?.iconUrl || null,
+          testerTarget: row.app?.testerTarget ?? 12,
+          lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
+          playTracks: parseTracksSnapshot(row.tracksSnapshot),
+          testingTracks: (row.app?.tracks || []).map((track) => ({
             id: track.id,
-            name: track.name,
             playTrack: track.trackId,
-            testingType: track.testingType,
-            syncedFromPlay: track.syncedFromPlay,
           })),
         }))}
         sources={sources.map((item) => ({ id: item.id, name: item.name }))}
       />
-      <SectionLabel className="mb-3 mt-10">Published requests</SectionLabel>
-      <div className="space-y-2.5">
-        {campaigns.length === 0 ? (
-          <EmptyState
-            title="No testing requests yet"
-            body="Publish your first testing request to start finding developers who can test your app."
-          />
-        ) : (
-          campaigns.map((campaign) => (
-            <Link
-              key={campaign.id}
-              href={`/campaigns/${campaign.id}`}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-white p-4 shadow-card transition-colors hover:border-line-strong hover:bg-surface sm:p-5"
-            >
-              <div className="min-w-0">
-                <div className="truncate font-medium text-slate-900">{campaign.name}</div>
-                <div className="mt-0.5 text-sm text-muted">
-                  {campaign.app.name} · {campaign.testingType.toLowerCase()} · target {campaign.targetTesters} ·{" "}
-                  {campaign._count.testerCampaigns} testers
-                  {campaign.publicSlug ? ` · /test/${campaign.publicSlug}` : ""}
-                </div>
-              </div>
-              <Badge tone={campaign.status === "ACTIVE" ? "good" : "neutral"}>{campaign.status}</Badge>
-            </Link>
-          ))
-        )}
-      </div>
+      <PublishedRequestsList
+        requests={campaigns.map((campaign) => ({
+          id: campaign.id,
+          name: campaign.name,
+          status: campaign.status,
+          published: campaign.published,
+          testingType: campaign.testingType,
+          playTrack: campaign.playTrack,
+          targetTesters: campaign.targetTesters,
+          testerCount: campaign._count.testerCampaigns,
+          publicSlug: campaign.publicSlug,
+          updatedAt: campaign.updatedAt.toISOString(),
+          pausedAt: campaign.pausedAt?.toISOString() ?? null,
+          appName: campaign.app.name,
+          packageName: campaign.app.packageName,
+          playConnected,
+        }))}
+      />
     </AppShell>
   );
 }

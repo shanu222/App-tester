@@ -60,7 +60,7 @@ export default async function PlayPage({
           />
           <PlayTestingGuide />
           <p className="text-sm leading-6 text-muted">
-            Need a TestLoop campaign that is not tied to a discovered track?{" "}
+            Publish a TestLoop testing request from an app already discovered from Google Play.{" "}
             <Link href="/campaigns" className="font-medium text-brand hover:underline">
               Open My Testing Requests
             </Link>

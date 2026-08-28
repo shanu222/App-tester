@@ -7,7 +7,7 @@ import { CopyButton } from "@/components/ui/copy-button";
 import type { PublicJoinResult } from "@/lib/testing-page";
 import { CheckCircle2, ExternalLink } from "lucide-react";
 
-export function JoinTestForm({ slug }: { slug: string }) {
+export function JoinTestForm({ slug, testingType }: { slug: string; testingType?: string }) {
   const [email, setEmail] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +54,11 @@ export function JoinTestForm({ slug }: { slug: string }) {
           placeholder="yourname@gmail.com"
         />
         <p className="mt-1.5 text-xs leading-5 text-muted">
-          TestLoop records your registration. Google Play remains the source of tester access.
+          {testingType === "OPEN"
+            ? "TestLoop records your Gmail for this request. You join the test through the Google Play testing link — not a closed tester list."
+            : testingType === "INTERNAL"
+              ? "Use the Google account associated with your Google Play access. TestLoop records it and follows the existing internal testing configuration."
+              : "TestLoop records your Gmail and provides the next step for Play Console access. Google Play remains the source of tester membership."}
         </p>
       </div>
       {error ? (

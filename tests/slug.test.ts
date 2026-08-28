@@ -42,9 +42,9 @@ describe("campaign testing URL", () => {
     expect(result.reason).toMatch(/internaltest/i);
   });
 
-  it("marks open testing as automatic and closed/internal as Play Console", () => {
-    expect(testerAccessMode("OPEN")).toBe("AUTOMATIC");
-    expect(testerAccessMode("CLOSED")).toBe("MANUAL_EMAIL_LIST");
-    expect(testerAccessMode("INTERNAL")).toBe("MANUAL_EMAIL_LIST");
+  it("marks open testing as opt-in and closed/internal as Play track testers", () => {
+    expect(testerAccessMode("OPEN")).toBe("OPEN_OPT_IN");
+    expect(testerAccessMode("CLOSED")).toBe("PLAY_TRACK_TESTERS");
+    expect(testerAccessMode("INTERNAL")).toBe("PLAY_TRACK_TESTERS");
   });
 });

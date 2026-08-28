@@ -23,14 +23,16 @@ export default async function RequestDetailPage({
   return (
     <AppShell title={request.app.name}>
       <section className="rounded-card border border-line bg-white p-5 shadow-card sm:p-6">
+        <p className="mt-3 text-sm leading-6 text-body">Looking for developers to test this app.</p>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <AppMark src={request.app.iconUrl} name={request.app.name} size={56} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={fill.tone}>{fill.label}</Badge>
               {pending ? <Badge tone="warn">Pending</Badge> : null}
-              <Badge tone="accent">Android · {request.testingType}</Badge>
-              {request.reciprocalOpen ? <Badge>Reciprocal open</Badge> : null}
+              <Badge tone="accent">{request.trackLabel}</Badge>
+              {request.reciprocalOpen ? <Badge>Reciprocal testing</Badge> : null}
+              {request.playConnected ? <Badge tone="good">Google Play connected</Badge> : null}
             </div>
             <p className="mt-3 text-sm text-muted">
               Developer:{" "}
@@ -39,11 +41,23 @@ export default async function RequestDetailPage({
               </Link>
               {request.owner.country ? ` · ${request.owner.country}` : ""}
             </p>
+            <p className="mt-1.5 font-mono text-xs text-muted">{request.app.packageName}</p>
             <p className="mt-1.5 text-sm text-body">
               <span className="font-medium text-slate-900 tabular-nums">
-                {request.testersReceived} / {request.targetTesters}
+                {request.remaining}
               </span>{" "}
-              testers · {request.durationDays} day duration
+              testing slots available · {request.durationDays} day duration
+            </p>
+            {request.versionLabel ? (
+              <p className="mt-1 text-sm text-muted">Version: {request.versionLabel}</p>
+            ) : null}
+            <p className="mt-1 text-sm text-muted">
+              Google Play testing link:{" "}
+              {request.testingType === "OPEN" && request.openTestingUrl
+                ? "Available"
+                : request.testingLinkStatus === "available"
+                  ? "Provided after enrollment"
+                  : request.testingLinkStatus || "Not available through Google Play API"}
             </p>
           </div>
         </div>
@@ -94,7 +108,8 @@ export default async function RequestDetailPage({
             appName={request.app.name}
             ownerName={request.owner.name}
             durationDays={request.durationDays}
-            defaultGmail={user.testingGmail || user.email}
+            defaultGmail={user.testingGmail || user.email || ""}
+            alreadyAccepted={Boolean(request.participation && !request.participation.consentAt)}
           />
         )}
       </div>

@@ -68,8 +68,12 @@ export default async function MyTestingPage() {
                       {owner.name} · {row.campaign.testingType} testing
                     </div>
                   </div>
-                  <Badge tone={row.status === "FAILED" || row.status === "MANUAL_REQUIRED" ? "warn" : "neutral"}>
-                    {row.status.replaceAll("_", " ")}
+                  <Badge tone={row.status === "FAILED" || row.status === "MANUAL_REQUIRED" ? "warn" : row.status === "INVITATION_READY" || row.status === "ADDED" ? "good" : "neutral"}>
+                    {row.playEnrollmentStatus === "ENROLLED"
+                      ? "Google Play enrolled"
+                      : row.playEnrollmentStatus === "OPEN_OPT_IN"
+                        ? "Open testing"
+                        : row.status.replaceAll("_", " ")}
                   </Badge>
                 </div>
                 {row.lastError ? (

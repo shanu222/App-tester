@@ -82,14 +82,8 @@ export default async function TesterDetailPage({
               <JsonButton
                 url="/api/google-play/testers/access"
                 body={{ testerCampaignId: row.id }}
-                label="Grant testing access"
+                label="Retry Play enrollment"
                 variant="secondary"
-              />
-              <JsonButton
-                url="/api/google-play/testers/confirm"
-                body={{ testerCampaignId: row.id }}
-                label="Mark added in Play Console"
-                variant="ghost"
               />
               <JsonButton
                 url="/api/gmail/send"

@@ -926,6 +926,16 @@ enum ParticipationStatus {
   FAILED
 }
 
+enum PlayEnrollmentStatus {
+  NOT_ATTEMPTED
+  PENDING
+  OPEN_OPT_IN
+  ENROLLED
+  VERIFIED
+  UNSUPPORTED
+  FAILED
+}
+
 enum ReciprocalStatus {
   PENDING
   ACCEPTED
@@ -943,6 +953,9 @@ model TestingParticipation {
   gmail            String?
   consentAt        DateTime?
   status           ParticipationStatus @default(REQUESTED)
+  playEnrollmentStatus PlayEnrollmentStatus @default(NOT_ATTEMPTED)
+  playEnrolledAt   DateTime?
+  playVerifiedAt   DateTime?
   lastError        String?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt

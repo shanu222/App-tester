@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
-import { campaignStats, getCampaign } from "@/lib/services/campaigns";
+import { getCampaign } from "@/lib/services/campaigns";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState, StatCard } from "@/components/ui/widgets";
 import { JsonButton } from "@/components/ui/json-button";
@@ -8,12 +8,10 @@ import { Card, CardHeader, SectionLabel } from "@/components/ui/card";
 import { percent } from "@/lib/utils";
 import { ExternalLink, Info } from "lucide-react";
 import Link from "next/link";
-import { PasteReplyForm } from "@/components/messages/paste-reply-form";
-import { ManualTesterForm } from "@/components/testers/manual-tester-form";
 import { RecruitmentPostEditor } from "@/components/campaigns/recruitment-post-editor";
 import { CopyButton } from "@/components/ui/copy-button";
 import { campaignShareUrl } from "@/lib/services/campaigns";
-import { PLAY_TESTER_API_LIMITATION, testerAccessMode } from "@/lib/integrations/play-testers";
+import { PLAY_TESTER_API_LIMITATION } from "@/lib/integrations/play-testers";
 import { CampaignTestersTable } from "@/components/campaigns/campaign-testers-table";
 import { prisma } from "@/lib/db";
 import { parseTracksSnapshot, PLAY_API_UNAVAILABLE, playTrackDisplayName, playTrackUiStatus } from "@/lib/integrations/play-config";
@@ -29,13 +27,7 @@ export default async function CampaignDetailPage({
   const user = await requireUser();
   const { id } = await params;
   const campaign = await getCampaign(user.id, id);
-  const stats = await campaignStats(user.id, id);
   const shareUrl = campaignShareUrl(campaign.publicSlug);
-  const accessMode = testerAccessMode(campaign.testingType);
-  const waitingEmails = campaign.testerCampaigns
-    .filter((row) => row.status === "ADDING")
-    .map((row) => row.detectedEmail || row.tester.email)
-    .filter((email): email is string => Boolean(email));
 
   const playApp = await prisma.googlePlayApp.findFirst({
     where: { userId: user.id, appId: campaign.appId },
@@ -55,8 +47,18 @@ export default async function CampaignDetailPage({
   const version =
     playTrack?.releaseName ||
     (playTrack?.versionCodes[0] ? `Version code ${playTrack.versionCodes[0]}` : PLAY_API_UNAVAILABLE);
-  const registeredTesters = campaign.testerCampaigns.length;
-  const pendingTesters = waitingEmails.length;
+  const registeredTesters = campaign.participations.filter((row) => Boolean(row.consentAt)).length;
+  const pendingTesters = campaign.participations.filter((row) =>
+    ["FAILED", "MANUAL_REQUIRED", "ACCESS_PROCESSING", "ACCEPTED"].includes(row.status),
+  ).length;
+  const completedTesters = campaign.participations.filter((row) =>
+    ["FEEDBACK_RECEIVED", "COMPLETED"].includes(row.status),
+  ).length;
+  const playEnrolled = campaign.participations.filter(
+    (row) => row.playEnrollmentStatus === "ENROLLED" || row.playEnrollmentStatus === "VERIFIED",
+  ).length;
+  const googlePlayTesters =
+    playTrack?.googleGroupCount == null ? PLAY_API_UNAVAILABLE : playTrack.googleGroupCount;
   const storeUrl = campaign.playStoreUrl || campaign.app.playStoreUrl || canonicalPlayStoreUrl(campaign.app.packageName);
   const playTestingUrl = campaign.testingUrl || campaign.webOptInUrl;
 
@@ -158,10 +160,14 @@ export default async function CampaignDetailPage({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Target" value={campaign.targetTesters} />
         <StatCard label="TestLoop testers" value={registeredTesters} />
-        <StatCard label="Pending Play Console" value={pendingTesters} />
-        <StatCard label="Opportunities" value={stats.opportunities} />
+        <StatCard
+          label="Play tester groups"
+          value={googlePlayTesters}
+          hint={playEnrolled ? `${playEnrolled} TestLoop testers confirmed on Play groups` : "Individual email lists are not returned by the Play API"}
+        />
+        <StatCard label="Pending" value={pendingTesters} />
+        <StatCard label="Completed" value={completedTesters} />
       </div>
 
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
@@ -231,50 +237,18 @@ export default async function CampaignDetailPage({
               </div>
             ) : null}
           </dl>
-          {accessMode === "MANUAL_EMAIL_LIST" && waitingEmails.length > 0 ? (
-            <div className="mt-4 border-t border-line pt-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="text-xs font-medium text-muted">Pending Play Console action</div>
-                <SourceBadge source="action" />
-              </div>
-              <p className="mt-1 text-xs leading-5 text-muted">
-                These testers are registered in TestLoop. Google Play has not confirmed they were added.
-              </p>
-              <ul className="mt-2 space-y-2">
-                {campaign.testerCampaigns
-                  .filter((row) => row.status === "ADDING")
-                  .map((row) => {
-                    const email = row.detectedEmail || row.tester.email;
-                    if (!email) return null;
-                    return (
-                      <li
-                        key={row.id}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-line bg-surface px-3 py-2"
-                      >
-                        <span className="break-all font-mono text-xs text-slate-700">{email}</span>
-                        <CopyButton value={email} label="Copy email" />
-                      </li>
-                    );
-                  })}
-              </ul>
-              <div className="mt-3">
-                <CopyButton value={waitingEmails.join("\n")} label="Copy all pending testers" />
-              </div>
-            </div>
-          ) : null}
         </Card>
 
         <Card>
           <CardHeader
-            title="Manual override"
-            description="Use only when Google APIs cannot complete the action automatically."
+            title="How testers join"
+            description="You do not enter tester Gmail addresses. Other developers accept this request and confirm the Google account they will use."
           />
-          <div className="mt-5">
-            <ManualTesterForm campaignId={campaign.id} />
-          </div>
-          <div className="mt-5 border-t border-line pt-5">
-            <PasteReplyForm campaignId={campaign.id} />
-          </div>
+          <p className="mt-4 text-sm leading-6 text-body">
+            Publish this request, then wait for developers on TestLoop. TestLoop uses your connected
+            Google Play account to enroll each confirmed Gmail when the Play API supports that
+            operation.
+          </p>
         </Card>
       </div>
 
@@ -307,7 +281,12 @@ export default async function CampaignDetailPage({
                   >
                     {row.tester.developerName || row.tester.name}
                   </Link>
-                  <div className="mt-0.5 text-sm text-muted">{row.status.replaceAll("_", " ")}</div>
+                  <div className="mt-0.5 text-sm text-muted">
+                    Source: TestLoop Accepted Test · {row.status.replaceAll("_", " ")}
+                    {row.playEnrollmentStatus && row.playEnrollmentStatus !== "NOT_ATTEMPTED"
+                      ? ` · Play ${row.playEnrollmentStatus.replaceAll("_", " ").toLowerCase()}`
+                      : ""}
+                  </div>
                 </div>
                 <div className="text-sm text-slate-700">
                   {row.consentAt ? row.gmail : <span className="text-muted">Gmail hidden until consent</span>}
@@ -331,11 +310,6 @@ export default async function CampaignDetailPage({
                     label="Retry"
                     variant="secondary"
                   />
-                  <JsonButton
-                    url="/api/network"
-                    body={{ action: "manual-added", participationId: row.id }}
-                    label="Mark manually added"
-                  />
                 </div>
               ) : null}
             </div>
@@ -346,26 +320,22 @@ export default async function CampaignDetailPage({
       <SectionLabel className="mb-3 mt-10">Testers</SectionLabel>
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
         <StatCard label="TestLoop testers" value={registeredTesters} />
-        <StatCard label="Pending Play Console" value={pendingTesters} />
-        <StatCard label="Play opt-in" value="Unavailable" hint="Not returned by the Play Developer API" />
+        <StatCard label="Pending" value={pendingTesters} />
+        <StatCard
+          label="Google Play testers"
+          value={googlePlayTesters}
+          hint="Individual email lists are not returned by the Play Developer API"
+        />
       </div>
       <div className="mb-4 rounded-card border border-line bg-surface p-4 text-sm leading-6 text-body">
         <div className="mb-2 flex flex-wrap gap-1.5">
           <SourceBadge source="limitation" />
         </div>
         <p>
-          Individual tester details, opt-in status, and per-tester download/install data are not
-          available through the connected Google Play API. The table below is TestLoop registration
-          data only.
+          Testers listed here joined by accepting this TestLoop request. Individual Play Console email
+          lists, opt-in status, and per-tester installs are not returned by the connected Google Play API.
         </p>
-        {accessMode === "MANUAL_EMAIL_LIST" ? (
-          <p className="mt-2">{PLAY_TESTER_API_LIMITATION}</p>
-        ) : (
-          <p className="mt-2">
-            Open testing testers join through Google Play using the official testing link. TestLoop
-            does not install the app and does not confirm Play opt-in.
-          </p>
-        )}
+        <p className="mt-2">{PLAY_TESTER_API_LIMITATION}</p>
       </div>
       <CampaignTestersTable
         testers={campaign.testerCampaigns.map((row) => ({

@@ -17,8 +17,8 @@ const MODES = [
     points: [
       "Eligibility is managed in Play Console.",
       "Email lists and Google Groups are Play Console features.",
-      "TestLoop can collect tester Gmail addresses.",
-      "The Play Developer API cannot add individual emails to those lists, so Play Console action may be required.",
+      "The Play Developer API cannot add individual emails to those lists.",
+      "Other developers provide Gmail when they accept this TestLoop request. TestLoop then enrolls that address through the owner’s Play connection when the API supports it.",
     ],
   },
   {

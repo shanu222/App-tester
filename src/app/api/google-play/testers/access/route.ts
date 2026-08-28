@@ -8,9 +8,8 @@ const schema = z.object({ testerCampaignId: z.string().min(1) });
 /**
  * Give a confirmed tester access to the campaign's track.
  *
- * Open tracks complete immediately. Internal and closed tracks return 409
- * because the Play testers resource cannot take an individual Gmail address.
- * That is a Google Play limitation, not a TestLoop error.
+ * Open tracks complete without a tester-list write. Closed/internal tracks
+ * return 409 when Google Play does not confirm enrollment.
  */
 export async function POST(request: Request) {
   try {

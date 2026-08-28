@@ -4,6 +4,8 @@ import { logActivity, notify } from "@/lib/audit";
 import { createOrGetTester, setTesterStatus } from "@/lib/services/testers";
 import { confirmTesterAdded, grantTesterAccess } from "@/lib/services/invitations";
 import { describeEmail } from "@/lib/email-extract";
+import { parseTracksSnapshot, playTrackDisplayName } from "@/lib/integrations/play-config";
+import { campaignTestingUrl } from "@/lib/integrations/play-testers";
 
 const RECEIVED_STATUSES = [
   "GMAIL_CONFIRMED",
@@ -159,9 +161,8 @@ export async function listPublishedRequests(
     take: 80,
   });
   const viewer = await prisma.user.findUnique({ where: { id: viewerId } });
-  const play = await prisma.integration.findMany({
+  const play = await prisma.googlePlayConnection.findMany({
     where: {
-      provider: "GOOGLE_PLAY",
       status: "CONNECTED",
       userId: { in: campaigns.map((item) => item.userId) },
     },
@@ -195,6 +196,7 @@ export async function listPublishedRequests(
         testersReceived,
         remaining,
         match,
+        playTrack: campaign.playTrack,
         automaticAccess: campaign.testingType === "OPEN",
         playConnected: playSet.has(campaign.userId),
         country: campaign.user.country,
@@ -213,7 +215,7 @@ export async function listPublishedRequests(
 export async function getPublicRequest(viewerId: string, campaignId: string) {
   const campaign = await prisma.campaign.findFirst({
     where: { id: campaignId, published: true, status: "ACTIVE" },
-    include: { app: true, user: true },
+    include: { app: true, user: true, track: true },
   });
   if (!campaign) throw new NotFoundError("Testing request not found.");
   const hidden = await blockedIdsFor(viewerId);
@@ -230,11 +232,32 @@ export async function getPublicRequest(viewerId: string, campaignId: string) {
       lastError: true,
       createdAt: true,
       gmail: true,
+      playEnrollmentStatus: true,
     },
   });
-  const play = await prisma.integration.findFirst({
-    where: { userId: campaign.userId, provider: "GOOGLE_PLAY", status: "CONNECTED" },
+  const play = await prisma.googlePlayConnection.findUnique({
+    where: { userId: campaign.userId },
   });
+  const playApp = await prisma.googlePlayApp.findFirst({
+    where: { userId: campaign.userId, packageName: campaign.app.packageName },
+    select: { tracksSnapshot: true },
+  });
+  const playTracks = parseTracksSnapshot(playApp?.tracksSnapshot);
+  const playTrack =
+    playTracks.find((track) => track.track === campaign.playTrack) ||
+    playTracks.find((track) => track.typeGuess === campaign.testingType) ||
+    null;
+  const versionLabel =
+    playTrack?.releaseName ||
+    (playTrack?.versionCodes[0] ? `Version code ${playTrack.versionCodes[0]}` : null);
+  const testing = campaignTestingUrl({
+    testingType: campaign.testingType,
+    packageName: campaign.app.packageName,
+    configuredUrl: campaign.testingUrl || campaign.webOptInUrl,
+  });
+  const trackLabel = playTrack
+    ? playTrack.displayName
+    : playTrackDisplayName(campaign.playTrack || campaign.testingType.toLowerCase());
   return {
     id: campaign.id,
     name: campaign.name,
@@ -255,7 +278,12 @@ export async function getPublicRequest(viewerId: string, campaignId: string) {
     testersReceived,
     remaining: Math.max(0, campaign.targetTesters - testersReceived),
     automaticAccess: campaign.testingType === "OPEN",
-    playConnected: Boolean(play),
+    playConnected: play?.status === "CONNECTED",
+    playTrack: campaign.playTrack,
+    trackLabel,
+    versionLabel,
+    testingLinkStatus: testing.url ? "available" : testing.reason,
+    openTestingUrl: campaign.testingType === "OPEN" ? testing.url : null,
     isOwner: campaign.userId === viewerId,
     owner: publicDeveloper(campaign.user),
     app: {
@@ -272,6 +300,7 @@ export async function getPublicRequest(viewerId: string, campaignId: string) {
           consentAt: mine.consentAt,
           lastError: mine.lastError,
           createdAt: mine.createdAt,
+          playEnrollmentStatus: mine.playEnrollmentStatus,
           gmail: mine.gmail && mine.consentAt ? mine.gmail : null,
         }
       : null,
@@ -351,7 +380,7 @@ export async function confirmTestingGmail(testerUserId: string, campaignId: stri
     campaignId,
     email: described.normalized,
     name: participation.tester.name || participation.tester.developerName || undefined,
-    sourceLabel: "Developer network",
+    sourceLabel: "TestLoop Accepted Test",
   });
   await prisma.testerCampaign.update({
     where: { id: created.testerCampaign.id },
@@ -394,6 +423,47 @@ export async function confirmTestingGmail(testerUserId: string, campaignId: stri
   return processTesterAccess(participation.id);
 }
 
+export async function describeJoinResult(participationId: string) {
+  const row = await prisma.testingParticipation.findUnique({
+    where: { id: participationId },
+    include: { campaign: { include: { app: true } } },
+  });
+  if (!row) throw new NotFoundError("Participation not found.");
+  const testing = campaignTestingUrl({
+    testingType: row.campaign.testingType,
+    packageName: row.campaign.app.packageName,
+    configuredUrl: row.campaign.testingUrl || row.campaign.webOptInUrl,
+  });
+  const enrolled = row.playEnrollmentStatus === "ENROLLED" || row.playEnrollmentStatus === "VERIFIED";
+  const open = row.playEnrollmentStatus === "OPEN_OPT_IN";
+  const failed = row.status === "FAILED" || row.status === "MANUAL_REQUIRED";
+  return {
+    participation: {
+      id: row.id,
+      status: row.status,
+      lastError: row.lastError,
+      consentAt: row.consentAt,
+      playEnrollmentStatus: row.playEnrollmentStatus,
+    },
+    join: {
+      ok: !failed,
+      outcome: row.playEnrollmentStatus,
+      title: failed
+        ? "Play enrollment did not complete"
+        : enrolled
+          ? "Tester added"
+          : open
+            ? "Open testing"
+            : "TestLoop registration complete",
+      detail: row.lastError || (open ? "Anyone can join this Google Play test." : enrolled ? "Google Play confirmed this Google account on the tester configuration." : "Your TestLoop registration is recorded."),
+      email: row.gmail,
+      appName: row.campaign.app.name,
+      trackLabel: row.campaign.testingType === "OPEN" ? "Open Testing" : row.campaign.testingType === "INTERNAL" ? "Internal Testing" : "Closed Testing",
+      testingUrl: failed ? null : testing.url,
+    },
+  };
+}
+
 export async function processTesterAccess(participationId: string) {
   const participation = await prisma.testingParticipation.findUnique({
     where: { id: participationId },
@@ -407,44 +477,51 @@ export async function processTesterAccess(participationId: string) {
   }
   await prisma.testingParticipation.update({
     where: { id: participation.id },
-    data: { status: "ACCESS_PROCESSING", lastError: null },
+    data: { status: "ACCESS_PROCESSING", playEnrollmentStatus: "PENDING", lastError: null },
   });
   try {
     const result = await grantTesterAccess({
       userId: participation.ownerUserId,
       testerCampaignId: participation.testerCampaignId,
     });
+    const now = new Date();
     if (!result.ok) {
-      const manual = await prisma.testingParticipation.update({
+      return prisma.testingParticipation.update({
         where: { id: participation.id },
-        data: { status: "MANUAL_REQUIRED", lastError: result.detail },
+        data: {
+          status: result.playEnrollmentStatus === "UNSUPPORTED" ? "MANUAL_REQUIRED" : "FAILED",
+          playEnrollmentStatus: result.playEnrollmentStatus,
+          lastError: result.detail,
+        },
       });
-      return manual;
     }
 
-    // Open testing: TestLoop can return Google's opt-in URL. That is not API confirmation
-    // that the tester was added to a Play tester list.
     const optInUrl = participation.campaign.webOptInUrl || result.optInUrl;
-    await prisma.testingParticipation.update({
+    const enrolled = result.playEnrollmentStatus === "ENROLLED";
+    const updated = await prisma.testingParticipation.update({
       where: { id: participation.id },
-      data: { status: optInUrl ? "INVITATION_READY" : "ADDED", lastError: null },
+      data: {
+        status: optInUrl ? "INVITATION_READY" : "ADDED",
+        playEnrollmentStatus: result.playEnrollmentStatus,
+        playEnrolledAt: enrolled ? now : null,
+        playVerifiedAt: enrolled ? now : null,
+        lastError: null,
+      },
     });
     await notify({
       userId: participation.testerUserId,
       type: "tester",
-      title: "TestLoop registration complete",
-      body: optInUrl
-        ? `Open Google Play to join the test for ${participation.campaign.app.name}. TestLoop has not added you to Google Play.`
-        : `${participation.campaign.app.name} is registered in TestLoop. Google Play has not confirmed tester list membership.`,
+      title: enrolled ? "You're enrolled in this Google Play test" : "TestLoop registration complete",
+      body: result.detail,
       href: "/testing",
       campaignId: participation.campaignId,
     });
-    return prisma.testingParticipation.findUniqueOrThrow({ where: { id: participation.id } });
+    return updated;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Google Play action failed.";
     return prisma.testingParticipation.update({
       where: { id: participation.id },
-      data: { status: "FAILED", lastError: message },
+      data: { status: "FAILED", playEnrollmentStatus: "FAILED", lastError: message },
     });
   }
 }

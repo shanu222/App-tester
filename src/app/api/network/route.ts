@@ -9,6 +9,7 @@ import {
   markParticipationManuallyAdded,
   markParticipationOptedIn,
   processTesterAccess,
+  describeJoinResult,
   requestReciprocal,
   respondReciprocal,
   submitParticipationFeedback,
@@ -66,14 +67,8 @@ export async function POST(request: Request) {
     if (body.action === "consent") {
       if (!body.campaignId || !body.gmail) return json({ error: "campaignId and gmail required." }, 400);
       const participation = await confirmTestingGmail(user.id, body.campaignId, body.gmail);
-      return json({
-        participation: {
-          id: participation.id,
-          status: participation.status,
-          lastError: participation.lastError,
-          consentAt: participation.consentAt,
-        },
-      });
+      const join = await describeJoinResult(participation.id);
+      return json(join);
     }
     if (body.action === "retry-access") {
       if (!body.participationId) return json({ error: "participationId required." }, 400);
@@ -85,7 +80,8 @@ export async function POST(request: Request) {
       });
       if (!existing) return json({ error: "Not found." }, 404);
       const participation = await processTesterAccess(existing.id);
-      return json({ participation: { id: participation.id, status: participation.status, lastError: participation.lastError } });
+      const join = await describeJoinResult(participation.id);
+      return json(join);
     }
     if (body.action === "manual-added") {
       if (!body.participationId) return json({ error: "participationId required." }, 400);

@@ -1,44 +1,54 @@
 import type { TestingType } from "@prisma/client";
+import { normalizeEmail } from "@/lib/email-extract";
 
 /**
  * Verified against the Android Publisher v3 Testers resource:
  * `{ googleGroups: [string] }`. Google documents that email lists in Play
  * Console are not supported by this resource.
  *
- * There is therefore no API call that puts an individual Gmail on a closed or
- * internal track. TestLoop reports that as a Google Play limitation rather
- * than as a TestLoop failure.
+ * Individual Gmail addresses therefore cannot be written to a closed/internal
+ * email list through the connected API. A Google Group address can be attached
+ * to the track without replacing groups already returned by GET.
  */
 export const PLAY_TESTER_API_LIMITATION =
-  "Google Play controls eligibility for closed and internal testing tracks. TestLoop can manage your campaign and tester records, but individual email-list membership must be handled through the supported Google Play configuration. The Play Developer API does not add individual Gmail addresses to those lists.";
+  "TestLoop could not add your Google account to this Google Play test. The Play Developer API only supports Google Groups on a testing track, not individual Gmail addresses. Existing Play testers were not changed.";
 
-export const PLAY_CLOSED_TESTING_TESTER_NOTE =
-  "Your email has been registered with TestLoop. Because this testing track requires controlled tester membership, the developer may need to add this email to the Play Console tester list.";
+export const PLAY_INTERNAL_TESTER_LIMIT_NOTE = "Internal Testing tester limit reached.";
 
-export const PLAY_INTERNAL_TESTING_TESTER_NOTE =
-  "Your email has been registered with TestLoop. Because internal testing requires controlled tester membership, the developer may need to add this email in Play Console. TestLoop has not added you to Google Play.";
+export const PLAY_CLOSED_TESTING_TESTER_NOTE = PLAY_TESTER_API_LIMITATION;
+
+export const PLAY_INTERNAL_TESTING_TESTER_NOTE = PLAY_TESTER_API_LIMITATION;
 
 export const PLAY_OPEN_TRACK_NOTE =
-  "Your app already has an open testing track. Testers can join through Google Play using the official opt-in link — TestLoop does not need to add individual Gmail addresses.";
+  "Anyone can join this Google Play open test. TestLoop recorded your Gmail for reciprocal testing and did not add it to a Play tester list.";
 
-export const PLAY_OPEN_TESTER_READY =
-  "Your TestLoop registration is complete. Use your Google account on Google Play to join the test. TestLoop has not added you to Google Play.";
+export const PLAY_OPEN_TESTER_READY = PLAY_OPEN_TRACK_NOTE;
 
-/**
- * How a tester gets access for a given track.
- *
- * - `AUTOMATIC`: open testing. No Play API write is required or possible, and
- *   the opt-in URL alone is sufficient, so TestLoop completes this end to end.
- * - `MANUAL_EMAIL_LIST`: internal/closed testing. Eligibility is configured in
- *   Play Console because the API exposes no email-list write.
- */
-export type TesterAccessMode = "AUTOMATIC" | "MANUAL_EMAIL_LIST";
+export const PLAY_ENROLLMENT_FAILED =
+  "TestLoop could not add your Google account to this Google Play test.";
+
+export type TesterAccessMode = "OPEN_OPT_IN" | "PLAY_TRACK_TESTERS";
 
 export function testerAccessMode(testingType: TestingType): TesterAccessMode {
-  return testingType === "OPEN" ? "AUTOMATIC" : "MANUAL_EMAIL_LIST";
+  return testingType === "OPEN" ? "OPEN_OPT_IN" : "PLAY_TRACK_TESTERS";
 }
 
-/** Play Console has no package-addressable deep link, so give the exact path. */
+export function isGoogleGroupAddress(email: string) {
+  return normalizeEmail(email).endsWith("@googlegroups.com");
+}
+
+/**
+ * Build the googleGroups payload for an update. Existing groups are kept.
+ * Returns alreadyPresent when the candidate is already on the list.
+ */
+export function mergeGoogleGroups(existing: string[], candidate: string) {
+  const normalized = normalizeEmail(candidate);
+  const groups = existing.map((group) => group.trim()).filter(Boolean);
+  const alreadyPresent = groups.some((group) => normalizeEmail(group) === normalized);
+  if (alreadyPresent) return { groups, alreadyPresent: true };
+  return { groups: [...groups, normalized], alreadyPresent: false };
+}
+
 export const PLAY_CONSOLE_URL = "https://play.google.com/console";
 
 export function playConsoleTesterSteps(testingType: TestingType): string[] {
@@ -48,29 +58,15 @@ export function playConsoleTesterSteps(testingType: TestingType): string[] {
     `Go to Test and release → Testing → ${track}.`,
     "Select the track, then open the Testers tab.",
     "Configure tester eligibility using the supported Google Play options for this track.",
-    "Save the changes in Play Console, then mark the testers as added in TestLoop.",
   ];
 }
 
-/**
- * The official Play opt-in URL for a package. This is Google's own testing
- * endpoint, never a TestLoop-hosted download.
- */
 export function playOptInUrl(packageName: string) {
   const trimmed = packageName.trim();
   if (!trimmed) return null;
   return `https://play.google.com/apps/testing/${trimmed}`;
 }
 
-/**
- * Resolve the real Google Play testing link for a campaign.
- *
- * Open and closed tracks share the derivable `apps/testing/{package}` opt-in
- * page, so TestLoop can build it. Internal testing does not: its link is
- * `apps/internaltest/{opaque id}`, which the Play Developer API never returns.
- * Rather than invent one, TestLoop asks the developer to paste the link Play
- * Console shows them, and reports it as missing until they do.
- */
 export function campaignTestingUrl(input: {
   testingType: TestingType;
   packageName: string;
@@ -82,7 +78,7 @@ export function campaignTestingUrl(input: {
     return {
       url: null,
       reason:
-        "Internal testing opt-in links are issued by Play Console as apps/internaltest/… and are not exposed by the Play Developer API. Copy the link from Play Console → Internal testing → Testers and paste it into this campaign.",
+        "Internal testing opt-in links are issued by Play Console as apps/internaltest/… and are not exposed by the Play Developer API. Copy the link from Play Console → Internal testing → Testers.",
     };
   }
   const url = playOptInUrl(input.packageName);

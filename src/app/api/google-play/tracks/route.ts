@@ -23,9 +23,7 @@ export async function POST(request: Request) {
       tracks: discovery.tracks.map((track) => ({
         ...track,
         accessMode:
-          track.typeGuess === "PRODUCTION"
-            ? "MANUAL_EMAIL_LIST"
-            : testerAccessMode(track.typeGuess),
+          track.typeGuess === "PRODUCTION" ? "READ_ONLY" : testerAccessMode(track.typeGuess),
       })),
       configuration: discovery.configuration,
       recommendation: discovery.recommendation,

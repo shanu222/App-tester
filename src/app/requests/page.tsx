@@ -110,9 +110,10 @@ export default async function RequestsPage({
                       <Badge tone={fill.tone}>{fill.label}</Badge>
                       {item.reciprocalOpen ? <Badge tone="accent">Reciprocal open</Badge> : null}
                     </div>
+                    <p className="mt-2 text-sm text-body">Looking for developers to test this app.</p>
                     <p className="mt-1 text-sm text-muted">
                       {item.owner.name}
-                      {item.country ? ` · ${item.country}` : ""} · Android · {item.testingType} testing
+                      {item.country ? ` · ${item.country}` : ""} · {item.playTrack || `${item.testingType} testing`}
                     </p>
                     <p className="mt-2 text-sm text-body">
                       <span className="font-medium text-slate-900 tabular-nums">

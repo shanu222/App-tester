@@ -32,14 +32,14 @@ describe("integration honesty", () => {
     );
   });
 
-  it("only automates tester access for open testing", () => {
-    expect(testerAccessMode("OPEN")).toBe("AUTOMATIC");
-    expect(testerAccessMode("CLOSED")).toBe("MANUAL_EMAIL_LIST");
-    expect(testerAccessMode("INTERNAL")).toBe("MANUAL_EMAIL_LIST");
+  it("only skips Play list writes for open testing", () => {
+    expect(testerAccessMode("OPEN")).toBe("OPEN_OPT_IN");
+    expect(testerAccessMode("CLOSED")).toBe("PLAY_TRACK_TESTERS");
+    expect(testerAccessMode("INTERNAL")).toBe("PLAY_TRACK_TESTERS");
   });
 
-  it("explains the Play testers API limitation rather than claiming automation", () => {
-    expect(PLAY_TESTER_API_LIMITATION).toMatch(/Google Play controls eligibility/i);
+  it("explains the Play testers API limitation rather than claiming email-list automation", () => {
+    expect(PLAY_TESTER_API_LIMITATION).toMatch(/individual Gmail/i);
     const steps = playConsoleTesterSteps("CLOSED");
     expect(steps.length).toBeGreaterThan(0);
     expect(steps.join(" ")).toContain("Closed testing");

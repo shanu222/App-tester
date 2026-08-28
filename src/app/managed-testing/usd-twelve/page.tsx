@@ -21,7 +21,7 @@ export default async function UsdTwelvePackagePage() {
       description="Managed Beta Testing · tester coordination · $10 — 12 Testers — 14 Days"
     >
       <Card className="max-w-xl">
-        <CardHeader title="TestLoop 12-Testers Package" description={`${formatUsd(pack.amountPkr)} · 12 testers · 14 days`} />
+        <CardHeader title="12 Testers — $10 USD — 14 Days" description={`${formatUsd(pack.amountPkr)} · 12 testers · 14 days`} />
         <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-muted">Testers</dt>

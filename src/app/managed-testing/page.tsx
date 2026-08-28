@@ -2,7 +2,6 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
 import { listDeveloperManagedCampaigns, listDeveloperPayments, listManagedPackages } from "@/lib/services/managed-testing";
 import { PaymentsPackagesPanel } from "@/components/managed-testing/payments-packages-panel";
-import { PackageCards } from "@/components/managed-testing/package-cards";
 import { UsdTwelvePackageCard } from "@/components/managed-testing/usd-twelve-package-card";
 import { ManagedTestingNotice } from "@/components/managed-testing/compliance-notice";
 import { CardHeader, SectionLabel } from "@/components/ui/card";
@@ -96,22 +95,19 @@ export default async function ManagedTestingPage() {
 
       <div className="mt-10">
         <CardHeader
-          title="Choose a tester package"
+          title="12 Testers — $10 USD — 14 Days"
           description="Managed testers are real people who have consented to participate. Outcomes on Google Play are not guaranteed."
         />
-        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {packages
-            .filter((pack) => isUsdTwelvePackage(pack.code))
-            .map((pack) => (
-              <UsdTwelvePackageCard key={pack.code} amount={pack.amountPkr} />
-            ))}
-        </div>
-        <div className="mt-8">
+        <div className="mt-5">
           {packages.length === 0 ? (
             <EmptyState title="Packages unavailable" body="Managed testing packages are not listed yet." />
-          ) : packages.some((pack) => !isUsdTwelvePackage(pack.code)) ? (
-            <PackageCards packages={packages} />
-          ) : null}
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {packages.map((pack) => (
+                <UsdTwelvePackageCard key={pack.code} amount={pack.amountPkr} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </AppShell>

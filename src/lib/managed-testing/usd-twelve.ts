@@ -1,5 +1,5 @@
 export const USD_TWELVE_PACKAGE_CODE = "usd_12_14";
-export const USD_TWELVE_PACKAGE_NAME = "TestLoop 12-Testers / 14-Day Managed Testing";
+export const USD_TWELVE_PACKAGE_NAME = "12 Testers — $10 USD — 14 Days";
 export const USD_TWELVE_PRICE_USD = 10;
 export const USD_TWELVE_TESTER_COUNT = 12;
 export const USD_TWELVE_DURATION_DAYS = 14;

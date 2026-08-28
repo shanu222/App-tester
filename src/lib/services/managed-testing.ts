@@ -36,7 +36,7 @@ import {
   type PaymentMethodId,
 } from "@/lib/managed-testing/methods";
 import { testerDisplayLabel, validateManagedCampaignSetup } from "@/lib/managed-testing/setup";
-import { isUsdTwelvePackage, parseUsdTwelveFulfillment } from "@/lib/managed-testing/usd-twelve";
+import { USD_TWELVE_PACKAGE_CODE, isUsdTwelvePackage, parseUsdTwelveFulfillment } from "@/lib/managed-testing/usd-twelve";
 import { issuePaymentConfirmToken } from "@/lib/managed-testing/payment-confirm-token";
 import { fulfillUsdTwelvePackage } from "@/lib/services/usd-twelve-package";
 import { formatDateTime } from "@/lib/utils";
@@ -94,7 +94,7 @@ async function notifyDeveloper(
 
 export async function listManagedPackages() {
   return prisma.managedTestingPackage.findMany({
-    where: { active: true },
+    where: { active: true, code: USD_TWELVE_PACKAGE_CODE },
     orderBy: { sortOrder: "asc" },
   });
 }

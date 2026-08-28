@@ -6,7 +6,7 @@ export function UsdTwelvePackageCard({ amount }: { amount: number }) {
   return (
     <article className="flex flex-col rounded-card border border-brand bg-white p-5 shadow-card ring-1 ring-brand/20">
       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand">Managed Testing</p>
-      <h3 className="mt-1 text-lg font-semibold text-slate-900">TestLoop 12-Testers Package</h3>
+      <h3 className="mt-1 text-lg font-semibold text-slate-900">12 Testers — $10 USD — 14 Days</h3>
       <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{formatUsd(amount)}</p>
       <p className="mt-1 text-sm text-muted">$10 — 12 Testers — 14 Days</p>
       <p className="mt-3 text-sm leading-6 text-slate-700">

@@ -3,7 +3,7 @@ import { AppError, ForbiddenError, NotFoundError, RateLimitError } from "@/lib/e
 import { logActivity, notify } from "@/lib/audit";
 import { createOrGetTester, setTesterStatus } from "@/lib/services/testers";
 import { confirmTesterAdded, grantTesterAccess } from "@/lib/services/invitations";
-import { notifyTesterJoined, notifyTesterOnboardingIssue } from "@/lib/services/notifications";
+import { notifyTesterJoined, notifyTesterOnboardingIssue, notifyTesterApproved } from "@/lib/services/notifications";
 import { describeEmail } from "@/lib/email-extract";
 import { parseTracksSnapshot, playTrackDisplayName } from "@/lib/integrations/play-config";
 import { campaignDependsOnPlayConnection, isPlayConnectionActive } from "@/lib/play-disconnect";
@@ -248,7 +248,7 @@ export async function listPublishedRequests(
         app: {
           id: campaign.app.id,
           name: campaign.app.name,
-          packageName: campaign.app.packageName,
+          packageName: null,
           iconUrl: campaign.app.iconUrl,
         },
         owner: publicDeveloper(campaign.user),
@@ -481,6 +481,9 @@ export async function finalizeAcceptedParticipation(
         targetTesters: row.campaign.targetTesters,
         actionRequired: null,
         joinKind: "open",
+        testerName: row.tester.developerName || row.tester.name,
+        testerEmail: row.gmail,
+        requestedAt: row.createdAt,
       });
     }
     return updated;
@@ -496,19 +499,33 @@ export async function finalizeAcceptedParticipation(
       },
     });
     if (sendNotify) {
-      await notifyTesterJoined({
-        ownerUserId: row.ownerUserId,
-        campaignId: row.campaignId,
-        testerKey: row.testerUserId,
-        appName: row.campaign.app.name,
-        testingType: row.campaign.testingType,
-        trackLabel: testingTypeLabel(row.campaign.testingType),
-        testerStatus: "Joining Google Group",
-        testerCount,
-        targetTesters: row.campaign.targetTesters,
-        actionRequired: null,
-        joinKind: "google_group",
-      });
+      if (row.gmail) {
+        await notifyTesterJoined({
+          ownerUserId: row.ownerUserId,
+          campaignId: row.campaignId,
+          testerKey: row.testerUserId,
+          appName: row.campaign.app.name,
+          testingType: row.campaign.testingType,
+          trackLabel: testingTypeLabel(row.campaign.testingType),
+          testerStatus: "Waiting for Developer",
+          testerCount,
+          targetTesters: row.campaign.targetTesters,
+          actionRequired: null,
+          joinKind: "google_group",
+          testerName: row.tester.developerName || row.tester.name,
+          testerEmail: row.gmail,
+          requestedAt: row.createdAt,
+        });
+      } else {
+        await notify({
+          userId: row.ownerUserId,
+          type: "tester",
+          title: "New tester request",
+          body: `${row.tester.developerName || row.tester.name || "A tester"} requested to test ${row.campaign.app.name}.`,
+          href: `/campaigns/${row.campaignId}`,
+          campaignId: row.campaignId,
+        });
+      }
     }
     return updated;
   }
@@ -517,8 +534,8 @@ export async function finalizeAcceptedParticipation(
     await notify({
       userId: row.ownerUserId,
       type: "tester",
-      title: "A developer accepted your testing request",
-      body: "They still need to enter the Gmail they use with Google Play so you can add them in Play Console.",
+      title: "New tester request",
+      body: `${row.tester.developerName || row.tester.name || "A tester"} requested to test ${row.campaign.app.name}.`,
       href: `/campaigns/${row.campaignId}`,
       campaignId: row.campaignId,
     });
@@ -582,7 +599,10 @@ export async function confirmTestingGmail(testerUserId: string, campaignId: stri
 
 export async function describeJoinResult(participationId: string) {
   const { row, access, testing } = await loadParticipationAccess(participationId);
-  const waiting = row.status === "MANUAL_REQUIRED";
+  const waiting =
+    row.status === "MANUAL_REQUIRED" ||
+    row.status === "GMAIL_CONFIRMED" ||
+    row.status === "ACCESS_PROCESSING";
   const open = row.playEnrollmentStatus === "OPEN_OPT_IN" || row.campaign.testingType === "OPEN";
   const confirmed = row.status === "ADDED" || row.status === "INVITATION_READY" || row.status === "OPTED_IN";
   const failed = row.status === "FAILED";
@@ -617,7 +637,7 @@ export async function describeJoinResult(participationId: string) {
   const detail = failed
     ? "TestLoop could not verify Google Play access."
     : waiting
-      ? "Your Google Play account needs to be added to this closed test."
+      ? "Request sent. The developer will add/confirm your Google Play testing access."
       : groupGuided
         ? GROUP_MEMBERSHIP_UNVERIFIABLE
         : groupPending
@@ -770,24 +790,93 @@ export async function processTesterAccess(participationId: string) {
 export async function markParticipationManuallyAdded(ownerUserId: string, participationId: string) {
   const participation = await prisma.testingParticipation.findFirst({
     where: { id: participationId, ownerUserId },
-    include: { campaign: true },
+    include: {
+      campaign: { include: { app: true, user: true } },
+      tester: { select: { developerName: true, name: true } },
+    },
   });
-  if (!participation?.testerCampaignId) throw new NotFoundError("Participation not found.");
-  await confirmTesterAdded(ownerUserId, participation.testerCampaignId);
-  const next = participation.campaign.webOptInUrl ? "INVITATION_READY" : "ADDED";
+  if (!participation) throw new NotFoundError("Participation not found.");
+  if (participation.status === "DECLINED") throw new AppError("This tester request was rejected.");
+  if (participation.status === "COMPLETED") throw new AppError("This tester request is already completed.");
+  if (participation.confirmedAt) return participation;
+  if (participation.testerCampaignId) {
+    await confirmTesterAdded(ownerUserId, participation.testerCampaignId);
+  }
+  const { access, testing } = await loadParticipationAccess(participation.id);
+  const next =
+    participation.status === "OPTED_IN" ||
+    participation.status === "ACTIVITY_DETECTED" ||
+    participation.status === "FEEDBACK_RECEIVED"
+      ? participation.status
+      : participation.campaign.webOptInUrl || testing.url
+        ? "INVITATION_READY"
+        : "ADDED";
+  const now = new Date();
+  const keepPlayStatus =
+    participation.playEnrollmentStatus === "OPEN_OPT_IN" || participation.playEnrollmentStatus === "VERIFIED"
+      ? participation.playEnrollmentStatus
+      : "UNSUPPORTED";
   const updated = await prisma.testingParticipation.update({
     where: { id: participation.id },
     data: {
       status: next,
-      playEnrollmentStatus: "UNSUPPORTED",
+      playEnrollmentStatus: keepPlayStatus,
+      confirmedAt: now,
+      confirmedByUserId: ownerUserId,
       lastError: null,
     },
+  });
+  await logActivity({
+    userId: ownerUserId,
+    campaignId: participation.campaignId,
+    action: "TESTER_CONFIRMED",
+    result: "Developer confirmed tester addition",
+  });
+  if (participation.gmail) {
+    await notifyTesterApproved({
+      testerUserId: participation.testerUserId,
+      testerEmail: participation.gmail,
+      ownerUserId,
+      campaignId: participation.campaignId,
+      participationId: participation.id,
+      appName: participation.campaign.app.name,
+      testingType: participation.campaign.testingType,
+      durationDays: participation.campaign.durationDays,
+      developerName:
+        participation.campaign.user.developerName || participation.campaign.user.name || "Developer",
+      testingUrl: testing.url,
+      groupJoinUrl: access.joinKind === "google_group" ? access.groupJoinUrl : null,
+    }).catch(() => undefined);
+  }
+  return updated;
+}
+
+export async function rejectParticipation(ownerUserId: string, participationId: string) {
+  const participation = await prisma.testingParticipation.findFirst({
+    where: { id: participationId, ownerUserId },
+    include: { campaign: { include: { app: true } } },
+  });
+  if (!participation) throw new NotFoundError("Participation not found.");
+  if (participation.status === "DECLINED") return participation;
+  const updated = await prisma.testingParticipation.update({
+    where: { id: participation.id },
+    data: {
+      status: "DECLINED",
+      rejectedAt: new Date(),
+      rejectedByUserId: ownerUserId,
+    },
+  });
+  await logActivity({
+    userId: ownerUserId,
+    campaignId: participation.campaignId,
+    action: "TESTER_REJECTED",
+    result: "Developer rejected tester request",
   });
   await notify({
     userId: participation.testerUserId,
     type: "tester",
-    title: "Developer confirmed Play Console action",
-    body: "The app owner confirmed they configured your tester access in Play Console. Google Play did not confirm this through the API.",
+    title: "Tester request declined",
+    body: `Your request to test ${participation.campaign.app.name} was declined.`,
     href: "/testing",
     campaignId: participation.campaignId,
   });

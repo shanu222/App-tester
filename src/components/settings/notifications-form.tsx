@@ -54,7 +54,9 @@ function formatWhen(value: string | null) {
 }
 
 function typeLabel(type: string) {
-  if (type === "tester_joined") return "New tester notification";
+  if (type === "tester_joined") return "New tester request";
+  if (type === "tester_confirmed") return "Tester confirmation";
+  if (type === "tester_approved") return "Tester approved";
   if (type === "tester_action_required") return "Google Play action required";
   if (type === "daily_summary") return "Daily summary";
   if (type === "weekly_summary") return "Weekly summary";
@@ -361,19 +363,25 @@ export function NotificationsForm({ initial }: { initial: SettingsView }) {
               className="py-2"
               checked={prefs.testerJoined}
               onChange={(event) => setPrefs((current) => ({ ...current, testerJoined: event.target.checked }))}
-              label="New tester joins"
+              label="New tester requests"
             />
             <Checkbox
               className="py-2"
               checked={prefs.testerAccepted}
               onChange={(event) => setPrefs((current) => ({ ...current, testerAccepted: event.target.checked }))}
-              label="Tester accepts request"
+              label="Testing activity"
             />
             <Checkbox
               className="py-2"
               checked={prefs.testerActionRequired}
               onChange={(event) => setPrefs((current) => ({ ...current, testerActionRequired: event.target.checked }))}
               label="Tester requires action"
+            />
+            <Checkbox
+              className="py-2"
+              checked={prefs.testerConfirmed}
+              onChange={(event) => setPrefs((current) => ({ ...current, testerConfirmed: event.target.checked }))}
+              label="Tester confirmation"
             />
             <Checkbox
               className="py-2"
@@ -456,6 +464,7 @@ export function NotificationsForm({ initial }: { initial: SettingsView }) {
               testerJoined: true,
               testerAccepted: true,
               testerActionRequired: true,
+              testerConfirmed: true,
               testerOnboardingIssue: true,
               playSyncIssues: true,
               playTrackChanges: true,
@@ -477,6 +486,7 @@ export function NotificationsForm({ initial }: { initial: SettingsView }) {
               testerJoined: false,
               testerAccepted: false,
               testerActionRequired: false,
+              testerConfirmed: false,
               testerOnboardingIssue: false,
               playSyncIssues: false,
               playTrackChanges: false,

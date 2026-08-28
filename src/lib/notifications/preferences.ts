@@ -2,6 +2,7 @@ export type NotificationPreferenceKey =
   | "testerJoined"
   | "testerAccepted"
   | "testerActionRequired"
+  | "testerConfirmed"
   | "testerOnboardingIssue"
   | "playSyncIssues"
   | "playTrackChanges"
@@ -18,6 +19,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   testerJoined: true,
   testerAccepted: true,
   testerActionRequired: true,
+  testerConfirmed: true,
   testerOnboardingIssue: true,
   playSyncIssues: true,
   playTrackChanges: false,

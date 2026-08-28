@@ -13,6 +13,7 @@ const prefsSchema = z.object({
   testerJoined: z.boolean().optional(),
   testerAccepted: z.boolean().optional(),
   testerActionRequired: z.boolean().optional(),
+  testerConfirmed: z.boolean().optional(),
   testerOnboardingIssue: z.boolean().optional(),
   playSyncIssues: z.boolean().optional(),
   playTrackChanges: z.boolean().optional(),

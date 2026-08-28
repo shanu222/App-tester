@@ -55,48 +55,108 @@ export function testNotificationEmail() {
 export function testerJoinedEmail(input: {
   appName: string;
   testingTypeLabel: string;
-  trackLabel: string;
+  testerName?: string | null;
+  testerEmail?: string | null;
+  requestedAt?: Date | string | null;
   testerStatus: string;
-  testerCount: number;
-  targetTesters: number;
-  actionRequired: string | null;
+  testerCount?: number;
+  targetTesters?: number;
+  trackLabel?: string;
+  actionRequired?: string | null;
   campaignUrl: string;
   playConsoleUrl?: string | null;
 }) {
-  const action = input.actionRequired
-    ? `<p><strong>Action required</strong><br>${escapeHtml(input.actionRequired)}</p>`
-    : `<p>No Play Console tester-list action is required for this join.</p>`;
-  const play =
-    input.playConsoleUrl && input.actionRequired
-      ? emailButton(input.playConsoleUrl, "Manage in Google Play")
-      : "";
+  const requested =
+    input.requestedAt != null
+      ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
+          typeof input.requestedAt === "string" ? new Date(input.requestedAt) : input.requestedAt,
+        )
+      : null;
+  const emailBox = input.testerEmail
+    ? `<p style="margin:20px 0;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;text-align:center">
+        <span style="display:block;font-size:12px;color:#64748b;margin-bottom:8px">Copy Tester Email</span>
+        <span style="font-size:18px;font-family:ui-monospace,Consolas,monospace;font-weight:600;color:#0f172a">${escapeHtml(input.testerEmail)}</span>
+      </p>`
+    : "";
+  const play = input.playConsoleUrl ? emailButton(input.playConsoleUrl, "Open Google Play Console") : "";
   const html = wrapEmail(
-    `<h1 style="font-size:20px;margin:0 0 12px">New tester joined — ${escapeHtml(input.appName)}</h1>
-    <p>A tester joined your TestLoop testing request.</p>
+    `<h1 style="font-size:20px;margin:0 0 12px">New Tester Request — ${escapeHtml(input.appName)}</h1>
+    <p>This tester has requested access to your Google Play test. Add the tester using the email address below if your testing track supports individual testers.</p>
     <p>
       <strong>App:</strong> ${escapeHtml(input.appName)}<br>
       <strong>Testing type:</strong> ${escapeHtml(input.testingTypeLabel)}<br>
-      <strong>Track:</strong> ${escapeHtml(input.trackLabel)}<br>
-      <strong>Tester status:</strong> ${escapeHtml(input.testerStatus)}<br>
-      <strong>Testers:</strong> ${input.testerCount} of ${input.targetTesters}
+      ${input.testerName ? `<strong>Tester:</strong> ${escapeHtml(input.testerName)}<br>` : ""}
+      ${input.testerEmail ? `<strong>Google Play email:</strong> ${escapeHtml(input.testerEmail)}<br>` : ""}
+      ${requested ? `<strong>Requested:</strong> ${escapeHtml(requested)}<br>` : ""}
+      <strong>Status:</strong> Waiting for Developer
     </p>
-    ${action}
-    ${emailButton(input.campaignUrl, "View Testing Request")}
+    ${emailBox}
+    ${emailButton(input.campaignUrl, "Open TestLoop")}
     ${play}`,
   );
   const text = [
-    `New tester joined — ${input.appName}`,
+    `New Tester Request — ${input.appName}`,
+    "",
+    "This tester has requested access to your Google Play test. Add the tester using the email address below if your testing track supports individual testers.",
     "",
     `App: ${input.appName}`,
     `Testing type: ${input.testingTypeLabel}`,
-    `Track: ${input.trackLabel}`,
-    `Tester status: ${input.testerStatus}`,
-    `Testers: ${input.testerCount} of ${input.targetTesters}`,
-    input.actionRequired ? `Action required: ${input.actionRequired}` : "No Play Console tester-list action is required.",
+    input.testerName ? `Tester: ${input.testerName}` : null,
+    input.testerEmail ? `Google Play email: ${input.testerEmail}` : null,
+    requested ? `Requested: ${requested}` : null,
+    "Status: Waiting for Developer",
     "",
-    `View Testing Request: ${input.campaignUrl}`,
-  ].join("\n");
-  return { subject: `New tester joined — ${input.appName}`, html, text };
+    `Open TestLoop: ${input.campaignUrl}`,
+    input.playConsoleUrl ? `Open Google Play Console: ${input.playConsoleUrl}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return { subject: `New Tester Request — ${input.appName}`, html, text };
+}
+
+export function testerApprovedEmail(input: {
+  appName: string;
+  testingTypeLabel: string;
+  durationDays: number;
+  developerName: string;
+  testingUrl: string | null;
+  groupJoinUrl: string | null;
+  dashboardUrl: string;
+}) {
+  const group = input.groupJoinUrl
+    ? `<p>Join the Google Group with the Google account you use on Google Play. After joining, open the testing link.</p>${emailButton(input.groupJoinUrl, "Join Google Group")}`
+    : "";
+  const play = input.testingUrl
+    ? emailButton(input.testingUrl, "Open Google Play Testing")
+    : emailButton(input.dashboardUrl, "Open TestLoop");
+  const html = wrapEmail(
+    `<h1 style="font-size:20px;margin:0 0 12px">You're Added as a Tester — ${escapeHtml(input.appName)}</h1>
+    <p>You're now approved to test ${escapeHtml(input.appName)}.</p>
+    <p>
+      <strong>App:</strong> ${escapeHtml(input.appName)}<br>
+      <strong>Testing:</strong> ${escapeHtml(input.testingTypeLabel)}<br>
+      <strong>Testing duration:</strong> ${input.durationDays} days<br>
+      <strong>Developer:</strong> ${escapeHtml(input.developerName)}
+    </p>
+    ${group}
+    ${play}`,
+  );
+  const text = [
+    `You're Added as a Tester — ${input.appName}`,
+    "",
+    `You're now approved to test ${input.appName}.`,
+    "",
+    `App: ${input.appName}`,
+    `Testing: ${input.testingTypeLabel}`,
+    `Testing duration: ${input.durationDays} days`,
+    `Developer: ${input.developerName}`,
+    "",
+    input.groupJoinUrl ? `Join Google Group: ${input.groupJoinUrl}` : null,
+    input.testingUrl ? `Open Google Play Testing: ${input.testingUrl}` : `Open TestLoop: ${input.dashboardUrl}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return { subject: `You're Added as a Tester — ${input.appName}`, html, text };
 }
 
 export function playIssueEmail(input: { title: string; body: string; href: string }) {

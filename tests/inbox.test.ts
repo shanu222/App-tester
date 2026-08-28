@@ -25,7 +25,26 @@ describe("inbox public payload", () => {
     expect(publicItem).not.toHaveProperty("type");
     expect(blob).not.toMatch(/packageName|SMTP_|CRON_SECRET|com\.[a-z]/i);
     expect(publicItem.href).toBe("/campaigns/camp_secret");
-    expect(publicItem.readAt).toBeNull();
+    expect(publicItem.copyEmail).toBeNull();
+    expect(publicItem.playConsole).toBe(false);
+  });
+
+  it("exposes copy-email and Play Console actions without internal IDs", () => {
+    const publicItem = toPublicInboxItem({
+      id: "note_2",
+      title: "New tester request",
+      body: "testerb@gmail.com requested to test AI Phone Doctor.",
+      href: "/campaigns/camp_secret",
+      readAt: null,
+      createdAt: new Date("2026-08-28T11:00:00.000Z"),
+      actions: { copyEmail: "testerb@gmail.com", playConsole: true, participationId: "part_secret" },
+      campaignId: "camp_secret",
+    });
+    expect(publicItem.copyEmail).toBe("testerb@gmail.com");
+    expect(publicItem.playConsole).toBe(true);
+    expect(publicItem).not.toHaveProperty("campaignId");
+    expect(JSON.stringify(publicItem)).not.toContain("part_secret");
+    expect(publicItem.href).toBe("/campaigns/camp_secret");
   });
 });
 
@@ -51,6 +70,8 @@ describe("inbox filters", () => {
       href: "/play",
       readAt: null,
       createdAt: "2026-08-28T11:00:00.000Z",
+      copyEmail: null,
+      playConsole: false,
     },
     {
       id: "2",
@@ -59,6 +80,8 @@ describe("inbox filters", () => {
       href: null,
       readAt: "2026-08-28T12:00:00.000Z",
       createdAt: "2026-08-28T10:00:00.000Z",
+      copyEmail: null,
+      playConsole: false,
     },
   ];
 

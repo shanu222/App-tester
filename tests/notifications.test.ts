@@ -13,6 +13,7 @@ import {
 } from "../src/lib/notifications/schedule";
 import {
   dailySummaryEmail,
+  testerApprovedEmail,
   testerJoinedEmail,
   testNotificationEmail,
   verificationEmail,
@@ -27,7 +28,7 @@ describe("notification preferences", () => {
     expect(DEFAULT_NOTIFICATION_PREFERENCES.testerActionRequired).toBe(true);
     expect(DEFAULT_NOTIFICATION_PREFERENCES.playSyncIssues).toBe(true);
     expect(DEFAULT_NOTIFICATION_PREFERENCES.playActionRequired).toBe(true);
-    expect(DEFAULT_NOTIFICATION_PREFERENCES.dailySummary).toBe(true);
+    expect(DEFAULT_NOTIFICATION_PREFERENCES.testerConfirmed).toBe(true);
     expect(DEFAULT_NOTIFICATION_PREFERENCES.playTrackChanges).toBe(false);
     expect(DEFAULT_NOTIFICATION_PREFERENCES.requestArchived).toBe(false);
     expect(DEFAULT_NOTIFICATION_PREFERENCES.requestCompleted).toBe(false);
@@ -170,23 +171,44 @@ describe("email templates", () => {
     const email = testerJoinedEmail({
       appName: "AI Phone Doctor",
       testingTypeLabel: "Closed Testing",
-      trackLabel: "Closed testing",
-      testerStatus: "Waiting for developer",
-      testerCount: 3,
-      targetTesters: 12,
-      actionRequired: "Add this tester in Google Play Console. TestLoop cannot add individual Gmail addresses through the Play API.",
+      testerName: "Developer B",
+      testerEmail: "testerb@gmail.com",
+      requestedAt: new Date("2026-08-28T11:00:00.000Z"),
+      testerStatus: "Waiting for Developer",
       campaignUrl: "https://www.testloop.org/campaigns/public-campaign",
       playConsoleUrl: "https://play.google.com/console",
     });
     const blob = `${email.subject}\n${email.text}\n${email.html}`;
-    expect(email.subject).toBe("New tester joined — AI Phone Doctor");
-    expect(blob).toContain("View Testing Request");
-    expect(blob).toContain("Manage in Google Play");
+    expect(email.subject).toBe("New Tester Request — AI Phone Doctor");
+    expect(blob).toContain("Open TestLoop");
+    expect(blob).toContain("Open Google Play Console");
+    expect(blob).toContain("testerb@gmail.com");
+    expect(blob).toContain("Waiting for Developer");
+    expect(blob).toContain("Add the tester using the email address below");
     expect(blob).not.toMatch(/com\.[a-z0-9]+/i);
     expect(blob).not.toMatch(/service.?account/i);
     expect(blob).not.toMatch(/SMTP_/i);
     expect(blob).not.toMatch(/CRON_SECRET/);
     expect(blob).not.toContain("tester_joined:");
+  });
+
+  it("tells the tester they were added without claiming a Play API write", () => {
+    const email = testerApprovedEmail({
+      appName: "AI Phone Doctor",
+      testingTypeLabel: "Closed",
+      durationDays: 14,
+      developerName: "Developer A",
+      testingUrl: "https://play.google.com/apps/testing/example",
+      groupJoinUrl: "https://groups.google.com/g/example",
+      dashboardUrl: "https://www.testloop.org/testing",
+    });
+    const blob = `${email.subject}\n${email.text}\n${email.html}`;
+    expect(email.subject).toBe("You're Added as a Tester — AI Phone Doctor");
+    expect(blob).toContain("Open Google Play Testing");
+    expect(blob).toContain("Join Google Group");
+    expect(blob).toContain("14 days");
+    expect(blob).not.toMatch(/com\.[a-z0-9]+/i);
+    expect(blob).not.toMatch(/service.?account/i);
   });
 
   it("keeps verification and test copy professional", () => {

@@ -7,12 +7,13 @@ import { JsonButton } from "@/components/ui/json-button";
 import { publicDeveloper } from "@/lib/services/network";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/ui/card";
-import { CheckCircle2, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { normalizeEmail } from "@/lib/email-extract";
 import { campaignTestingUrl } from "@/lib/integrations/play-testers";
 import { TESTER_STATUS_LABELS } from "@/lib/status";
 import { participationStatusLabel } from "@/lib/tester-labels";
+import { enrollmentStatus } from "@/lib/enrollment-status";
 import { detectTrackAccess } from "@/lib/integrations/play-access";
 
 export default async function MyTestingPage() {
@@ -57,16 +58,25 @@ export default async function MyTestingPage() {
         <div className="space-y-4">
           {mine.map((row) => {
             const access = detectTrackAccess(row.campaign.testingType, null, row.campaign);
-            const ready = ["ADDED", "INVITATION_READY", "OPTED_IN", "ACTIVITY_DETECTED", "FEEDBACK_RECEIVED", "COMPLETED"].includes(
-              row.status,
-            ) || row.playEnrollmentStatus === "OPEN_OPT_IN";
-            const groupGuided = row.playEnrollmentStatus === "ENROLLED" && access.joinKind === "google_group";
-            const owner = publicDeveloper(row.owner);
+            const view = enrollmentStatus({
+              status: row.status,
+              playEnrollmentStatus: row.playEnrollmentStatus,
+              joinKind: access.joinKind,
+              confirmedAt: row.confirmedAt,
+              campaignStatus: row.campaign.status,
+            });
             const statusLabel = participationStatusLabel({
               status: row.status,
               playEnrollmentStatus: row.playEnrollmentStatus,
               joinKind: access.joinKind,
+              confirmedAt: row.confirmedAt,
+              campaignStatus: row.campaign.status,
+              role: "tester",
             });
+            const ready = view.key === "ready" || view.key === "developer_confirmed" || view.key === "play_verified";
+            const groupJoinUrl = access.joinKind === "google_group" ? access.groupJoinUrl : null;
+            const owner = publicDeveloper(row.owner);
+            const playUrl = row.campaign.testingUrl || row.campaign.webOptInUrl;
             return (
               <div key={row.id} className="rounded-card border border-line bg-white p-5 shadow-card">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -76,49 +86,43 @@ export default async function MyTestingPage() {
                       {owner.name} · {row.campaign.testingType === "OPEN" ? "Open" : row.campaign.testingType === "INTERNAL" ? "Internal" : "Closed"} testing
                     </div>
                   </div>
-                  <Badge tone={row.status === "FAILED" ? "bad" : row.status === "MANUAL_REQUIRED" ? "warn" : ready || groupGuided ? "good" : "neutral"}>
-                    {statusLabel}
-                  </Badge>
+                  <Badge tone={view.tone}>{statusLabel}</Badge>
                 </div>
-                {row.lastError ? (
+                {row.lastError && view.key !== "pending_developer" ? (
                   <p className="mt-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-800">
                     {row.lastError}
                   </p>
                 ) : null}
-                {!ready && access.joinKind === "google_group" ? (
-                  <Link href={`/requests/${row.campaignId}`} className="mt-4 inline-block">
-                    <Button variant="secondary">Continue joining</Button>
-                  </Link>
-                ) : null}
-                {(ready || groupGuided) && (row.campaign.testingUrl || row.campaign.webOptInUrl) ? (
-                  <div className="mt-4 rounded-control border border-emerald-200 bg-emerald-50 p-4">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
-                      <CheckCircle2 className="h-4.5 w-4.5" aria-hidden />
-                      You&apos;re ready to test
-                    </div>
-                    <ol className="mt-2.5 list-decimal space-y-1 pl-5 text-sm leading-6 text-emerald-900/80">
-                      <li>Open the testing link.</li>
-                      <li>Join the test.</li>
-                      <li>Install the app from Google Play.</li>
-                      <li>Use the app according to the developer&apos;s instructions.</li>
-                      <li>Submit feedback.</li>
-                    </ol>
-                    <a
-                      className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-800 hover:underline"
-                      href={row.campaign.testingUrl || row.campaign.webOptInUrl || undefined}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open Google Play
-                      <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                    </a>
-                  </div>
-                ) : ready && !row.campaign.webOptInUrl && !row.campaign.testingUrl ? (
+                {view.key === "pending_developer" ? (
                   <p className="mt-3 text-sm leading-6 text-muted">
-                    Access is configured. A testing/opt-in URL has not been stored for this campaign, so TestLoop
-                    will not show a join link yet.
+                    Request sent. The developer will add/confirm your Google Play testing access.
                   </p>
                 ) : null}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {groupJoinUrl && view.key !== "rejected" ? (
+                    <a href={groupJoinUrl} target="_blank" rel="noreferrer">
+                      <Button variant="secondary" size="sm">
+                        Join Google Group
+                        <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                      </Button>
+                    </a>
+                  ) : null}
+                  {ready && playUrl ? (
+                    <a href={playUrl} target="_blank" rel="noreferrer">
+                      <Button size="sm">
+                        Open Google Play
+                        <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                      </Button>
+                    </a>
+                  ) : null}
+                  {!ready && access.joinKind === "google_group" && !groupJoinUrl ? (
+                    <Link href={`/requests/${row.campaignId}`}>
+                      <Button variant="secondary" size="sm">
+                        Continue joining
+                      </Button>
+                    </Link>
+                  ) : null}
+                </div>
                 <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-4">
                   {row.status === "FAILED" ? (
                     <JsonButton

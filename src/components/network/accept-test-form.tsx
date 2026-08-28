@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/fields";
 import { CopyButton } from "@/components/ui/copy-button";
 import { ExternalLink } from "lucide-react";
-import { PLAY_CONSOLE_URL } from "@/lib/integrations/play-testers";
 import type { GoogleGroupConfigured, TesterJoinKind } from "@/lib/integrations/play-access";
 
 type JoinView = {
@@ -257,6 +256,10 @@ export function AcceptTestForm({
             </a>
             <CopyButton value={join.testingUrl} label="Copy testing link" />
           </div>
+        ) : join.title === "Tester request submitted" || join.title === "Waiting for developer" ? (
+          <p className="mt-5 text-sm leading-6 text-muted">
+            You can follow this request from My Testing. TestLoop will email you after the developer confirms.
+          </p>
         ) : (
           <div className="mt-5 space-y-2">
             <p className="text-sm text-muted">{join.testingUnavailable || "Google Play testing link unavailable"}</p>
@@ -264,12 +267,6 @@ export function AcceptTestForm({
               <Button type="button" variant="secondary" onClick={() => void accept()} disabled={pending}>
                 Try again
               </Button>
-              <a href={PLAY_CONSOLE_URL} target="_blank" rel="noreferrer">
-                <Button variant="ghost" type="button">
-                  Open Play Console
-                  <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden />
-                </Button>
-              </a>
             </div>
           </div>
         )}
@@ -398,7 +395,7 @@ export function AcceptTestForm({
       ) : null}
       <p className="mb-4 text-sm leading-6 text-muted">{publicAccessLabel}</p>
       <Button type="button" aria-busy={pending} onClick={accept} disabled={pending}>
-        {pending ? "Working…" : "Accept Test"}
+        {pending ? "Working…" : "Accept & Become Tester"}
       </Button>
     </div>
   );

@@ -27,6 +27,7 @@ export async function notify(input: {
   body: string;
   href?: string;
   campaignId?: string;
+  actions?: { copyEmail?: string; playConsole?: boolean };
 }) {
   const settings = await prisma.userSettings.findUnique({
     where: { userId: input.userId },
@@ -47,6 +48,7 @@ export async function notify(input: {
       body: input.body,
       href: input.href,
       campaignId: input.campaignId,
+      actions: input.actions ? { copyEmail: input.actions.copyEmail, playConsole: input.actions.playConsole } : undefined,
     },
   });
 }

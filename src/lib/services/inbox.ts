@@ -21,6 +21,7 @@ export async function listInbox(userId: string) {
         title: true,
         body: true,
         href: true,
+        actions: true,
         readAt: true,
         createdAt: true,
       },

@@ -25,6 +25,7 @@ import { canonicalPlayStoreUrl } from "@/lib/play-url";
 import { getPlayConnection } from "@/lib/services/play-connection";
 import { detectTrackAccess } from "@/lib/integrations/play-access";
 import { participationStatusLabel } from "@/lib/tester-labels";
+import { enrollmentStatus } from "@/lib/enrollment-status";
 import { testingTypeExplanation, testingTypeLabel } from "@/lib/campaign-autofill";
 import { PLAY_INSTALL_LIMITATION } from "@/lib/integrations/capabilities";
 import {
@@ -418,53 +419,70 @@ export default async function CampaignDetailPage({
         />
       </div>
 
-      <SectionLabel className="mb-1.5 mt-10">Developer testers</SectionLabel>
-      <p className="mb-3 text-xs leading-5 text-muted">
-        Gmail is visible here only after the developer explicitly consented. It is never shown on the public
-        request page.
-      </p>
+      <SectionLabel className="mb-3 mt-10">Developer testers</SectionLabel>
       <div className="mb-10 space-y-2.5">
         {campaign.participations.length === 0 ? (
           <EmptyState
             title="No testers yet"
-            body="When another developer accepts this request and consents to share Gmail, they appear here."
+            body="When another developer accepts this request and shares their Google Play email, they appear here."
           />
         ) : (
-          campaign.participations.map((row) => (
-            <div key={row.id} className="rounded-card border border-line bg-white p-4 shadow-card">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <Link
-                    href={`/developers/${row.tester.id}`}
-                    className="font-medium text-brand hover:underline"
-                  >
-                    {row.tester.developerName || row.tester.name}
-                  </Link>
-                  <div className="mt-0.5 text-sm text-muted">
-                    Source: TestLoop Accepted Test ·{" "}
-                    {row.status === "MANUAL_REQUIRED"
-                      ? "Waiting for developer"
-                      : participationStatusLabel({
-                          status: row.status,
-                          playEnrollmentStatus: row.playEnrollmentStatus,
-                          joinKind: access.joinKind,
-                        })}
+          campaign.participations.map((row) => {
+            const statusLabel = participationStatusLabel({
+              status: row.status,
+              playEnrollmentStatus: row.playEnrollmentStatus,
+              joinKind: access.joinKind,
+              confirmedAt: row.confirmedAt,
+              campaignStatus: campaign.status,
+              role: "owner",
+            });
+            const view = enrollmentStatus({
+              status: row.status,
+              playEnrollmentStatus: row.playEnrollmentStatus,
+              joinKind: access.joinKind,
+              confirmedAt: row.confirmedAt,
+              campaignStatus: campaign.status,
+            });
+            const waiting = view.key === "pending_developer" || view.key === "joining_group";
+            const canConfirm =
+              waiting && (access.joinKind === "google_group" || Boolean(row.consentAt && row.gmail));
+            return (
+              <div key={row.id} className="rounded-card border border-line bg-white p-4 shadow-card">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Link
+                      href={`/developers/${row.tester.id}`}
+                      className="font-medium text-brand hover:underline"
+                    >
+                      {row.tester.developerName || row.tester.name}
+                    </Link>
+                    <div className="mt-0.5">
+                      <Badge tone={view.tone}>{statusLabel}</Badge>
+                    </div>
                   </div>
                 </div>
-                <div className="text-sm text-slate-700">
-                  {row.consentAt ? row.gmail : <span className="text-muted">Gmail hidden until consent</span>}
-                </div>
+                {row.lastError && view.key === "failed" ? (
+                  <p className="mt-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-800">
+                    {row.lastError}
+                  </p>
+                ) : null}
+                {view.key !== "rejected" && view.key !== "expired" ? (
+                  <TesterRequestActions
+                    participationId={row.id}
+                    testerName={row.tester.developerName || row.tester.name || "Tester"}
+                    gmail={row.consentAt ? row.gmail : null}
+                    statusLabel={statusLabel}
+                    joinKind={access.joinKind}
+                    groupEmail={campaign.googleGroupEmail}
+                    canConfirm={canConfirm}
+                    canReject={waiting}
+                  />
+                ) : row.consentAt && row.gmail ? (
+                  <p className="mt-3 font-mono text-sm text-slate-700">{row.gmail}</p>
+                ) : null}
               </div>
-              {row.lastError ? (
-                <p className="mt-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-800">
-                  {row.lastError}
-                </p>
-              ) : null}
-              {row.status === "MANUAL_REQUIRED" ? (
-                <TesterRequestActions participationId={row.id} gmail={row.consentAt ? row.gmail : null} />
-              ) : null}
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

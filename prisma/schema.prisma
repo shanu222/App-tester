@@ -850,6 +850,7 @@ model Notification {
   title      String
   body       String
   href       String?
+  actions    Json?
   readAt     DateTime?
   createdAt  DateTime  @default(now())
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -991,6 +992,10 @@ model TestingParticipation {
   playEnrollmentStatus PlayEnrollmentStatus @default(NOT_ATTEMPTED)
   playEnrolledAt   DateTime?
   playVerifiedAt   DateTime?
+  confirmedAt      DateTime?
+  confirmedByUserId String?
+  rejectedAt       DateTime?
+  rejectedByUserId String?
   lastError        String?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt

@@ -25,6 +25,7 @@ import {
   dailySummaryEmail,
   playIssueEmail,
   testerJoinedEmail,
+  testerApprovedEmail,
   testNotificationEmail,
   verificationEmail,
 } from "@/lib/notifications/templates";
@@ -299,7 +300,8 @@ export async function sendDeveloperNotification(input: {
   html: string;
   campaignId?: string;
   testerId?: string;
-  inApp?: { title: string; body: string; href?: string };
+  inApp?: { title: string; body: string; href?: string; copyEmail?: string; playConsole?: boolean };
+  immediate?: boolean;
 }) {
   if (input.inApp) {
     await notify({
@@ -309,6 +311,10 @@ export async function sendDeveloperNotification(input: {
       body: input.inApp.body,
       href: input.inApp.href,
       campaignId: input.campaignId,
+      actions:
+        input.inApp.copyEmail || input.inApp.playConsole
+          ? { copyEmail: input.inApp.copyEmail, playConsole: input.inApp.playConsole }
+          : undefined,
     });
   }
 
@@ -316,7 +322,10 @@ export async function sendDeveloperNotification(input: {
   const prefs = parseNotificationPreferences(settings?.notificationPreferences);
   const schedule = parseNotificationSchedule(settings || {});
   const masterOn = settings?.emailNotificationsEnabled !== false && schedule.frequency !== "disabled";
-  const sendNow = masterOn && schedule.frequency === "realtime" && preferenceEnabled(prefs, input.preference);
+  const sendNow =
+    masterOn &&
+    preferenceEnabled(prefs, input.preference) &&
+    (schedule.frequency === "realtime" || input.immediate);
   const to = settings?.notificationEmailVerified ? settings.notificationEmail || "" : "";
   const status = !masterOn
     ? "disabled"
@@ -327,11 +336,13 @@ export async function sendDeveloperNotification(input: {
         : "queued";
   const skipReason = !masterOn
     ? "Email notifications are disabled."
-    : !to
-      ? "No verified notification email."
-      : schedule.frequency === "daily" || schedule.frequency === "weekly"
-        ? "Included in the scheduled summary."
-        : "This alert is turned off.";
+    : !preferenceEnabled(prefs, input.preference)
+      ? "This alert is turned off."
+      : !to
+        ? "No verified notification email."
+        : schedule.frequency === "daily" || schedule.frequency === "weekly"
+          ? "Included in the scheduled summary."
+          : "This alert is turned off.";
 
   try {
     await prisma.emailEvent.create({
@@ -391,22 +402,31 @@ export async function notifyTesterJoined(input: {
   targetTesters: number;
   actionRequired: string | null;
   joinKind: "open" | "google_group" | "individual";
+  testerName?: string | null;
+  testerEmail?: string | null;
+  requestedAt?: Date | null;
 }) {
   const campaignUrl = `${env.appUrl.replace(/\/$/, "")}/campaigns/${input.campaignId}`;
   const template = testerJoinedEmail({
     appName: input.appName,
     testingTypeLabel: testingTypeLabel(input.testingType),
-    trackLabel: input.trackLabel,
+    testerName: input.testerName,
+    testerEmail: input.testerEmail,
+    requestedAt: input.requestedAt ?? new Date(),
     testerStatus: input.testerStatus,
     testerCount: input.testerCount,
     targetTesters: input.targetTesters,
+    trackLabel: input.trackLabel,
     actionRequired: input.actionRequired,
     campaignUrl,
-    playConsoleUrl: input.actionRequired ? PLAY_CONSOLE_URL : null,
+    playConsoleUrl: PLAY_CONSOLE_URL,
   });
   const preference: NotificationPreferenceKey = input.actionRequired
     ? "testerActionRequired"
     : "testerJoined";
+  const emailLine = input.testerEmail
+    ? `${input.testerEmail} requested to test ${input.appName}.`
+    : `A tester requested to test ${input.appName}.`;
   await sendDeveloperNotification({
     userId: input.ownerUserId,
     type: input.actionRequired ? "tester_action_required" : "tester_joined",
@@ -417,12 +437,102 @@ export async function notifyTesterJoined(input: {
     html: template.html,
     campaignId: input.campaignId,
     testerId: input.testerId,
+    immediate: true,
     inApp: {
-      title: input.actionRequired ? "New tester request" : "New tester joined your TestLoop testing request",
-      body: `${input.appName} · ${testingTypeLabel(input.testingType)} · ${input.testerStatus}`,
+      title: "New tester request",
+      body: emailLine,
       href: `/campaigns/${input.campaignId}`,
+      copyEmail: input.testerEmail || undefined,
+      playConsole: true,
     },
   });
+}
+
+export async function notifyTesterApproved(input: {
+  testerUserId: string;
+  testerEmail: string;
+  ownerUserId: string;
+  campaignId: string;
+  participationId: string;
+  appName: string;
+  testingType: "OPEN" | "CLOSED" | "INTERNAL";
+  durationDays: number;
+  developerName: string;
+  testingUrl: string | null;
+  groupJoinUrl: string | null;
+}) {
+  const eventKey = `tester_approved:${input.participationId}`;
+  const dashboardUrl = `${env.appUrl.replace(/\/$/, "")}/testing`;
+  const template = testerApprovedEmail({
+    appName: input.appName,
+    testingTypeLabel: testingTypeLabel(input.testingType),
+    durationDays: input.durationDays,
+    developerName: input.developerName,
+    testingUrl: input.testingUrl,
+    groupJoinUrl: input.groupJoinUrl,
+    dashboardUrl,
+  });
+  try {
+    await prisma.emailEvent.create({
+      data: {
+        userId: input.testerUserId,
+        campaignId: input.campaignId,
+        type: "tester_approved",
+        toAddress: input.testerEmail,
+        subject: template.subject,
+        status: "queued",
+        eventKey,
+      },
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) return { duplicate: true as const };
+    throw error;
+  }
+  const sent = await sendSmtpEmail({
+    to: input.testerEmail,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+  });
+  await prisma.emailEvent.update({
+    where: { eventKey },
+    data: {
+      status: sent.ok ? "sent" : sent.skipped ? "skipped" : "failed",
+      error: sent.ok ? null : sent.error,
+    },
+  });
+  await notify({
+    userId: input.testerUserId,
+    type: "tester",
+    title: "You're added as a tester",
+    body: `You're now approved to test ${input.appName}.`,
+    href: "/testing",
+    campaignId: input.campaignId,
+  });
+  const ownerNote = playIssueEmail({
+    title: `Tester approved — ${input.appName}`,
+    body: `${input.testerEmail} was confirmed as a tester for ${input.appName}.`,
+    href: `${env.appUrl.replace(/\/$/, "")}/campaigns/${input.campaignId}`,
+  });
+  await sendDeveloperNotification({
+    userId: input.ownerUserId,
+    type: "tester_confirmed",
+    eventKey: `tester_confirmed:${input.participationId}`,
+    preference: "testerConfirmed",
+    subject: ownerNote.subject,
+    text: ownerNote.text,
+    html: ownerNote.html,
+    campaignId: input.campaignId,
+    immediate: true,
+    inApp: {
+      title: "Tester approved",
+      body: `${input.testerEmail} was confirmed as a tester for ${input.appName}.`,
+      href: `/campaigns/${input.campaignId}`,
+      copyEmail: input.testerEmail,
+      playConsole: true,
+    },
+  });
+  return { duplicate: false as const, sent: sent.ok };
 }
 
 export async function notifyPlaySyncIssue(userId: string, appName?: string | null) {

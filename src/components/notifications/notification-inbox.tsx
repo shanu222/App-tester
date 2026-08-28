@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCheck, MoreHorizontal, RefreshCw, Trash2, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
 import { EmptyState } from "@/components/ui/widgets";
 import { FilterButtons } from "@/components/ui/filter-pills";
 import { useUnreadNotifications } from "@/components/notifications/unread-provider";
@@ -273,8 +274,19 @@ function NotificationRow({
                 if (unread) onRead(true);
               }}
             >
-              View
+              View Request
             </Link>
+          ) : null}
+          {item.copyEmail ? <CopyButton value={item.copyEmail} label="Copy Email" size="sm" variant="ghost" /> : null}
+          {item.playConsole ? (
+            <a
+              href="https://play.google.com/console"
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-medium text-brand hover:underline"
+            >
+              Open Google Play Console
+            </a>
           ) : null}
         </div>
       </div>

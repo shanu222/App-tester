@@ -8,6 +8,7 @@ import {
   listPublishedRequests,
   markParticipationManuallyAdded,
   markParticipationOptedIn,
+  rejectParticipation,
   processTesterAccess,
   describeJoinResult,
   checkGroupAccess,
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
           "consent",
           "retry-access",
           "manual-added",
+          "reject-tester",
           "verify-tester",
           "check-group-access",
           "opted-in",
@@ -96,6 +98,11 @@ export async function POST(request: Request) {
     if (body.action === "manual-added") {
       if (!body.participationId) return json({ error: "participationId required." }, 400);
       const participation = await markParticipationManuallyAdded(user.id, body.participationId);
+      return json({ participation: { id: participation.id, status: participation.status } });
+    }
+    if (body.action === "reject-tester") {
+      if (!body.participationId) return json({ error: "participationId required." }, 400);
+      const participation = await rejectParticipation(user.id, body.participationId);
       return json({ participation: { id: participation.id, status: participation.status } });
     }
     if (body.action === "verify-tester") {

@@ -131,10 +131,14 @@ export async function grantTesterAccess(input: {
   const trackLabel = playTrackDisplayName(granted.campaign.playTrack || testingType.toLowerCase());
 
   async function emailOwner(status: string, actionRequired: string | null, joinKind: TesterJoinKind) {
+    const participation = await prisma.testingParticipation.findFirst({
+      where: { testerCampaignId: granted.id },
+      select: { testerUserId: true, createdAt: true },
+    });
     await notifyTesterJoined({
       ownerUserId: input.userId,
       campaignId: granted.campaignId,
-      testerKey: granted.testerId,
+      testerKey: participation?.testerUserId ?? granted.tester.emailNormalized ?? granted.testerId,
       testerId: granted.testerId,
       appName: granted.campaign.app.name,
       testingType,
@@ -144,6 +148,9 @@ export async function grantTesterAccess(input: {
       targetTesters: granted.campaign.targetTesters,
       actionRequired,
       joinKind,
+      testerName: granted.tester.name,
+      testerEmail: granted.tester.emailNormalized || granted.tester.email,
+      requestedAt: participation?.createdAt ?? new Date(),
     });
   }
 
@@ -191,7 +198,7 @@ export async function grantTesterAccess(input: {
       action: "TESTER_GROUP_JOIN",
       result: `${row.tester.emailNormalized} · google group · ${row.campaign.app.packageName}`,
     });
-    await emailOwner("Joining Google Group", null, "google_group");
+    await emailOwner("Waiting for Developer", null, "google_group");
     return {
       ok: true,
       mode,
@@ -219,13 +226,7 @@ export async function grantTesterAccess(input: {
     action: "TESTER_PENDING_PLAY_CONSOLE",
     result: `${row.tester.emailNormalized} · ${testingType.toLowerCase()} · ${row.campaign.app.packageName}`,
   });
-  await emailOwner(
-    "Waiting for developer",
-    testingType === "INTERNAL"
-      ? "Google Play requires this tester to be added to the internal-testing tester list manually. TestLoop cannot add individual Gmail addresses through the Play API."
-      : "Google Play requires this tester to be added to the closed-test tester list manually. TestLoop cannot add individual Gmail addresses through the Play API.",
-    "individual",
-  );
+    await emailOwner("Waiting for Developer", null, "individual");
   return {
     ok: true,
     mode,

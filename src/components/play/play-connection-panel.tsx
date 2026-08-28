@@ -88,8 +88,9 @@ function DisconnectConfirmModal({
           Disconnect Google Play?
         </h2>
         <p className="mt-3 text-sm leading-6 text-slate-700">
-          This removes TestLoop’s synchronized Play data and related testing posts. Google Play Console
-          is not changed.
+          This removes the Google Play application and testing information currently synchronized with TestLoop.
+          Your testing posts and synchronized Play data will no longer be available until you reconnect.
+          Google Play Console is not changed.
         </p>
         {error ? (
           <p className="mt-4 rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-800">
@@ -112,7 +113,7 @@ function DisconnectConfirmModal({
                 : "Disconnecting…"
                 : cleanupFailed
                   ? "Retry cleanup"
-                  : "Disconnect & Remove TestLoop Data"}
+                  : "Disconnect Google Play"}
           </Button>
         </div>
       </div>

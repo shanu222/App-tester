@@ -38,9 +38,7 @@ export default async function RequestsPage({
   const recommended = [...requests].sort((a, b) => b.match.score - a.match.score).slice(0, 3);
 
   return (
-    <AppShell
-      title="Testing Requests"
-    >
+    <AppShell title="Discover Testing">
       <div className="mb-6 flex flex-wrap gap-2" role="group" aria-label="Filter requests">
         {FILTERS.map((item) => {
           const active = item.reciprocal
@@ -123,7 +121,9 @@ export default async function RequestsPage({
                     </p>
                   </div>
                   <Link href={`/requests/${item.id}`} className="sm:self-center">
-                    <Button className="w-full sm:w-auto">Join Test</Button>
+                    <Button className="w-full sm:w-auto" variant="secondary">
+                      View Testing
+                    </Button>
                   </Link>
                 </div>
               </article>

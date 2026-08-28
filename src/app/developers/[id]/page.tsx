@@ -78,7 +78,6 @@ export default async function DeveloperPublicPage({
               className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-white px-4 py-3.5 shadow-card"
             >
               <span className="font-medium text-slate-900">{app.name}</span>
-              <span className="font-mono text-xs text-muted">{app.packageName}</span>
             </div>
           ))}
         </div>

@@ -4,6 +4,7 @@ import { getApp } from "@/lib/services/apps";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
+import { TechnicalDetails } from "@/components/ui/technical-details";
 import Link from "next/link";
 
 export default async function AppDetailPage({
@@ -39,7 +40,9 @@ export default async function AppDetailPage({
       }
     >
       <section className="rounded-card border border-line bg-white p-5 shadow-card sm:p-6">
-        <p className="font-mono text-sm text-muted">{app.packageName}</p>
+        <TechnicalDetails>
+          <p>Package name: {app.packageName}</p>
+        </TechnicalDetails>
         <div className="mt-3 flex flex-wrap gap-2">
           <Badge tone="accent">{app.googlePlayStatus.replaceAll("_", " ")}</Badge>
           <Badge>{app.testingType}</Badge>

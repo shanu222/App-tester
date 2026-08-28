@@ -85,8 +85,11 @@ export function JoinTestForm({
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          placeholder="yourname@gmail.com"
+          placeholder={openTesting ? "you@example.com" : "yourname@gmail.com"}
         />
+        {!openTesting ? (
+          <p className="mt-1.5 text-xs text-muted">Enter the Google account you use with Google Play.</p>
+        ) : null}
       </div>
       {error ? (
         <p role="alert" className="rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-700">
@@ -109,25 +112,19 @@ function JoinResultCard({
 }) {
   const success = result.outcome === "READY" || result.outcome === "REGISTERED";
 
-  return (
-    <div className="mt-6">
-      <div
-        className={
-          success
-            ? "rounded-card border border-emerald-200 bg-emerald-50 p-5"
-            : "rounded-card border border-red-200 bg-red-50 p-5"
-        }
-      >
+  if (success) {
+    return (
+      <div className="mt-6 rounded-card border border-emerald-200 bg-emerald-50 p-5">
         <div className="flex items-start gap-2.5">
-          {success ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden /> : null}
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden />
           <div>
-            <h2 className="text-base font-semibold text-slate-900">{result.statusLabel}</h2>
+            <h2 className="text-base font-semibold text-slate-900">You&apos;re in!</h2>
             <p className="mt-2 text-sm leading-6 text-body">{result.detail}</p>
           </div>
         </div>
         {result.groupJoinUrl ? (
           <div className="mt-5">
-            <a href={result.groupJoinUrl} target="_blank" rel="noreferrer">
+            <a href={result.groupJoinUrl} target="_blank" rel="noopener noreferrer">
               <Button className="w-full sm:w-auto" variant="secondary">
                 Join Google Group
                 <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden />
@@ -137,7 +134,7 @@ function JoinResultCard({
         ) : null}
         {result.optInUrl ? (
           <div className="mt-5">
-            <a href={result.optInUrl} target="_blank" rel="noreferrer">
+            <a href={result.optInUrl} target="_blank" rel="noopener noreferrer">
               <Button className="w-full sm:w-auto">
                 Open Google Play
                 <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden />
@@ -145,14 +142,31 @@ function JoinResultCard({
             </a>
           </div>
         ) : null}
+        <button type="button" onClick={onReset} className="mt-4 text-sm font-medium text-brand hover:underline">
+          Use a different email
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={onReset}
-        className="mt-4 text-sm font-medium text-brand hover:underline"
-      >
-        Use a different email
-      </button>
+    );
+  }
+
+  return (
+    <div className="mt-6 rounded-card border border-red-200 bg-red-50 p-5">
+      <h2 className="text-base font-semibold text-slate-900">Unable to join testing</h2>
+      <p className="mt-2 text-sm leading-6 text-body">We couldn&apos;t complete your testing registration.</p>
+      <details className="mt-4">
+        <summary className="cursor-pointer text-sm font-medium text-slate-700">What happened?</summary>
+        <p className="mt-2 text-sm leading-6 text-body">{result.detail}</p>
+      </details>
+      <div className="mt-5 flex flex-wrap gap-2">
+        {result.optInUrl ? (
+          <a href={result.optInUrl} target="_blank" rel="noopener noreferrer">
+            <Button size="sm">Open Google Play</Button>
+          </a>
+        ) : null}
+        <Button type="button" size="sm" variant="secondary" onClick={onReset}>
+          Try again
+        </Button>
+      </div>
     </div>
   );
 }

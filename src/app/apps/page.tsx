@@ -7,7 +7,7 @@ export default async function AppsPage() {
   const user = await requireUser();
   const apps = await listAppsWithStats(user.id);
   return (
-    <AppShell title="My Apps" description="Android apps you own, their tracks, and tester progress.">
+    <AppShell title="My Apps">
       <MyAppsWorkspace
         apps={apps.map((app) => ({
           id: app.id,

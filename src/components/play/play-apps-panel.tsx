@@ -178,7 +178,7 @@ export function PlayAppsPanel({
       <Card>
         <CardHeader
           title="Your Google Play apps"
-          description="Applications Google reports for this connection. Play Console remains the source of truth."
+          description="Connected to Google Play."
         />
         <p className="mt-2 text-xs text-muted">
           Last synchronized: {formatPlayTimestamp(lastSyncAt) || "Not yet synchronized"}
@@ -194,7 +194,7 @@ export function PlayAppsPanel({
           <div className="mt-5 border-t border-line pt-5">
             <EmptyState
               title="No apps discovered yet"
-              body="Refresh from Google Play to retrieve the applications this account can access. App discovery uses the Play Developer Reporting API, which must be enabled on the same Google Cloud project."
+              body="Refresh from Google Play to load the applications this account can access."
               action={
                 <Button variant="secondary" onClick={refresh} disabled={pending !== null}>
                   {pending === "refresh" ? "Refreshing…" : "Refresh from Google Play"}
@@ -298,10 +298,12 @@ function PlayAppCard({
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <Badge tone="good">Google Play connected</Badge>
             </div>
-            <details className="mt-2 text-xs text-muted">
-              <summary className="cursor-pointer text-brand">View details</summary>
-              <p className="mt-1 font-mono">{app.packageName}</p>
-              <p className="mt-1">Last synchronized: {formatPlayTimestamp(app.lastSyncAt) || "Not yet synchronized"}</p>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-sm font-medium text-brand">App details</summary>
+              <p className="mt-1 break-all text-xs text-muted">{app.packageName}</p>
+              <p className="mt-1 text-xs text-muted">
+                Last synchronized: {formatPlayTimestamp(app.lastSyncAt) || "Not yet synchronized"}
+              </p>
             </details>
           </div>
         </div>
@@ -410,7 +412,10 @@ function SelectedAppDetail({
             <AppMark name={app.name} src={app.iconUrl} />
             <div className="min-w-0">
               <h2 className="text-lg font-semibold text-slate-900">{app.name}</h2>
-              <p className="mt-0.5 font-mono text-xs text-muted">{app.packageName}</p>
+              <details className="mt-1">
+                <summary className="cursor-pointer text-sm font-medium text-brand">App details</summary>
+                <p className="mt-1 break-all text-xs text-muted">{app.packageName}</p>
+              </details>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <SourceBadge source="google-play" />
                 <Badge tone="good">Connected</Badge>

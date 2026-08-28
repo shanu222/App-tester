@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Hint, Input, Label } from "@/components/ui/fields";
+import { InfoModal } from "@/components/ui/info-modal";
 import type { NotificationPreferences } from "@/lib/notifications/preferences";
 
 type SettingsView = {
@@ -113,7 +114,17 @@ export function NotificationsForm({ initial }: { initial: SettingsView }) {
 
   return (
     <Card>
-      <CardHeader title="Notifications" description="Receive important TestLoop activity by email." />
+      <CardHeader
+        title="Notifications"
+        description="Receive important TestLoop activity by email."
+        action={
+          <InfoModal title="About notifications" label="About notifications">
+            TestLoop sends mail only to a verified notification address that you choose. It does not have to
+            be your Google Play email. Disable the master switch to pause non-critical alerts. Daily summaries
+            go out around 4:00 PM Pakistan time.
+          </InfoModal>
+        }
+      />
 
       {!initial.smtpConfigured ? (
         <p className="mt-4 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">

@@ -159,9 +159,19 @@ export function FirebaseLogin() {
   }
 
   const busy = pending !== null;
+  const heading = mode === "create" ? "Create your TestLoop account" : "Welcome back";
+  const subheading =
+    mode === "create"
+      ? "Join TestLoop to discover and manage software testing opportunities."
+      : "Sign in to your TestLoop account.";
 
   return (
     <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">{heading}</h2>
+        <p className="mt-1 text-sm leading-6 text-muted">{subheading}</p>
+      </div>
+
       <Button
         type="button"
         variant="secondary"
@@ -171,7 +181,7 @@ export function FirebaseLogin() {
         onClick={withGoogle}
       >
         <GoogleGlyph />
-        {pending === "google" ? "Opening Google…" : "Continue with Google"}
+        {pending === "google" ? "Opening Google…" : mode === "create" ? "Continue with Google" : "Google Sign In"}
       </Button>
 
       <div className="flex items-center gap-3" aria-hidden>

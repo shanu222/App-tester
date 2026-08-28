@@ -28,8 +28,8 @@ const COPY: Record<
   },
   delete: {
     title: "Delete testing request?",
-    body: "This will permanently remove this TestLoop testing request and its TestLoop campaign data. This does NOT delete or modify the application, release or testing track from Google Play Console.",
-    confirm: "Delete permanently",
+    body: "This will permanently remove this archived request from TestLoop. Google Play is not changed.",
+    confirm: "Delete",
     pending: "Deleting…",
     button: "Delete permanently",
     danger: true,

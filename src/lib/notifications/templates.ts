@@ -21,6 +21,11 @@ export function wrapEmail(bodyHtml: string) {
           <tr>
             <td style="padding-top:16px;font-size:15px;line-height:1.6">${bodyHtml}</td>
           </tr>
+          <tr>
+            <td style="padding-top:24px;font-size:12px;line-height:1.5;color:#64748b;border-top:1px solid #e2e8f0">
+              TestLoop<br>A product of Resilience Technologies Labs
+            </td>
+          </tr>
         </table>
       </td>
     </tr>

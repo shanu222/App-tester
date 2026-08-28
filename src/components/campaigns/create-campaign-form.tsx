@@ -6,6 +6,8 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Input, Label, Select, Textarea } from "@/components/ui/fields";
 import { EmptyState } from "@/components/ui/widgets";
+import { TechnicalDetails } from "@/components/ui/technical-details";
+import { InfoModal } from "@/components/ui/info-modal";
 import { SourceBadge } from "@/components/ui/source-badge";
 import { PlayStatusMark } from "@/components/play/play-status";
 import { formatPlayTimestamp } from "@/components/play/play-connection-panel";
@@ -276,7 +278,7 @@ export function CreateCampaignForm({
     <Card>
       <CardHeader
         title="New testing request"
-        description="Select a Play app. Testing type comes from Google Play."
+        description="Select an app. TestLoop fills the testing type from Google Play."
         action={
           <Button
             type="button"
@@ -304,7 +306,7 @@ export function CreateCampaignForm({
           >
             {localApps.map((app) => (
               <option key={app.packageName} value={app.packageName}>
-                {app.name} · {app.packageName}
+                {app.name}
               </option>
             ))}
           </Select>
@@ -315,7 +317,9 @@ export function CreateCampaignForm({
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">Application</div>
               <div className="mt-1 font-medium text-slate-900">{selected.name}</div>
-              <div className="font-mono text-xs text-muted">{selected.packageName}</div>
+              <TechnicalDetails className="mt-2">
+                <p>Package name: {selected.packageName}</p>
+              </TechnicalDetails>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <SourceBadge source="google-play" />
@@ -415,10 +419,9 @@ export function CreateCampaignForm({
               </div>
             )}
             {explanation ? (
-              <p className="text-sm leading-6 text-slate-700">
-                <span className="font-medium">{explanation.title}. </span>
+              <InfoModal title={explanation.title} label={`What is ${testingTypeLabel(chosen?.testingType || "")}?`}>
                 {explanation.body}
-              </p>
+              </InfoModal>
             ) : null}
           </div>
         ) : null}

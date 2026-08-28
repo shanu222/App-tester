@@ -4,18 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
-  BarChart3,
+  Bell,
   Building2,
   ClipboardList,
   LayoutDashboard,
   MessageSquare,
-  Plug,
   Search,
   Settings,
   ShieldCheck,
-  CircleHelp,
   Smartphone,
-  UserRound,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,12 +28,9 @@ const ICONS = {
   testers: Users,
   messages: MessageSquare,
   play: Building2,
-  analytics: BarChart3,
-  profile: UserRound,
-  integrations: Plug,
   settings: Settings,
-  help: CircleHelp,
   admin: ShieldCheck,
+  notifications: Bell,
 } as const;
 
 export type NavItem = { href: string; label: string; section?: string; icon: NavIcon };

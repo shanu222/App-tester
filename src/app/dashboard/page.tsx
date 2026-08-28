@@ -4,8 +4,8 @@ import { requireUser } from "@/auth";
 import { getDashboardStats } from "@/lib/services/dashboard";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { TestingTypeBadge } from "@/components/ui/testing-type-badge";
 import { SectionLabel } from "@/components/ui/card";
 import { AppMark } from "@/components/brand/app-mark";
 import { InfoPopover } from "@/components/ui/info-popover";
@@ -43,16 +43,17 @@ export default async function DashboardPage() {
   return (
     <AppShell
       title="Dashboard"
+      description={`Welcome back, ${user.developerName || user.name || "developer"}.`}
       actions={
         <Link href="/requests">
-          <Button variant="secondary">Find tests</Button>
+          <Button variant="secondary">Discover Testing</Button>
         </Link>
       }
     >
-      <p className="text-sm text-muted">Welcome back, {user.developerName || user.name || "developer"}.</p>
+      <p className="sr-only">Welcome back, {user.developerName || user.name || "developer"}.</p>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Connected apps" value={stats.playApps} />
+        <StatCard label="Google Play apps" value={stats.playApps} hint={playConnected ? "Connected" : "Not connected"} />
         <StatCard label="Active testing requests" value={stats.activeCampaigns} />
         <StatCard label="Active testers" value={stats.activeTesters} />
         <StatCard label="Pending actions" value={stats.pendingTesters + unread} />
@@ -128,7 +129,7 @@ export default async function DashboardPage() {
                 </div>
                 <div className="mt-4 flex justify-end">
                   <Link href={app.appId ? `/apps/${app.appId}` : "/play"}>
-                    <Button size="sm">Manage testing</Button>
+                    <Button size="sm">Manage Testing</Button>
                   </Link>
                 </div>
               </div>
@@ -144,7 +145,7 @@ export default async function DashboardPage() {
           body="Browse published requests from other developers."
           action={
             <Link href="/requests">
-              <Button variant="secondary">Find tests</Button>
+              <Button variant="secondary">Discover Testing</Button>
             </Link>
           }
         />
@@ -162,7 +163,7 @@ export default async function DashboardPage() {
                   {row.status.replaceAll("_", " ").toLowerCase()}
                 </p>
               </div>
-              <Badge tone="neutral">Open</Badge>
+              <TestingTypeBadge type={row.campaign.testingType} />
             </Link>
           ))}
         </div>

@@ -11,11 +11,11 @@ export const metadata: Metadata = {
 };
 
 const REASONS: Record<string, string> = {
-  CredentialsSignin: "Your Firebase sign-in was not accepted. Sign in again to get a fresh token.",
-  CallbackRouteError: `Firebase verified you, but ${SITE_NAME} could not finish setting up your account.`,
+  CredentialsSignin: "Your sign-in was not accepted. Try again.",
+  CallbackRouteError: `${SITE_NAME} could not finish setting up your account.`,
   AccessDenied: "This account is not allowed to sign in.",
-  MissingSecret: "The deployment is missing AUTH_SECRET.",
-  UntrustedHost: "This hostname is not trusted by the sign-in configuration.",
+  MissingSecret: "Sign-in is not fully configured on this deployment.",
+  UntrustedHost: "This website address is not authorized for sign-in.",
   SessionTokenError: "Your session could not be read. Sign in again.",
 };
 
@@ -44,10 +44,13 @@ export default async function LoginErrorPage({
           </p>
 
           {reason ? (
-            <p className="mt-4 rounded-control border border-line bg-surface px-3 py-2 font-mono text-xs text-slate-600">
-              Reference: {reason}
-              {error && error !== reason ? ` (${error})` : ""}
-            </p>
+            <details className="mt-4">
+              <summary className="cursor-pointer text-sm font-medium text-slate-700">Technical details</summary>
+              <p className="mt-2 rounded-control border border-line bg-surface px-3 py-2 text-xs text-muted">
+                Reference: {reason}
+                {error && error !== reason ? ` (${error})` : ""}
+              </p>
+            </details>
           ) : null}
 
           <div className="mt-6">

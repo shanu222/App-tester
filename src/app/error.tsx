@@ -17,8 +17,14 @@ export default function ErrorBoundary({ error, reset }: { error: Error; reset: (
           </span>
           <h1 className="mt-5 text-xl font-semibold text-slate-900">This page could not be loaded</h1>
           <p className="mt-2 text-sm leading-6 text-muted">
-            {error.message || "An unexpected error stopped this page from loading. No Google Play data was changed."}
+            Something went wrong while loading this page. No Google Play data was changed.
           </p>
+          {error.message ? (
+            <details className="mt-4 text-left">
+              <summary className="cursor-pointer text-sm font-medium text-slate-700">Technical details</summary>
+              <p className="mt-2 text-xs leading-5 text-muted">{error.message}</p>
+            </details>
+          ) : null}
           <Button type="button" className="mt-6 w-full" onClick={reset}>
             Try again
           </Button>

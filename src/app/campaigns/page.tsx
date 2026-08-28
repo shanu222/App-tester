@@ -29,10 +29,7 @@ export default async function CampaignsPage({
   const playConnected = isPlayConnectionActive(playConnection?.status);
 
   return (
-    <AppShell
-      title="Published requests"
-      description="Publish a TestLoop request for an app already in Google Play Console."
-    >
+    <AppShell title="Testing Requests">
       <CreateCampaignForm
         initialAppId={params.appId}
         playConnected={playConnected}

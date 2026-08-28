@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { PublicChrome } from "@/components/layout/public-chrome";
-import { SITE_NAME, SITE_ORIGIN, SITE_TAGLINE } from "@/lib/site";
+import { CompanyAboutBlurb } from "@/components/brand/company-attribution";
+import { SITE_NAME, SITE_ORIGIN } from "@/lib/site";
+import { InfoModal } from "@/components/ui/info-modal";
 import Link from "next/link";
 
 export const metadata: Metadata = {
   title: `About | ${SITE_NAME}`,
-  description: `${SITE_NAME} is a developer-to-developer mobile app testing network.`,
+  description: `${SITE_NAME} is a professional platform for discovering, joining and managing software testing opportunities.`,
   alternates: { canonical: `${SITE_ORIGIN}/about` },
 };
 
@@ -13,30 +15,32 @@ export default function AboutPage() {
   return (
     <PublicChrome>
       <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:py-16">
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-          About {SITE_NAME}
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand">{SITE_NAME}</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+          Professional testing platform
         </h1>
-        <p className="mt-4 text-lg leading-8 text-body">{SITE_TAGLINE}.</p>
-        <div className="mt-8 space-y-4 text-base leading-7 text-body">
-          <p>
-            {SITE_NAME} is a professional network for Android developers, indie teams, and startups who need closed
-            testing support from other developers — and who can offer testing in return.
-          </p>
-          <p>
-            Developers sign in with Google, complete a profile, publish a testing request, and accept requests from
-            others. A Google Play testing Gmail is shared only after explicit consent. Google Play automation runs only
-            when a developer has connected the official Play Developer API, and only for the operations that API
-            actually supports; otherwise {SITE_NAME} shows the exact manual step instead of a fake success.
-          </p>
-          <p>
-            {SITE_NAME} does not guarantee testers, downloads, reviews, ratings, or Google Play approval. Reputation
-            scores are calculated from recorded platform activity, not invented statistics.
-          </p>
+        <p className="mt-4 text-lg leading-8 text-body">
+          Discover, join and manage software testing opportunities — with Google Play as the source of truth.
+        </p>
+
+        <div className="mt-8 grid gap-3 sm:grid-cols-3">
+          <InfoModal title="What is Open Testing?" label="Open Testing">
+            Anyone with the testing link can join through Google Play. TestLoop does not manage an individual tester
+            email list for open testing.
+          </InfoModal>
+          <InfoModal title="What is Closed Testing?" label="Closed Testing">
+            Closed testing uses a limited tester list or a Google Group configured in Play Console. TestLoop records
+            the tester request and shows the developer what Play Console still requires.
+          </InfoModal>
+          <InfoModal title="What is Internal Testing?" label="Internal Testing">
+            Internal testing is a private Play track with Google’s own limits. TestLoop never claims a tester was added
+            unless Google Play actually confirms it.
+          </InfoModal>
         </div>
-        <Link
-          href="/"
-          className="mt-10 inline-block border-t border-line pt-6 text-sm font-medium text-brand hover:underline"
-        >
+
+        <CompanyAboutBlurb className="mt-10" />
+
+        <Link href="/" className="mt-10 inline-block text-sm font-medium text-brand hover:underline">
           Back to {SITE_NAME}
         </Link>
       </main>

@@ -4,6 +4,9 @@ import { prisma } from "@/lib/db";
 import { SettingsForms } from "@/components/settings/settings-forms";
 import { NotificationsForm } from "@/components/settings/notifications-form";
 import { getNotificationSettings } from "@/lib/services/notifications";
+import { CompanyAboutBlurb } from "@/components/brand/company-attribution";
+import { Card, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Suspense } from "react";
 import Link from "next/link";
 
@@ -14,21 +17,23 @@ export default async function SettingsPage() {
   const notifications = await getNotificationSettings(user.id);
   return (
     <AppShell title="Settings">
-      <div className="mb-6 flex flex-wrap gap-2 text-sm">
-        <Link href="/integrations" className="rounded-full border border-line px-3 py-1.5 text-slate-600 hover:border-line-strong">
-          Integrations
-        </Link>
-        <Link href="/analytics" className="rounded-full border border-line px-3 py-1.5 text-slate-600 hover:border-line-strong">
-          Analytics
-        </Link>
-        <Link href="/activity" className="rounded-full border border-line px-3 py-1.5 text-slate-600 hover:border-line-strong">
-          Alerts
-        </Link>
-      </div>
       <div className="space-y-6">
         <Suspense fallback={null}>
           <NotificationsForm initial={notifications} />
         </Suspense>
+        <Card>
+          <CardHeader
+            title="Google Play"
+            description="Connection, synchronization, and disconnect live on the Google Play page."
+            action={
+              <Link href="/play">
+                <Button variant="secondary" size="sm">
+                  Open Google Play
+                </Button>
+              </Link>
+            }
+          />
+        </Card>
         <SettingsForms
           user={{
             name: user.name || "",
@@ -54,6 +59,7 @@ export default async function SettingsPage() {
           }}
           templates={templates.map((item) => ({ key: item.key, name: item.name, body: item.body }))}
         />
+        <CompanyAboutBlurb />
       </div>
     </AppShell>
   );

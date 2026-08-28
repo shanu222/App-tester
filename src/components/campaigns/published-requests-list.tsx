@@ -72,7 +72,7 @@ function RequestCard({ row }: { row: TestingRequestCardData }) {
           <>
             <Link href={openHref}>
               <Button size="sm" variant="secondary">
-                View
+                View Testing
               </Button>
             </Link>
             <Link href={`/campaigns/${row.id}`}>
@@ -92,12 +92,12 @@ function RequestCard({ row }: { row: TestingRequestCardData }) {
 }
 
 export function PublishedRequestsList({ requests }: { requests: TestingRequestCardData[] }) {
-  const [filter, setFilter] = useState<"all" | "active" | "stopped" | "archived">("all");
+  const [filter, setFilter] = useState<"active" | "stopped" | "archived">("active");
   const live = requests.filter((row) => requestState(row) === "active");
   const stopped = requests.filter((row) => requestState(row) === "stopped" || requestState(row) === "draft");
   const archived = requests.filter((row) => requestState(row) === "archived");
   const visible =
-    filter === "active" ? live : filter === "stopped" ? stopped : filter === "archived" ? archived : requests;
+    filter === "stopped" ? stopped : filter === "archived" ? archived : live;
 
   if (!requests.length) {
     return (
@@ -113,7 +113,6 @@ export function PublishedRequestsList({ requests }: { requests: TestingRequestCa
       <SectionLabel>Published testing requests</SectionLabel>
       <FilterButtons
         items={[
-          { id: "all", label: "All", active: filter === "all", onClick: () => setFilter("all") },
           { id: "active", label: "Active", active: filter === "active", onClick: () => setFilter("active") },
           { id: "stopped", label: "Stopped", active: filter === "stopped", onClick: () => setFilter("stopped") },
           { id: "archived", label: "Archived", active: filter === "archived", onClick: () => setFilter("archived") },

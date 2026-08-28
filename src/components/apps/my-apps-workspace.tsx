@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input, Label, Select } from "@/components/ui/fields";
 import { EmptyState } from "@/components/ui/widgets";
+import { TechnicalDetails } from "@/components/ui/technical-details";
 import { parsePlayStoreUrl } from "@/lib/play-url";
 import { Plus, RefreshCw, Search } from "lucide-react";
 
@@ -242,7 +243,11 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
               >
                 <div className="min-w-0">
                   <div className="truncate font-medium text-slate-900">{app.name}</div>
-                  <div className="mt-0.5 font-mono text-xs text-muted">{app.packageName}</div>
+                  <div className="mt-0.5">
+                    <TechnicalDetails>
+                      <p>Package name: {app.packageName}</p>
+                    </TechnicalDetails>
+                  </div>
                 </div>
                 <Button
                   type="button"
@@ -362,7 +367,11 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
                         <Badge>No campaign</Badge>
                       )}
                     </div>
-                    <div className="mt-1 truncate font-mono text-xs text-muted">{app.packageName}</div>
+                    <div className="mt-2">
+                      <TechnicalDetails>
+                        <p>Package name: {app.packageName}</p>
+                      </TechnicalDetails>
+                    </div>
                     <div className="mt-1 truncate text-xs text-muted">
                       {app.tracks[0]?.name || app.testingType} · {app.campaign?.name || "No testing campaign yet"}
                     </div>

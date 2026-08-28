@@ -11,17 +11,16 @@ import { type NavItem } from "@/components/layout/sidebar-nav";
 import { SiteFooter } from "@/components/layout/public-chrome";
 
 const NAV: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", section: "Workspace", icon: "home" },
-  { href: "/apps", label: "My Apps", section: "Workspace", icon: "apps" },
-  { href: "/play", label: "Google Play", section: "Workspace", icon: "play" },
-  { href: "/requests", label: "Testing Requests", section: "Testing", icon: "requests" },
-  { href: "/campaigns", label: "Published Requests", section: "Testing", icon: "campaigns" },
-  { href: "/testing", label: "My Testing", section: "Testing", icon: "testing" },
-  { href: "/testers", label: "Testers", section: "Testing", icon: "testers" },
+  { href: "/dashboard", label: "Dashboard", section: "Main", icon: "home" },
+  { href: "/requests", label: "Discover Testing", section: "Main", icon: "requests" },
+  { href: "/testing", label: "My Testing", section: "Main", icon: "testing" },
+  { href: "/apps", label: "My Apps", section: "Developer", icon: "apps" },
+  { href: "/campaigns", label: "Testing Requests", section: "Developer", icon: "campaigns" },
+  { href: "/play", label: "Google Play", section: "Developer", icon: "play" },
+  { href: "/testers", label: "Testers", section: "Developer", icon: "testers" },
+  { href: "/activity", label: "Notifications", section: "Account", icon: "notifications" },
   { href: "/messages", label: "Messages", section: "Account", icon: "messages" },
   { href: "/settings", label: "Settings", section: "Account", icon: "settings" },
-  { href: "/profile", label: "Profile", section: "Account", icon: "profile" },
-  { href: "/about", label: "Help", section: "Account", icon: "help" },
 ];
 
 export async function AppShell({

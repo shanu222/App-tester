@@ -17,7 +17,7 @@ export const revalidate = 0;
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_ORIGIN),
   title: `${SITE_NAME} — Developers Testing Developers' Apps`,
-  description: `${SITE_TAGLINE}. Publish campaigns, accept tests, share Gmail by consent, and track Google Play closed testing.`,
+  description: `${SITE_TAGLINE} A professional platform for discovering, joining and managing software testing opportunities.`,
   openGraph: {
     siteName: SITE_NAME,
     type: "website",

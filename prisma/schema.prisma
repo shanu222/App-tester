@@ -1098,6 +1098,7 @@ enum ManagedPaymentProvider {
   NAYAPAY
   BINANCE
   REVENUECAT
+  PADDLE
 }
 
 enum ManagedPaymentMethod {
@@ -1212,6 +1213,7 @@ model ManagedTestingPayment {
   confirmTokenHash     String?
   confirmTokenExpiresAt DateTime?
   confirmTokenUsedAt   DateTime?
+  paddleTransactionId  String?                @unique
   paidAt               DateTime?
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
@@ -1223,6 +1225,12 @@ model ManagedTestingPayment {
   @@index([userId])
   @@index([status])
   @@index([reviewedById])
+}
+
+model PaddleWebhookEvent {
+  eventId   String   @id
+  eventType String
+  createdAt DateTime @default(now())
 }
 
 model ManagedTestingCampaign {

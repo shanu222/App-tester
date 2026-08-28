@@ -1,8 +1,25 @@
 import { handleRouteError, json } from "@/lib/http";
 import { requireUser } from "@/auth";
-import { submitPaymentProof } from "@/lib/services/managed-testing";
+import { getPaymentCheckoutForUser, submitPaymentProof } from "@/lib/services/managed-testing";
 
 export const maxDuration = 60;
+
+export async function GET(_request: Request, context: { params: Promise<{ publicId: string }> }) {
+  try {
+    const user = await requireUser();
+    const { publicId } = await context.params;
+    const view = await getPaymentCheckoutForUser(user.id, publicId);
+    return json({
+      ok: true,
+      status: view.payment.status,
+      active: view.activated,
+      campaignPublicId: view.campaignPublicId,
+      paddleCheckout: view.payment.paddleCheckout,
+    });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
 
 export async function POST(request: Request, context: { params: Promise<{ publicId: string }> }) {
   try {

@@ -82,7 +82,7 @@ export default async function DashboardPage() {
               <Button variant="secondary">Payments & Packages</Button>
             </Link>
             <Link href="/managed-testing/usd-twelve">
-              <Button variant="secondary">$10 — 12 Testers — 14 Days</Button>
+              <Button variant="secondary">Buy TestLoop</Button>
             </Link>
             <Link href="/managed-testing">
               <Button>View packages</Button>

@@ -2,10 +2,12 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
 import { getPaymentCheckoutForUser } from "@/lib/services/managed-testing";
 import { PaymentCheckoutPanel } from "@/components/managed-testing/payment-checkout-panel";
+import { PaddleResumeCheckout } from "@/components/managed-testing/paddle-resume-checkout";
 import { ManagedTestingNotice } from "@/components/managed-testing/compliance-notice";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { paymentIsActivated } from "@/lib/managed-testing/methods";
+import { paddleCheckoutConfigured } from "@/lib/paddle/config";
 import { isUsdTwelvePackage } from "@/lib/managed-testing/usd-twelve";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -24,15 +26,33 @@ export default async function ManagedPaymentPage({
     }
     redirect(`/managed-testing/${view.campaignPublicId}/setup`);
   }
+  const paddleCheckout = view.payment.paddleCheckout && paddleCheckoutConfigured() && view.canSubmitProof;
 
   return (
-    <AppShell title="Purchase package" description="Pay the listed amount, then upload proof. TestLoop activates the package only after review.">
+    <AppShell
+      title={paddleCheckout ? "TestLoop" : "Purchase package"}
+      description={
+        paddleCheckout
+          ? "Complete the one-time $10 Paddle checkout. TestLoop activates access only after the transaction is verified."
+          : "Pay the listed amount, then upload proof. TestLoop activates the package only after review."
+      }
+    >
       <Card className="max-w-2xl">
         <CardHeader
-          title={view.payment.packageName}
-          description={`${view.payment.testerCount} managed testers · ${view.payment.amountLabel}`}
+          title={paddleCheckout ? "TestLoop" : view.payment.packageName}
+          description={
+            paddleCheckout
+              ? `${view.payment.amountLabel} · one-time payment`
+              : `${view.payment.testerCount} managed testers · ${view.payment.amountLabel}`
+          }
         />
-        <div className="mt-6">
+        <div className="mt-6 space-y-6">
+          {paddleCheckout ? (
+            <div className="space-y-3">
+              <PaddleResumeCheckout paymentPublicId={view.payment.publicId} customerEmail={view.developerEmail} />
+              <p className="text-sm text-muted">Or pay with a wallet and upload proof. Access still waits for verification.</p>
+            </div>
+          ) : null}
           <PaymentCheckoutPanel
             payment={view.payment}
             methods={view.methods}

@@ -6,6 +6,7 @@ import { UsdTwelveCheckoutForm } from "@/components/managed-testing/usd-twelve-c
 import { ManagedTestingNotice } from "@/components/managed-testing/compliance-notice";
 import { Card, CardHeader } from "@/components/ui/card";
 import { USD_TWELVE_INCLUDED, formatUsd } from "@/lib/managed-testing/usd-twelve";
+import { paddleCheckoutConfigured } from "@/lib/paddle/config";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -16,24 +17,21 @@ export default async function UsdTwelvePackagePage() {
   if (!pack) notFound();
 
   return (
-    <AppShell
-      title="TESTLOOP MANAGED TESTING"
-      description="Managed Beta Testing · tester coordination · $10 — 12 Testers — 14 Days"
-    >
+    <AppShell title="TestLoop" description="One-time $10 USD purchase · 12 testers · 14 days of managed testing">
       <Card className="max-w-xl">
-        <CardHeader title="12 Testers — $10 USD — 14 Days" description={`${formatUsd(pack.amountPkr)} · 12 testers · 14 days`} />
+        <CardHeader title="TestLoop" description="One-time payment. Access starts after Paddle verifies the transaction." />
         <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-3">
           <div>
-            <dt className="text-muted">Testers</dt>
-            <dd className="mt-0.5 font-semibold text-slate-900">12 Testers</dd>
-          </div>
-          <div>
-            <dt className="text-muted">Duration</dt>
-            <dd className="mt-0.5 font-semibold text-slate-900">14 Days</dd>
+            <dt className="text-muted">Product</dt>
+            <dd className="mt-0.5 font-semibold text-slate-900">TestLoop</dd>
           </div>
           <div>
             <dt className="text-muted">Price</dt>
-            <dd className="mt-0.5 font-semibold text-slate-900">USD $10</dd>
+            <dd className="mt-0.5 font-semibold text-slate-900">{formatUsd(pack.amountPkr)} USD</dd>
+          </div>
+          <div>
+            <dt className="text-muted">Billing</dt>
+            <dd className="mt-0.5 font-semibold text-slate-900">One-time payment</dd>
           </div>
         </dl>
         <p className="mt-5 text-sm font-medium text-slate-800">Includes:</p>
@@ -48,12 +46,16 @@ export default async function UsdTwelvePackagePage() {
           ))}
         </ul>
         <div className="mt-6">
-          <UsdTwelveCheckoutForm apps={apps} />
+          <UsdTwelveCheckoutForm
+            apps={apps}
+            paddleReady={paddleCheckoutConfigured()}
+            customerEmail={user.email}
+          />
         </div>
         <ManagedTestingNotice className="mt-6 flex items-start gap-1 text-sm leading-6 text-muted" />
         <div className="mt-6">
           <Link href="/managed-testing">
-            <Button variant="secondary">Back to packages</Button>
+            <Button variant="secondary">Back</Button>
           </Link>
         </div>
       </Card>

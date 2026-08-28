@@ -214,7 +214,37 @@ export async function adminMarkPaymentFailed(paymentPublicId: string) {
   });
 }
 
-async function markPaymentPaid(paymentId: string, provider: "STUB" | "MANUAL", reviewerId?: string) {
+export async function activateManagedPaymentFromPaddle(paymentId: string, paddleTransactionId: string) {
+  const owner = await prisma.managedTestingPayment.findUnique({
+    where: { paddleTransactionId },
+    select: { id: true },
+  });
+  if (owner && owner.id !== paymentId) {
+    throw new AppError("This Paddle transaction is already attached to another payment.");
+  }
+  try {
+    await prisma.managedTestingPayment.update({
+      where: { id: paymentId },
+      data: { paddleTransactionId, provider: "PADDLE" },
+    });
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
+    if (code === "P2002") {
+      const taken = await prisma.managedTestingPayment.findUnique({
+        where: { paddleTransactionId },
+        select: { id: true },
+      });
+      if (!taken || taken.id !== paymentId) {
+        throw new AppError("This Paddle transaction is already attached to another payment.");
+      }
+    } else {
+      throw error;
+    }
+  }
+  return markPaymentPaid(paymentId, "PADDLE");
+}
+
+async function markPaymentPaid(paymentId: string, provider: "STUB" | "MANUAL" | "PADDLE", reviewerId?: string) {
   const payment = await prisma.managedTestingPayment.findUnique({
     where: { id: paymentId },
     include: { package: true, campaign: true },
@@ -248,7 +278,7 @@ async function markPaymentPaid(paymentId: string, provider: "STUB" | "MANUAL", r
       paidAt: new Date(),
       reviewedAt: new Date(),
       reviewedById: reviewerId,
-      provider: provider === "STUB" ? "STUB" : payment.provider,
+      provider: provider === "STUB" ? "STUB" : provider === "PADDLE" ? "PADDLE" : payment.provider,
       confirmTokenUsedAt: payment.confirmTokenUsedAt ?? new Date(),
     },
     include: { package: true },
@@ -359,7 +389,7 @@ function publicPaymentView(payment: {
     status: payment.status,
     provider: payment.provider,
     method: payment.method ?? null,
-    methodLabel: method?.label ?? null,
+    methodLabel: payment.provider === "PADDLE" ? "Paddle" : method?.label ?? null,
     transactionReference: payment.transactionReference,
     developerReference: payment.developerReference ?? null,
     hasProof: Boolean(payment.proofMime),
@@ -375,6 +405,7 @@ function publicPaymentView(payment: {
     campaignPublicId: payment.campaign?.publicId ?? null,
     campaignStatus: payment.campaign?.status ?? null,
     active: paymentIsActivated(payment.status),
+    paddleCheckout: payment.provider === "PADDLE",
   };
 }
 

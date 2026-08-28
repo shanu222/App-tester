@@ -95,8 +95,8 @@ export default async function ManagedTestingPage() {
 
       <div className="mt-10">
         <CardHeader
-          title="12 Testers — $10 USD — 14 Days"
-          description="Managed testers are real people who have consented to participate. Outcomes on Google Play are not guaranteed."
+          title="TestLoop"
+          description="One-time $10 USD purchase. Managed testers are real people who have consented to participate. Outcomes on Google Play are not guaranteed."
         />
         <div className="mt-5">
           {packages.length === 0 ? (

@@ -16,6 +16,8 @@ import {
 } from "@/lib/managed-testing/catalog";
 import { PAYMENTS_ADMIN_EMAIL } from "@/lib/managed-testing/methods";
 import { resolveCheckoutProvider } from "@/lib/managed-testing/payments";
+import { paddleCheckoutConfigured } from "@/lib/paddle/config";
+import { ensurePaddleCheckoutTransaction } from "@/lib/paddle/checkout";
 import {
   USD_TWELVE_DURATION_DAYS,
   USD_TWELVE_PACKAGE_CODE,
@@ -149,7 +151,8 @@ export async function startUsdTwelveCheckout(
     testingType: input.testingType,
     testingUrl: validated.testingUrl || "",
   };
-  const provider = resolveCheckoutProvider();
+  const usePaddle = paddleCheckoutConfigured();
+  const provider = usePaddle ? "PADDLE" : resolveCheckoutProvider() === "stub" ? "STUB" : "MANUAL";
   const payment = await prisma.managedTestingPayment.create({
     data: {
       publicId: publicPaymentId(),
@@ -157,13 +160,21 @@ export async function startUsdTwelveCheckout(
       packageId: pack.id,
       amountPkr: pack.amountPkr,
       currency: pack.currency,
-      provider: provider === "stub" ? "STUB" : "MANUAL",
+      provider,
       status: "PENDING_PAYMENT",
       transactionReference: paymentReference(),
       fulfillment,
     },
   });
-  return { paymentPublicId: payment.publicId };
+  if (!usePaddle) {
+    return { paymentPublicId: payment.publicId, paddleCheckout: false as const, paddleTransactionId: null };
+  }
+  const checkout = await ensurePaddleCheckoutTransaction({ userId, paymentPublicId: payment.publicId });
+  return {
+    paymentPublicId: payment.publicId,
+    paddleCheckout: true as const,
+    paddleTransactionId: checkout.transactionId,
+  };
 }
 
 export async function fulfillUsdTwelvePackage(paymentId: string) {

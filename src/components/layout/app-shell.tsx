@@ -22,7 +22,6 @@ const NAV: NavItem[] = [
   { href: "/play", label: "Google Play", section: "Developer", icon: "play" },
   { href: "/testers", label: "Testers", section: "Developer", icon: "testers" },
   { href: "/activity", label: "Notifications", section: "Account", icon: "notifications" },
-  { href: "/messages", label: "Messages", section: "Account", icon: "messages" },
   { href: "/settings", label: "Settings", section: "Account", icon: "settings" },
 ];
 

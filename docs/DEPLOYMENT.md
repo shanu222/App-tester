@@ -73,7 +73,7 @@ Meta App Dashboard also needs the Privacy Policy URL: `https://YOUR-PROJECT.verc
 `vercel.json` schedules:
 
 - `GET /api/cron/tick` at `0 0 * * *` (daily job runner)
-- `GET /api/cron/daily-testing-summary` at `*/15 * * * *` (checks each developer’s selected frequency, time, weekday, and timezone)
+- `GET /api/cron/daily-testing-summary` at `0 11 * * *` (11:00 UTC ≈ 4:00 PM Asia/Karachi). Hobby-compatible. Each run evaluates that developer’s frequency, time, weekday, and timezone and skips work that is not due or already sent.
 
 Both endpoints require `CRON_SECRET`. Vercel Cron sends `Authorization: Bearer $CRON_SECRET` automatically when that variable exists. Unauthenticated callers cannot trigger the daily summary.
 
@@ -83,7 +83,7 @@ On **Pro**, the job runner (`/api/cron/tick`) can run more often:
 "schedule": "*/15 * * * *"
 ```
 
-Keep `/api/cron/daily-testing-summary` at `*/15 * * * *` so each developer’s local schedule is honored. The default remains Daily at 16:00 Asia/Karachi. Intervals under a day require Vercel Pro.
+Keep `/api/cron/daily-testing-summary` at `0 11 * * *` so the project deploys on the **Hobby** plan. The default digest remains Daily at 16:00 Asia/Karachi. Each run still honors daily vs weekly, weekday, timezone, and preferred time (send only if that local time has been reached and the digest has not already gone out).
 
 Jobs are idempotent and time out at 25s (serverless-safe). This is not a persistent worker. For high volume, run the same queue against the same database from an external worker.
 

@@ -292,7 +292,7 @@ export function NotificationsForm({ initial }: { initial: SettingsView }) {
               <FieldLabel
                 htmlFor="notification-time"
                 infoTitle="Preferred time"
-                info="Summaries are sent in a short window around this local time. The default is 4:00 PM in Asia/Karachi."
+                info="The daily job sends a summary if this local time has been reached. The default is 4:00 PM in Asia/Karachi."
               >
                 Preferred time
               </FieldLabel>

@@ -118,15 +118,12 @@ export function zonedDateParts(date: Date, timeZone: string) {
   };
 }
 
-const SEND_WINDOW_MINUTES = 15;
-
 export function isScheduledSendDue(date: Date, schedule: NotificationSchedule) {
   if (schedule.frequency !== "daily" && schedule.frequency !== "weekly") return false;
   const local = zonedDateParts(date, schedule.timezone);
   const [hours, minutes] = schedule.time.split(":").map((part) => Number.parseInt(part, 10));
   const preferred = hours * 60 + minutes;
-  const elapsed = local.minutesOfDay - preferred;
-  if (elapsed < 0 || elapsed >= SEND_WINDOW_MINUTES) return false;
+  if (local.minutesOfDay < preferred) return false;
   if (schedule.frequency === "weekly") return local.weekday === schedule.weekday;
   return true;
 }

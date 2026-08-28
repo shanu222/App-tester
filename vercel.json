@@ -8,7 +8,7 @@
     },
     {
       "path": "/api/cron/daily-testing-summary",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 11 * * *"
     }
   ]
 }

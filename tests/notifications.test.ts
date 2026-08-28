@@ -60,7 +60,7 @@ describe("notification schedule", () => {
     });
   });
 
-  it("treats the default Karachi window as due", () => {
+  it("treats the default Karachi time as due at 11:00 UTC", () => {
     expect(
       isScheduledSendDue(karachiFourPm, {
         frequency: "daily",
@@ -70,7 +70,15 @@ describe("notification schedule", () => {
       }),
     ).toBe(true);
     expect(
-      isScheduledSendDue(new Date("2026-08-28T11:14:00.000Z"), {
+      isScheduledSendDue(new Date("2026-08-28T10:59:00.000Z"), {
+        frequency: "daily",
+        time: "16:00",
+        timezone: "Asia/Karachi",
+        weekday: 1,
+      }),
+    ).toBe(false);
+    expect(
+      isScheduledSendDue(new Date("2026-08-28T11:15:00.000Z"), {
         frequency: "daily",
         time: "16:00",
         timezone: "Asia/Karachi",
@@ -78,9 +86,17 @@ describe("notification schedule", () => {
       }),
     ).toBe(true);
     expect(
-      isScheduledSendDue(new Date("2026-08-28T11:15:00.000Z"), {
+      isScheduledSendDue(karachiFourPm, {
         frequency: "daily",
-        time: "16:00",
+        time: "09:00",
+        timezone: "Asia/Karachi",
+        weekday: 1,
+      }),
+    ).toBe(true);
+    expect(
+      isScheduledSendDue(karachiFourPm, {
+        frequency: "daily",
+        time: "20:00",
         timezone: "Asia/Karachi",
         weekday: 1,
       }),

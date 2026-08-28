@@ -22,6 +22,8 @@ const PUBLIC_PREFIXES = [
   "/api/telemetry",
   "/api/notifications/verify",
   "/notifications/verify",
+  "/managed-testing/join",
+  "/api/managed-testing/join",
   "/test",
   "/api/test",
 ];

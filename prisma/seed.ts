@@ -91,6 +91,25 @@ async function main() {
   });
 
   console.log("Seeded demo@testerbridge.dev / Demo12345!");
+
+  for (const tester of [
+    { publicId: "mtt_demo_1", name: "Ayesha Khan", email: "consented.tester.1@example.com" },
+    { publicId: "mtt_demo_2", name: "Bilal Ahmed", email: "consented.tester.2@example.com" },
+    { publicId: "mtt_demo_3", name: "Camila Rahman", email: "consented.tester.3@example.com" },
+  ]) {
+    await prisma.managedTester.upsert({
+      where: { email: tester.email },
+      update: { consentStatus: "CONSENTED", availableForTesting: true, currentlyAssigned: false },
+      create: {
+        publicId: tester.publicId,
+        name: tester.name,
+        email: tester.email,
+        googleAccountEmail: tester.email,
+        consentStatus: "CONSENTED",
+        availableForTesting: true,
+      },
+    });
+  }
 }
 
 main()

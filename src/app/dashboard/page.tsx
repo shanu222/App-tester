@@ -59,6 +59,20 @@ export default async function DashboardPage() {
         <StatCard label="Pending actions" value={stats.pendingTesters + unread} />
       </div>
 
+      <div className="mt-6 rounded-card border border-line bg-white p-5 shadow-card">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <SectionLabel>Managed Beta Testing</SectionLabel>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-700">
+              Purchase a tester package and TestLoop coordinates consenting testing participants for your app.
+            </p>
+          </div>
+          <Link href="/managed-testing">
+            <Button>View packages</Button>
+          </Link>
+        </div>
+      </div>
+
       {showOnboarding ? (
         <div className="mt-6 rounded-card border border-line bg-white p-5 shadow-card">
           <SectionLabel>Get started</SectionLabel>

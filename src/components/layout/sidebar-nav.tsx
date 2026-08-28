@@ -13,6 +13,7 @@ import {
   Settings,
   ShieldCheck,
   Smartphone,
+  Sparkles,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ const ICONS = {
   testers: Users,
   messages: MessageSquare,
   play: Building2,
+  managed: Sparkles,
   settings: Settings,
   admin: ShieldCheck,
   notifications: Bell,

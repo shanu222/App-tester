@@ -185,6 +185,8 @@ model User {
   developerBlocks         DeveloperBlock[]         @relation("Blocker")
   messagesSent            DeveloperMessage[]       @relation("MessageSender")
   messagesReceived        DeveloperMessage[]       @relation("MessageRecipient")
+  managedTestingPayments  ManagedTestingPayment[]
+  managedTestingCampaigns ManagedTestingCampaign[]
 
   @@index([createdAt])
   @@index([deletedAt])
@@ -459,7 +461,8 @@ model App {
   campaigns        Campaign[]
   feedback         Feedback[]
   telemetryEvents  TelemetryEvent[]
-  playApps         GooglePlayApp[]
+  playApps                GooglePlayApp[]
+  managedTestingCampaigns ManagedTestingCampaign[]
 
   @@unique([userId, packageName])
   @@index([userId])
@@ -1070,4 +1073,208 @@ model DeveloperMessage {
   @@index([senderId])
   @@index([recipientId])
   @@index([createdAt])
+}
+
+enum ManagedPaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum ManagedPaymentProvider {
+  MANUAL
+  STUB
+}
+
+enum ManagedCampaignStatus {
+  AWAITING_PAYMENT
+  DRAFT
+  READY
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum ManagedReportFrequency {
+  DAILY
+  WEEKLY
+  COMPLETION
+}
+
+enum ManagedConsentStatus {
+  PENDING
+  CONSENTED
+  WITHDRAWN
+}
+
+enum ManagedAssignmentStatus {
+  AVAILABLE
+  INVITED
+  EMAIL_SENT
+  EMAIL_OPENED
+  GROUP_JOINED
+  OPTED_IN
+  TESTING
+  CONFIRMATION_PENDING
+  CONFIRMED
+  COMPLETED
+  DECLINED
+  EXPIRED
+}
+
+enum ManagedInvitationStatus {
+  NOT_SENT
+  SENT
+  FAILED
+}
+
+enum ManagedOptInStatus {
+  NOT_STARTED
+  JOINED
+}
+
+enum ManagedConfirmationStatus {
+  NOT_CONFIRMED
+  CONFIRMED
+}
+
+model ManagedTestingPackage {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  testerCount Int
+  amountPkr   Int
+  currency    String   @default("PKR")
+  contactOnly Boolean  @default(false)
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  payments    ManagedTestingPayment[]
+}
+
+model ManagedTestingPayment {
+  id                   String                 @id @default(cuid())
+  publicId             String                 @unique
+  userId               String
+  packageId            String
+  amountPkr            Int
+  currency             String                 @default("PKR")
+  provider             ManagedPaymentProvider @default(MANUAL)
+  status               ManagedPaymentStatus   @default(PENDING)
+  transactionReference String                 @unique
+  paidAt               DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  user                 User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  package              ManagedTestingPackage  @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  campaign             ManagedTestingCampaign?
+
+  @@index([userId])
+  @@index([status])
+}
+
+model ManagedTestingCampaign {
+  id                  String                   @id @default(cuid())
+  publicId            String                   @unique
+  userId              String
+  appId               String?
+  paymentId           String                   @unique
+  testingType         TestingType              @default(CLOSED)
+  testerTarget        Int
+  durationDays        Int                      @default(14)
+  testingUrl          String?
+  testingInstructions String?
+  status              ManagedCampaignStatus    @default(DRAFT)
+  startedAt           DateTime?
+  endsAt              DateTime?
+  completedAt         DateTime?
+  reportEmailEnabled  Boolean                  @default(true)
+  reportFrequency     ManagedReportFrequency   @default(DAILY)
+  reportTime          String                   @default("16:00")
+  reportTimezone      String                   @default("Asia/Karachi")
+  reportWeekday       Int                      @default(1)
+  whatsappNumber      String?
+  whatsappVerified    Boolean                  @default(false)
+  lastReportOn        DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  user                User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app                 App?                     @relation(fields: [appId], references: [id], onDelete: SetNull)
+  payment             ManagedTestingPayment    @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  assignments         ManagedCampaignTester[]
+  reports             ManagedTestingReport[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model ManagedTester {
+  id                  String               @id @default(cuid())
+  publicId            String               @unique
+  name                String
+  email               String               @unique
+  googleAccountEmail  String?
+  consentStatus       ManagedConsentStatus @default(PENDING)
+  availableForTesting Boolean              @default(false)
+  currentlyAssigned   Boolean              @default(false)
+  campaignsTested     Int                  @default(0)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  assignments         ManagedCampaignTester[]
+
+  @@index([consentStatus, availableForTesting, currentlyAssigned])
+}
+
+model ManagedCampaignTester {
+  id                   String                     @id @default(cuid())
+  publicId             String                     @unique
+  campaignId           String
+  testerId             String
+  displayLabel         String
+  testingStatus        ManagedAssignmentStatus    @default(INVITED)
+  invitationStatus     ManagedInvitationStatus    @default(NOT_SENT)
+  optInStatus          ManagedOptInStatus         @default(NOT_STARTED)
+  confirmationStatus   ManagedConfirmationStatus  @default(NOT_CONFIRMED)
+  inviteTokenHash      String?                    @unique
+  inviteTokenExpiresAt DateTime?
+  invitedAt            DateTime?
+  emailSentAt          DateTime?
+  optedInAt            DateTime?
+  confirmedAt          DateTime?
+  declinedAt           DateTime?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  campaign             ManagedTestingCampaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  tester               ManagedTester              @relation(fields: [testerId], references: [id], onDelete: Restrict)
+  confirmation         ManagedTesterConfirmation?
+
+  @@unique([campaignId, testerId])
+  @@index([campaignId])
+}
+
+model ManagedTesterConfirmation {
+  id              String                @id @default(cuid())
+  assignmentId    String                @unique
+  confirmedSetup  Boolean               @default(true)
+  screenshotMime  String?
+  screenshotBytes Bytes?
+  createdAt       DateTime              @default(now())
+  assignment      ManagedCampaignTester @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+}
+
+model ManagedTestingReport {
+  id         String                 @id @default(cuid())
+  campaignId String
+  periodKey  String
+  kind       String
+  sentAt     DateTime               @default(now())
+  snapshot   Json?
+  campaign   ManagedTestingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, periodKey])
+  @@index([campaignId])
 }

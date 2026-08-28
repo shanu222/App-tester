@@ -205,6 +205,101 @@ export function dailySummaryEmail(input: {
   return { subject: `${heading} — ${input.dateLabel}`, html, text };
 }
 
+export function managedTesterInviteEmail(input: {
+  testerName: string;
+  appName: string;
+  testingTypeLabel: string;
+  developerName: string;
+  joinUrl: string;
+  confirmUrl: string;
+}) {
+  const html = wrapEmail(
+    `<p>Hi ${escapeHtml(input.testerName)},</p>
+    <p>You have been invited to participate in a beta test for:</p>
+    <p style="font-size:18px;font-weight:600;margin:16px 0">${escapeHtml(input.appName)}</p>
+    <p>Testing type: ${escapeHtml(input.testingTypeLabel)}<br>Developer: ${escapeHtml(input.developerName)}</p>
+    <p>Join the testing program using the button below.</p>
+    ${emailButton(input.joinUrl, "Join Test")}
+    <p style="color:#64748b;font-size:13px">After you join, return to TestLoop to confirm participation:</p>
+    ${emailButton(input.confirmUrl, "Confirm participation")}`,
+  );
+  const text = `Hi ${input.testerName},\n\nYou have been invited to participate in a beta test for:\n${input.appName}\n\nTesting type: ${input.testingTypeLabel}\nDeveloper: ${input.developerName}\n\nJoin Test:\n${input.joinUrl}\n\nConfirm participation:\n${input.confirmUrl}\n`;
+  return { subject: `You're invited to test ${input.appName}`, html, text };
+}
+
+export function managedTesterReminderEmail(input: {
+  testerName: string;
+  appName: string;
+  joinUrl: string;
+  confirmUrl: string;
+}) {
+  const html = wrapEmail(
+    `<p>Hi ${escapeHtml(input.testerName)},</p>
+    <p>This is a reminder to join the beta test for ${escapeHtml(input.appName)}.</p>
+    ${emailButton(input.joinUrl, "Join Test")}
+    ${emailButton(input.confirmUrl, "Confirm participation")}`,
+  );
+  const text = `Hi ${input.testerName},\n\nReminder to join the beta test for ${input.appName}.\n\nJoin Test:\n${input.joinUrl}\n\nConfirm:\n${input.confirmUrl}\n`;
+  return { subject: `Reminder: test ${input.appName}`, html, text };
+}
+
+export function managedTestingDailyReportEmail(input: {
+  appName: string;
+  day: number;
+  durationDays: number;
+  assigned: number;
+  invitationsSent: number;
+  optedIn: number;
+  confirmed: number;
+  pending: number;
+  remaining: number;
+  campaignUrl: string;
+  period?: "daily" | "weekly" | "completion";
+}) {
+  const heading =
+    input.period === "weekly"
+      ? "TESTLOOP — WEEKLY TESTING REPORT"
+      : input.period === "completion"
+        ? "TESTLOOP — TESTING CAMPAIGN COMPLETED"
+        : "TESTLOOP — DAILY TESTING REPORT";
+  const html = wrapEmail(
+    `<p style="letter-spacing:0.08em;font-size:12px;font-weight:700;color:#2563eb">${heading}</p>
+    <p>App: <strong>${escapeHtml(input.appName)}</strong></p>
+    <p>Day: ${input.day} / ${input.durationDays}</p>
+    <ul>
+      <li>Testers assigned: ${input.assigned}</li>
+      <li>Invitations sent: ${input.invitationsSent}</li>
+      <li>Opted in: ${input.optedIn}</li>
+      <li>Confirmed: ${input.confirmed}</li>
+      <li>Pending: ${input.pending}</li>
+      <li>Days remaining: ${input.remaining}</li>
+    </ul>
+    ${
+      input.pending > 0
+        ? `<p><strong>Action required:</strong> ${input.pending} tester${input.pending === 1 ? " is" : "s are"} still pending.</p>`
+        : "<p>No pending testers right now.</p>"
+    }
+    ${emailButton(input.campaignUrl, "Open Campaign")}`,
+  );
+  const text = [
+    heading,
+    "",
+    `App: ${input.appName}`,
+    `Day: ${input.day} / ${input.durationDays}`,
+    `Testers assigned: ${input.assigned}`,
+    `Invitations sent: ${input.invitationsSent}`,
+    `Opted in: ${input.optedIn}`,
+    `Confirmed: ${input.confirmed}`,
+    `Pending: ${input.pending}`,
+    `Days remaining: ${input.remaining}`,
+    input.pending > 0 ? `Action required: ${input.pending} testers are still pending.` : "",
+    `Open Campaign: ${input.campaignUrl}`,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+  return { subject: heading, html, text };
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")

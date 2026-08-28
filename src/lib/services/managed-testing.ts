@@ -1,0 +1,945 @@
+import type { ManagedReportFrequency, TestingType } from "@prisma/client";
+import { prisma } from "@/lib/db";
+import { AppError, NotFoundError, RateLimitError } from "@/lib/errors";
+import { randomToken, sha256 } from "@/lib/crypto";
+import { env } from "@/lib/env";
+import { describeEmail } from "@/lib/email-extract";
+import { sendSmtpEmail } from "@/lib/smtp";
+import { sendDeveloperNotification } from "@/lib/services/notifications";
+import { testingTypeLabel } from "@/lib/campaign-autofill";
+import {
+  MANAGED_TESTING_DURATION_DAYS,
+  formatPkr,
+  paymentReference,
+  publicAssignmentId,
+  publicCampaignId,
+  publicPaymentId,
+  publicTesterId,
+} from "@/lib/managed-testing/catalog";
+import { campaignDayProgress } from "@/lib/managed-testing/labels";
+import {
+  manualPayeeInstructions,
+  managedTestingStubPaymentsAllowed,
+  resolveCheckoutProvider,
+  whatsappReportingConfigured,
+} from "@/lib/managed-testing/payments";
+import { testerDisplayLabel, validateManagedCampaignSetup } from "@/lib/managed-testing/setup";
+import {
+  isScheduledSendDue,
+  parseNotificationTime,
+  resolveTimeZone,
+} from "@/lib/notifications/schedule";
+import {
+  managedTesterInviteEmail,
+  managedTesterReminderEmail,
+  managedTestingDailyReportEmail,
+  playIssueEmail,
+} from "@/lib/notifications/templates";
+
+const INVITE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const SCREENSHOT_MAX_BYTES = 400 * 1024;
+const SCREENSHOT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function campaignUrl(publicId: string) {
+  return `${env.appUrl.replace(/\/$/, "")}/managed-testing/${publicId}`;
+}
+
+function confirmUrl(token: string) {
+  return `${env.appUrl.replace(/\/$/, "")}/managed-testing/join/${encodeURIComponent(token)}`;
+}
+
+function appNameOf(campaign: { app: { name: string } | null }) {
+  return campaign.app?.name || "your app";
+}
+
+async function notifyDeveloper(
+  userId: string,
+  input: { type: string; eventKey: string; title: string; body: string; href: string; immediate?: boolean },
+) {
+  const template = playIssueEmail({ title: input.title, body: input.body, href: `${env.appUrl.replace(/\/$/, "")}${input.href}` });
+  await sendDeveloperNotification({
+    userId,
+    type: input.type,
+    eventKey: input.eventKey,
+    preference: "managedTesting",
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+    immediate: input.immediate ?? true,
+    inApp: { title: input.title, body: input.body, href: input.href },
+  });
+}
+
+export async function listManagedPackages() {
+  return prisma.managedTestingPackage.findMany({
+    where: { active: true },
+    orderBy: { sortOrder: "asc" },
+  });
+}
+
+export async function listDeveloperManagedCampaigns(userId: string) {
+  const [campaigns, pendingPayments] = await Promise.all([
+    prisma.managedTestingCampaign.findMany({
+      where: { userId },
+      include: {
+        app: { select: { name: true, iconUrl: true } },
+        payment: { include: { package: true } },
+        _count: { select: { assignments: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.managedTestingPayment.findMany({
+      where: { userId, status: "PENDING", campaign: null },
+      include: { package: true },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+  return { campaigns, pendingPayments };
+}
+
+export async function startCheckout(userId: string, packageCode: string) {
+  const pack = await prisma.managedTestingPackage.findFirst({
+    where: { code: packageCode, active: true },
+  });
+  if (!pack) throw new NotFoundError("That tester package is not available.");
+  if (pack.contactOnly) {
+    throw new AppError("Contact us to arrange a custom managed testing package.", 400, "CONTACT_SALES");
+  }
+  const provider = resolveCheckoutProvider();
+  const payment = await prisma.managedTestingPayment.create({
+    data: {
+      publicId: publicPaymentId(),
+      userId,
+      packageId: pack.id,
+      amountPkr: pack.amountPkr,
+      currency: pack.currency,
+      provider: provider === "stub" ? "STUB" : "MANUAL",
+      status: "PENDING",
+      transactionReference: paymentReference(),
+    },
+    include: { package: true },
+  });
+  return {
+    payment: publicPaymentView(payment),
+    stubAllowed: managedTestingStubPaymentsAllowed(),
+    payee: manualPayeeInstructions(),
+  };
+}
+
+export async function getPaymentForUser(userId: string, publicId: string) {
+  const payment = await prisma.managedTestingPayment.findFirst({
+    where: { publicId, userId },
+    include: { package: true, campaign: { select: { publicId: true, status: true } } },
+  });
+  if (!payment) throw new NotFoundError("Payment not found.");
+  return {
+    payment: publicPaymentView(payment),
+    stubAllowed: managedTestingStubPaymentsAllowed() && payment.status === "PENDING",
+    payee: manualPayeeInstructions(),
+    campaignPublicId: payment.campaign?.publicId ?? null,
+  };
+}
+
+export async function confirmStubPayment(userId: string, publicId: string) {
+  if (!managedTestingStubPaymentsAllowed()) {
+    throw new AppError("This payment cannot be confirmed here.", 403, "PAYMENT_PROVIDER");
+  }
+  const payment = await prisma.managedTestingPayment.findFirst({
+    where: { publicId, userId },
+  });
+  if (!payment) throw new NotFoundError("Payment not found.");
+  return markPaymentPaid(payment.id, "STUB");
+}
+
+export async function adminMarkPaymentPaid(paymentPublicId: string) {
+  const payment = await prisma.managedTestingPayment.findUnique({
+    where: { publicId: paymentPublicId },
+  });
+  if (!payment) throw new NotFoundError("Payment not found.");
+  return markPaymentPaid(payment.id, "MANUAL");
+}
+
+export async function adminMarkPaymentFailed(paymentPublicId: string) {
+  const payment = await prisma.managedTestingPayment.findUnique({
+    where: { publicId: paymentPublicId },
+  });
+  if (!payment) throw new NotFoundError("Payment not found.");
+  if (payment.status === "PAID") throw new AppError("Paid packages cannot be marked failed.");
+  return prisma.managedTestingPayment.update({
+    where: { id: payment.id },
+    data: { status: "FAILED" },
+  });
+}
+
+async function markPaymentPaid(paymentId: string, provider: "STUB" | "MANUAL") {
+  const payment = await prisma.managedTestingPayment.findUnique({
+    where: { id: paymentId },
+    include: { package: true, campaign: true },
+  });
+  if (!payment) throw new NotFoundError("Payment not found.");
+  if (payment.status === "PAID" && payment.campaign) {
+    return { campaignPublicId: payment.campaign.publicId, alreadyPaid: true as const };
+  }
+  if (payment.status === "PAID") {
+    const campaign = await createDraftCampaign(payment);
+    return { campaignPublicId: campaign.publicId, alreadyPaid: true as const };
+  }
+  if (payment.status !== "PENDING") {
+    throw new AppError("This payment is not awaiting confirmation.");
+  }
+  const updated = await prisma.managedTestingPayment.update({
+    where: { id: payment.id },
+    data: { status: "PAID", paidAt: new Date(), provider },
+    include: { package: true },
+  });
+  const campaign = await createDraftCampaign(updated);
+  await notifyDeveloper(payment.userId, {
+    type: "managed_payment_paid",
+    eventKey: `managed_paid:${payment.id}`,
+    title: "Managed testing package ready",
+    body: `${payment.package.name} is ready. Create your testing campaign to continue.`,
+    href: `/managed-testing/${campaign.publicId}/setup`,
+  });
+  return { campaignPublicId: campaign.publicId, alreadyPaid: false as const };
+}
+
+async function createDraftCampaign(payment: {
+  id: string;
+  userId: string;
+  package: { testerCount: number };
+  campaign?: { publicId: string } | null;
+}) {
+  if (payment.campaign) {
+    return prisma.managedTestingCampaign.findUniqueOrThrow({ where: { paymentId: payment.id } });
+  }
+  return prisma.managedTestingCampaign.create({
+    data: {
+      publicId: publicCampaignId(),
+      userId: payment.userId,
+      paymentId: payment.id,
+      testerTarget: payment.package.testerCount,
+      durationDays: MANAGED_TESTING_DURATION_DAYS,
+      status: "DRAFT",
+    },
+  });
+}
+
+function publicPaymentView(payment: {
+  publicId: string;
+  amountPkr: number;
+  currency: string;
+  status: string;
+  provider: string;
+  transactionReference: string;
+  paidAt: Date | null;
+  createdAt: Date;
+  package: { code: string; name: string; testerCount: number; amountPkr: number; contactOnly: boolean };
+  campaign?: { publicId: string; status: string } | null;
+}) {
+  return {
+    publicId: payment.publicId,
+    amountLabel: formatPkr(payment.amountPkr),
+    currency: payment.currency,
+    status: payment.status,
+    provider: payment.provider,
+    transactionReference: payment.transactionReference,
+    paidAt: payment.paidAt?.toISOString() ?? null,
+    createdAt: payment.createdAt.toISOString(),
+    packageName: payment.package.name,
+    testerCount: payment.package.testerCount,
+    campaignPublicId: payment.campaign?.publicId ?? null,
+  };
+}
+
+async function ownedCampaign(userId: string, publicId: string) {
+  const campaign = await prisma.managedTestingCampaign.findFirst({
+    where: { publicId, userId },
+    include: {
+      app: { select: { id: true, name: true, iconUrl: true, webOptInUrl: true, playStoreUrl: true } },
+      payment: { include: { package: true } },
+      assignments: {
+        include: { tester: true, confirmation: { select: { id: true, confirmedSetup: true, screenshotMime: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+  if (!campaign) throw new NotFoundError("Campaign not found.");
+  return campaign;
+}
+
+export async function getManagedCampaignForUser(userId: string, publicId: string) {
+  const campaign = await ownedCampaign(userId, publicId);
+  return toDashboardView(campaign);
+}
+
+export async function listSelectableApps(userId: string) {
+  const apps = await prisma.app.findMany({
+    where: { userId },
+    select: { id: true, name: true, iconUrl: true, testingType: true, webOptInUrl: true, syncedFromPlay: true },
+    orderBy: { name: "asc" },
+  });
+  return apps.map((app) => ({
+    id: app.id,
+    name: app.name,
+    iconUrl: app.iconUrl,
+    testingType: app.testingType,
+    hasTestingLink: Boolean(app.webOptInUrl),
+    playConnected: app.syncedFromPlay,
+  }));
+}
+
+export async function saveManagedCampaignSetup(
+  userId: string,
+  publicId: string,
+  input: {
+    appId: string;
+    testingType: TestingType;
+    testingUrl?: string | null;
+    testingInstructions?: string | null;
+  },
+) {
+  const campaign = await ownedCampaign(userId, publicId);
+  if (campaign.payment.status !== "PAID") {
+    throw new AppError("Payment must be confirmed before creating a campaign.");
+  }
+  if (campaign.status === "ACTIVE" || campaign.status === "COMPLETED") {
+    throw new AppError("This campaign can no longer be edited.");
+  }
+  const app = await prisma.app.findFirst({
+    where: { id: input.appId, userId },
+    select: { id: true, name: true, webOptInUrl: true },
+  });
+  if (!app) throw new AppError("Select one of your apps.");
+  const validated = validateManagedCampaignSetup({
+    testingType: input.testingType,
+    testingUrl: input.testingUrl || app.webOptInUrl,
+    testingInstructions: input.testingInstructions,
+  });
+  if (!validated.ok) throw new AppError(validated.error);
+  const updated = await prisma.managedTestingCampaign.update({
+    where: { id: campaign.id },
+    data: {
+      appId: app.id,
+      testingType: input.testingType,
+      testingUrl: validated.testingUrl,
+      testingInstructions: validated.testingInstructions,
+      status: "READY",
+    },
+  });
+  return { publicId: updated.publicId };
+}
+
+export async function startManagedCampaign(userId: string, publicId: string) {
+  const campaign = await ownedCampaign(userId, publicId);
+  if (campaign.payment.status !== "PAID") throw new AppError("Payment is not confirmed.");
+  if (campaign.status === "ACTIVE") return toDashboardView(campaign);
+  if (campaign.status !== "READY" && campaign.status !== "DRAFT") {
+    throw new AppError("This campaign cannot be started.");
+  }
+  if (!campaign.appId || !campaign.testingUrl) {
+    throw new AppError("Select an app and testing link before starting.");
+  }
+  const now = new Date();
+  const started = await prisma.managedTestingCampaign.update({
+    where: { id: campaign.id },
+    data: {
+      status: "ACTIVE",
+      startedAt: now,
+      endsAt: new Date(now.getTime() + campaign.durationDays * 86_400_000),
+    },
+  });
+  const assigned = await assignConsentingTesters(started.id, started.testerTarget);
+  await sendAssignmentInvites(started.id);
+  await notifyDeveloper(userId, {
+    type: "managed_campaign_started",
+    eventKey: `managed_started:${started.id}`,
+    title: "Managed testing campaign started",
+    body: `${appNameOf(campaign)} is now coordinating ${assigned} consenting tester${assigned === 1 ? "" : "s"}.`,
+    href: `/managed-testing/${started.publicId}`,
+  });
+  return getManagedCampaignForUser(userId, publicId);
+}
+
+async function assignConsentingTesters(campaignId: string, needed: number) {
+  const already = await prisma.managedCampaignTester.findMany({
+    where: { campaignId },
+    select: { testerId: true },
+  });
+  const remaining = Math.max(0, needed - already.length);
+  if (remaining === 0) return already.length;
+  const pool = await prisma.managedTester.findMany({
+    where: {
+      consentStatus: "CONSENTED",
+      availableForTesting: true,
+      currentlyAssigned: false,
+      id: { notIn: already.map((row) => row.testerId) },
+    },
+    orderBy: { createdAt: "asc" },
+    take: remaining,
+  });
+  let index = already.length;
+  for (const tester of pool) {
+    const token = randomToken(32);
+    await prisma.$transaction([
+      prisma.managedCampaignTester.create({
+        data: {
+          publicId: publicAssignmentId(),
+          campaignId,
+          testerId: tester.id,
+          displayLabel: testerDisplayLabel(index),
+          testingStatus: "INVITED",
+          inviteTokenHash: sha256(token),
+          inviteTokenExpiresAt: new Date(Date.now() + INVITE_TTL_MS),
+          invitedAt: new Date(),
+        },
+      }),
+      prisma.managedTester.update({
+        where: { id: tester.id },
+        data: { currentlyAssigned: true },
+      }),
+    ]);
+    await storeInviteToken(campaignId, tester.id, token);
+    index += 1;
+  }
+  return already.length + pool.length;
+}
+
+/** Keep plaintext token only in memory for the email send that follows. */
+const pendingInviteTokens = new Map<string, string>();
+
+async function storeInviteToken(campaignId: string, testerId: string, token: string) {
+  pendingInviteTokens.set(`${campaignId}:${testerId}`, token);
+}
+
+async function sendAssignmentInvites(campaignId: string) {
+  const campaign = await prisma.managedTestingCampaign.findUnique({
+    where: { id: campaignId },
+    include: {
+      app: { select: { name: true } },
+      user: { select: { developerName: true, name: true } },
+      assignments: { include: { tester: true } },
+    },
+  });
+  if (!campaign?.testingUrl) return;
+  const developerName = campaign.user.developerName || campaign.user.name || "A TestLoop developer";
+  for (const assignment of campaign.assignments) {
+    if (assignment.invitationStatus === "SENT") continue;
+    let token = pendingInviteTokens.get(`${campaignId}:${assignment.testerId}`);
+    if (!token) {
+      token = randomToken(32);
+      await prisma.managedCampaignTester.update({
+        where: { id: assignment.id },
+        data: {
+          inviteTokenHash: sha256(token),
+          inviteTokenExpiresAt: new Date(Date.now() + INVITE_TTL_MS),
+        },
+      });
+    }
+    pendingInviteTokens.delete(`${campaignId}:${assignment.testerId}`);
+    const template = managedTesterInviteEmail({
+      testerName: assignment.tester.name,
+      appName: appNameOf(campaign),
+      testingTypeLabel: testingTypeLabel(campaign.testingType),
+      developerName,
+      joinUrl: campaign.testingUrl,
+      confirmUrl: confirmUrl(token),
+    });
+    const sent = await sendSmtpEmail({
+      to: assignment.tester.email,
+      subject: template.subject,
+      text: template.text,
+      html: template.html,
+    });
+    await prisma.emailEvent.create({
+      data: {
+        userId: campaign.userId,
+        type: "managed_tester_invite",
+        toAddress: assignment.tester.email,
+        subject: template.subject,
+        status: sent.ok ? "sent" : sent.skipped ? "skipped" : "failed",
+        error: sent.ok ? null : sent.error,
+        eventKey: `managed_invite:${assignment.id}:${sent.ok ? "sent" : Date.now()}`,
+      },
+    });
+    await prisma.managedCampaignTester.update({
+      where: { id: assignment.id },
+      data: {
+        invitationStatus: sent.ok ? "SENT" : "FAILED",
+        testingStatus: sent.ok ? "EMAIL_SENT" : assignment.testingStatus,
+        emailSentAt: sent.ok ? new Date() : null,
+      },
+    });
+  }
+  const sentCount = campaign.assignments.length;
+  await notifyDeveloper(campaign.userId, {
+    type: "managed_invites_sent",
+    eventKey: `managed_invites:${campaign.id}`,
+    title: "Tester invitations sent",
+    body: `${sentCount} invitation${sentCount === 1 ? "" : "s"} sent for ${appNameOf(campaign)}.`,
+    href: `/managed-testing/${campaign.publicId}`,
+  });
+}
+
+export async function sendManagedReminder(userId: string, publicId: string, assignmentPublicId: string) {
+  const campaign = await ownedCampaign(userId, publicId);
+  const assignment = campaign.assignments.find((row) => row.publicId === assignmentPublicId);
+  if (!assignment) throw new NotFoundError("Tester not found.");
+  if (assignment.confirmationStatus === "CONFIRMED") {
+    throw new AppError("This tester has already confirmed.");
+  }
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const recent = await prisma.emailEvent.count({
+    where: {
+      userId,
+      type: "managed_tester_reminder",
+      toAddress: assignment.tester.email,
+      createdAt: { gte: hourAgo },
+    },
+  });
+  if (recent >= 2) throw new RateLimitError("Wait before sending another reminder.");
+  const token = randomToken(32);
+  await prisma.managedCampaignTester.update({
+    where: { id: assignment.id },
+    data: {
+      inviteTokenHash: sha256(token),
+      inviteTokenExpiresAt: new Date(Date.now() + INVITE_TTL_MS),
+    },
+  });
+  const template = managedTesterReminderEmail({
+    testerName: assignment.tester.name,
+    appName: appNameOf(campaign),
+    joinUrl: campaign.testingUrl || env.appUrl,
+    confirmUrl: confirmUrl(token),
+  });
+  const sent = await sendSmtpEmail({
+    to: assignment.tester.email,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+  });
+  await prisma.emailEvent.create({
+    data: {
+      userId,
+      type: "managed_tester_reminder",
+      toAddress: assignment.tester.email,
+      subject: template.subject,
+      status: sent.ok ? "sent" : sent.skipped ? "skipped" : "failed",
+      error: sent.ok ? null : sent.error,
+    },
+  });
+  if (!sent.ok) throw new AppError(sent.error);
+  return { ok: true as const };
+}
+
+export async function loadJoinPage(token: string) {
+  const hash = sha256(token.trim());
+  const assignment = await prisma.managedCampaignTester.findFirst({
+    where: {
+      inviteTokenHash: hash,
+      inviteTokenExpiresAt: { gt: new Date() },
+    },
+    include: {
+      tester: { select: { name: true } },
+      campaign: { include: { app: { select: { name: true } } } },
+    },
+  });
+  if (!assignment) throw new AppError("This invitation link is invalid or has expired.");
+  if (assignment.testingStatus === "EMAIL_SENT" || assignment.testingStatus === "INVITED") {
+    await prisma.managedCampaignTester.update({
+      where: { id: assignment.id },
+      data: { testingStatus: "EMAIL_OPENED" },
+    });
+  }
+  return {
+    testerName: assignment.tester.name,
+    appName: appNameOf(assignment.campaign),
+    testingTypeLabel: testingTypeLabel(assignment.campaign.testingType),
+    joinUrl: assignment.campaign.testingUrl,
+    alreadyConfirmed: assignment.confirmationStatus === "CONFIRMED",
+    instructions: assignment.campaign.testingInstructions,
+  };
+}
+
+export async function confirmManagedParticipation(
+  token: string,
+  screenshot?: { mime: string; bytes: Buffer } | null,
+) {
+  const hash = sha256(token.trim());
+  const assignment = await prisma.managedCampaignTester.findFirst({
+    where: {
+      inviteTokenHash: hash,
+      inviteTokenExpiresAt: { gt: new Date() },
+    },
+    include: { campaign: { include: { app: { select: { name: true } } } }, tester: true },
+  });
+  if (!assignment) throw new AppError("This invitation link is invalid or has expired.");
+  if (screenshot) {
+    if (!SCREENSHOT_TYPES.has(screenshot.mime)) throw new AppError("Upload a JPEG, PNG, or WebP screenshot.");
+    if (screenshot.bytes.length > SCREENSHOT_MAX_BYTES) throw new AppError("Screenshot must be under 400 KB.");
+  }
+  const screenshotBytes = screenshot ? Uint8Array.from(screenshot.bytes) : null;
+  await prisma.$transaction([
+    prisma.managedCampaignTester.update({
+      where: { id: assignment.id },
+      data: {
+        testingStatus: "CONFIRMED",
+        optInStatus: "JOINED",
+        confirmationStatus: "CONFIRMED",
+        optedInAt: assignment.optedInAt ?? new Date(),
+        confirmedAt: new Date(),
+        inviteTokenHash: null,
+        inviteTokenExpiresAt: null,
+      },
+    }),
+    prisma.managedTesterConfirmation.upsert({
+      where: { assignmentId: assignment.id },
+      update: {
+        confirmedSetup: true,
+        screenshotMime: screenshot?.mime ?? undefined,
+        screenshotBytes: screenshotBytes ?? undefined,
+      },
+      create: {
+        assignmentId: assignment.id,
+        confirmedSetup: true,
+        screenshotMime: screenshot?.mime ?? null,
+        screenshotBytes: screenshotBytes,
+      },
+    }),
+    prisma.managedTester.update({
+      where: { id: assignment.testerId },
+      data: { campaignsTested: { increment: 1 } },
+    }),
+  ]);
+  await notifyDeveloper(assignment.campaign.userId, {
+    type: "managed_tester_confirmed",
+    eventKey: `managed_confirmed:${assignment.id}`,
+    title: "Tester confirmed participation",
+    body: `${assignment.displayLabel} confirmed setup for ${appNameOf(assignment.campaign)}.`,
+    href: `/managed-testing/${assignment.campaign.publicId}`,
+  });
+  return { ok: true as const, appName: appNameOf(assignment.campaign) };
+}
+
+export async function saveCampaignReportPrefs(
+  userId: string,
+  publicId: string,
+  input: {
+    reportEmailEnabled?: boolean;
+    reportFrequency?: ManagedReportFrequency;
+    reportTime?: string;
+    reportTimezone?: string;
+    whatsappNumber?: string | null;
+  },
+) {
+  const campaign = await ownedCampaign(userId, publicId);
+  const number = input.whatsappNumber?.trim() || null;
+  if (number && !/^\+?[0-9]{10,15}$/.test(number.replace(/[\s-]/g, ""))) {
+    throw new AppError("Enter a valid WhatsApp number with country code.");
+  }
+  await prisma.managedTestingCampaign.update({
+    where: { id: campaign.id },
+    data: {
+      reportEmailEnabled: input.reportEmailEnabled ?? campaign.reportEmailEnabled,
+      reportFrequency: input.reportFrequency ?? campaign.reportFrequency,
+      reportTime: parseNotificationTime(input.reportTime ?? campaign.reportTime),
+      reportTimezone: resolveTimeZone(input.reportTimezone ?? campaign.reportTimezone),
+      whatsappNumber: number,
+      whatsappVerified: number ? false : false,
+    },
+  });
+  return getManagedCampaignForUser(userId, publicId);
+}
+
+export async function exportCampaignReportCsv(userId: string, publicId: string) {
+  const campaign = await ownedCampaign(userId, publicId);
+  const lines = [
+    ["Tester", "Play email", "Invitation", "Opt-in", "Confirmation", "Status"].join(","),
+    ...campaign.assignments.map((row) =>
+      [
+        csv(row.displayLabel),
+        csv(row.tester.googleAccountEmail || row.tester.email),
+        csv(row.invitationStatus),
+        csv(row.optInStatus),
+        csv(row.confirmationStatus),
+        csv(row.testingStatus),
+      ].join(","),
+    ),
+  ];
+  return {
+    filename: `${appNameOf(campaign).replace(/[^\w]+/g, "-")}-managed-testing.csv`,
+    csv: lines.join("\n"),
+  };
+}
+
+function csv(value: string) {
+  if (/[",\n]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
+  return value;
+}
+
+export async function getAssignmentScreenshot(userId: string, assignmentPublicId: string) {
+  const assignment = await prisma.managedCampaignTester.findFirst({
+    where: { publicId: assignmentPublicId, campaign: { userId } },
+    include: { confirmation: true },
+  });
+  if (!assignment?.confirmation?.screenshotBytes) throw new NotFoundError("No screenshot uploaded.");
+  return {
+    mime: assignment.confirmation.screenshotMime || "image/jpeg",
+    bytes: Buffer.from(assignment.confirmation.screenshotBytes),
+  };
+}
+
+function toDashboardView(
+  campaign: Awaited<ReturnType<typeof ownedCampaign>>,
+) {
+  const assigned = campaign.assignments.length;
+  const invitationsSent = campaign.assignments.filter((row) => row.invitationStatus === "SENT").length;
+  const optedIn = campaign.assignments.filter((row) => row.optInStatus === "JOINED").length;
+  const confirmed = campaign.assignments.filter((row) => row.confirmationStatus === "CONFIRMED").length;
+  const pending = Math.max(0, assigned - confirmed);
+  const progress = campaignDayProgress(campaign.startedAt, campaign.durationDays);
+  return {
+    publicId: campaign.publicId,
+    paymentPublicId: campaign.payment.publicId,
+    status: campaign.status,
+    testingType: campaign.testingType,
+    testerTarget: campaign.testerTarget,
+    durationDays: campaign.durationDays,
+    testingUrl: campaign.testingUrl,
+    testingInstructions: campaign.testingInstructions,
+    app: campaign.app ? { name: campaign.app.name, iconUrl: campaign.app.iconUrl } : null,
+    packageName: campaign.payment.package.name,
+    testerCount: campaign.payment.package.testerCount,
+    paymentStatus: campaign.payment.status,
+    amountLabel: formatPkr(campaign.payment.amountPkr),
+    startedAt: campaign.startedAt?.toISOString() ?? null,
+    endsAt: campaign.endsAt?.toISOString() ?? null,
+    progress,
+    stats: { assigned, invitationsSent, optedIn, confirmed, pending, recruiting: Math.max(0, campaign.testerTarget - assigned) },
+    reportEmailEnabled: campaign.reportEmailEnabled,
+    reportFrequency: campaign.reportFrequency,
+    reportTime: campaign.reportTime,
+    reportTimezone: campaign.reportTimezone,
+    whatsappNumber: campaign.whatsappNumber,
+    whatsappVerified: campaign.whatsappVerified,
+    whatsappAvailable: whatsappReportingConfigured(),
+    testers: campaign.assignments.map((row) => ({
+      publicId: row.publicId,
+      label: row.displayLabel,
+      name: row.tester.name,
+      playEmail: row.tester.googleAccountEmail || row.tester.email,
+      invitationStatus: row.invitationStatus,
+      optInStatus: row.optInStatus,
+      confirmationStatus: row.confirmationStatus,
+      testingStatus: row.testingStatus,
+      hasScreenshot: Boolean(row.confirmation?.screenshotMime),
+    })),
+    timeline: buildTimeline(campaign, progress, { assigned, invitationsSent, optedIn, confirmed }),
+  };
+}
+
+function buildTimeline(
+  campaign: { status: string; startedAt: Date | null; durationDays: number },
+  progress: { day: number; durationDays: number },
+  stats: { assigned: number; invitationsSent: number; optedIn: number; confirmed: number },
+) {
+  const started = Boolean(campaign.startedAt);
+  return [
+    { label: `Day ${started ? progress.day : 0} / ${campaign.durationDays}`, done: started },
+    { label: "Campaign started", done: started },
+    { label: "Invitations sent", done: stats.invitationsSent > 0 },
+    { label: "Tester participation", done: stats.assigned > 0 },
+    { label: "Opt-in progress", done: stats.optedIn > 0 },
+    { label: "Confirmation progress", done: stats.confirmed > 0 },
+    { label: "Campaign completed", done: campaign.status === "COMPLETED" },
+  ];
+}
+
+export async function expireManagedCampaigns(now = new Date()) {
+  const due = await prisma.managedTestingCampaign.findMany({
+    where: { status: "ACTIVE", endsAt: { lte: now } },
+    include: { assignments: true, app: { select: { name: true } } },
+  });
+  for (const campaign of due) {
+    await prisma.managedTestingCampaign.update({
+      where: { id: campaign.id },
+      data: { status: "COMPLETED", completedAt: now },
+    });
+    for (const assignment of campaign.assignments) {
+      await prisma.managedCampaignTester.update({
+        where: { id: assignment.id },
+        data: {
+          testingStatus:
+            assignment.confirmationStatus === "CONFIRMED" ? "COMPLETED" : "EXPIRED",
+        },
+      });
+      await prisma.managedTester.update({
+        where: { id: assignment.testerId },
+        data: { currentlyAssigned: false },
+      });
+    }
+    await notifyDeveloper(campaign.userId, {
+      type: "managed_campaign_completed",
+      eventKey: `managed_completed:${campaign.id}`,
+      title: "Managed testing campaign completed",
+      body: `${appNameOf(campaign)} has reached the end of its testing period.`,
+      href: `/managed-testing/${campaign.publicId}`,
+    });
+    await sendCampaignReport(campaign.id, "completion", now);
+  }
+  return { completed: due.length };
+}
+
+export async function sendManagedTestingReports(now = new Date()) {
+  await expireManagedCampaigns(now);
+  const campaigns = await prisma.managedTestingCampaign.findMany({
+    where: { status: "ACTIVE", reportEmailEnabled: true, reportFrequency: { in: ["DAILY", "WEEKLY"] } },
+  });
+  let sent = 0;
+  for (const campaign of campaigns) {
+    const frequency = campaign.reportFrequency === "WEEKLY" ? "weekly" : "daily";
+    const due = isScheduledSendDue(now, {
+      frequency,
+      time: campaign.reportTime,
+      timezone: campaign.reportTimezone,
+      weekday: campaign.reportWeekday,
+    });
+    if (!due) continue;
+    const ok = await sendCampaignReport(campaign.id, frequency, now);
+    if (ok) sent += 1;
+  }
+  return { sent };
+}
+
+async function sendCampaignReport(campaignId: string, kind: "daily" | "weekly" | "completion", now: Date) {
+  const campaign = await prisma.managedTestingCampaign.findUnique({
+    where: { id: campaignId },
+    include: { app: { select: { name: true } }, assignments: true },
+  });
+  if (!campaign) return false;
+  const local = new Intl.DateTimeFormat("en-CA", {
+    timeZone: campaign.reportTimezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  const periodKey = `${kind}:${local}`;
+  const existing = await prisma.managedTestingReport.findUnique({
+    where: { campaignId_periodKey: { campaignId, periodKey } },
+  });
+  if (existing) return false;
+  const assigned = campaign.assignments.length;
+  const invitationsSent = campaign.assignments.filter((row) => row.invitationStatus === "SENT").length;
+  const optedIn = campaign.assignments.filter((row) => row.optInStatus === "JOINED").length;
+  const confirmed = campaign.assignments.filter((row) => row.confirmationStatus === "CONFIRMED").length;
+  const pending = Math.max(0, assigned - confirmed);
+  const progress = campaignDayProgress(campaign.startedAt, campaign.durationDays, now);
+  const snapshot = { assigned, invitationsSent, optedIn, confirmed, pending, day: progress.day };
+  try {
+    await prisma.managedTestingReport.create({
+      data: { campaignId, periodKey, kind, snapshot },
+    });
+  } catch {
+    return false;
+  }
+  const template = managedTestingDailyReportEmail({
+    appName: appNameOf(campaign),
+    day: progress.day,
+    durationDays: campaign.durationDays,
+    assigned,
+    invitationsSent,
+    optedIn,
+    confirmed,
+    pending,
+    remaining: progress.remaining,
+    campaignUrl: campaignUrl(campaign.publicId),
+    period: kind,
+  });
+  await sendDeveloperNotification({
+    userId: campaign.userId,
+    type: `managed_${kind}_report`,
+    eventKey: `managed_report:${campaign.id}:${periodKey}`,
+    preference: "managedTesting",
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
+    immediate: true,
+    inApp: {
+      title: template.subject,
+      body: `${appNameOf(campaign)} · day ${progress.day} of ${campaign.durationDays}.`,
+      href: `/managed-testing/${campaign.publicId}`,
+    },
+  });
+  await prisma.managedTestingCampaign.update({
+    where: { id: campaign.id },
+    data: { lastReportOn: now },
+  });
+  return true;
+}
+
+export async function adminListManagedTesting() {
+  const [campaigns, payments, testers, pending] = await Promise.all([
+    prisma.managedTestingCampaign.findMany({
+      include: {
+        user: { select: { developerName: true, name: true, email: true } },
+        app: { select: { name: true } },
+        payment: { include: { package: true } },
+        _count: { select: { assignments: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 80,
+    }),
+    prisma.managedTestingPayment.findMany({
+      include: {
+        user: { select: { developerName: true, name: true, email: true } },
+        package: true,
+        campaign: { select: { publicId: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 80,
+    }),
+    prisma.managedTester.count(),
+    prisma.managedTestingPayment.count({ where: { status: "PENDING" } }),
+  ]);
+  const available = await prisma.managedTester.count({
+    where: { consentStatus: "CONSENTED", availableForTesting: true, currentlyAssigned: false },
+  });
+  return { campaigns, payments, testers, pending, available };
+}
+
+export async function adminAddManagedTester(input: {
+  name: string;
+  email: string;
+  googleAccountEmail?: string | null;
+  consented?: boolean;
+}) {
+  const email = describeEmail(input.email);
+  if (!email.valid) throw new AppError("Enter a valid tester email.");
+  const play = input.googleAccountEmail?.trim() ? describeEmail(input.googleAccountEmail) : null;
+  if (play && !play.valid) throw new AppError("Enter a valid Google Play email.");
+  const consented = input.consented !== false;
+  try {
+    return await prisma.managedTester.create({
+      data: {
+        publicId: publicTesterId(),
+        name: input.name.trim() || "Tester",
+        email: email.normalized,
+        googleAccountEmail: play?.normalized ?? email.normalized,
+        consentStatus: consented ? "CONSENTED" : "PENDING",
+        availableForTesting: consented,
+      },
+    });
+  } catch {
+    throw new AppError("That tester email is already in the pool.");
+  }
+}
+
+export async function adminAllocateTesters(campaignPublicId: string) {
+  const campaign = await prisma.managedTestingCampaign.findUnique({
+    where: { publicId: campaignPublicId },
+  });
+  if (!campaign) throw new NotFoundError("Campaign not found.");
+  if (campaign.status !== "ACTIVE") throw new AppError("Testers can only be allocated to an active campaign.");
+  const assigned = await assignConsentingTesters(campaign.id, campaign.testerTarget);
+  await sendAssignmentInvites(campaign.id);
+  return { assigned };
+}

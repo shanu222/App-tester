@@ -18,6 +18,7 @@ const NAV: NavItem[] = [
   { href: "/testing", label: "My Testing", section: "Main", icon: "testing" },
   { href: "/apps", label: "My Apps", section: "Developer", icon: "apps" },
   { href: "/campaigns", label: "Testing Requests", section: "Developer", icon: "campaigns" },
+  { href: "/managed-testing", label: "Managed Testing", section: "Developer", icon: "managed" },
   { href: "/play", label: "Google Play", section: "Developer", icon: "play" },
   { href: "/testers", label: "Testers", section: "Developer", icon: "testers" },
   { href: "/activity", label: "Notifications", section: "Account", icon: "notifications" },
@@ -41,7 +42,11 @@ export async function AppShell({
   const unread = await unreadInboxCountForUser(user.id);
   const items: NavItem[] =
     user.role === "ADMIN"
-      ? [...NAV, { href: "/admin", label: "Admin", section: "Account", icon: "admin" }]
+      ? [
+          ...NAV,
+          { href: "/admin", label: "Admin", section: "Account", icon: "admin" },
+          { href: "/admin/managed-testing", label: "Managed Testing", section: "Account", icon: "managed" },
+        ]
       : NAV;
 
   return (

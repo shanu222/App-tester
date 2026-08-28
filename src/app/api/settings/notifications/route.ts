@@ -23,6 +23,7 @@ const prefsSchema = z.object({
   requestArchived: z.boolean().optional(),
   requestCompleted: z.boolean().optional(),
   dailySummary: z.boolean().optional(),
+  managedTesting: z.boolean().optional(),
 });
 
 export async function GET() {

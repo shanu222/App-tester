@@ -46,4 +46,4 @@ Vercel → Project → Settings → Environment Variables
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Vercel Cron sends `Authorization: Bearer $CRON_SECRET` to `/api/cron/tick` and `/api/cron/daily-testing-summary` (`0 11 * * *` ≈ 4:00 PM Asia/Karachi).
+Vercel Cron sends `Authorization: Bearer $CRON_SECRET` to `/api/cron/tick` and `/api/cron/daily-testing-summary` (`*/15 * * * *`, honoring each user’s notification schedule; default Daily at 16:00 Asia/Karachi).

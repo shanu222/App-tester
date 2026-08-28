@@ -3,59 +3,27 @@ import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
 import { EmptyState } from "@/components/ui/widgets";
 import { formatDateTime } from "@/lib/utils";
-import { JsonButton } from "@/components/ui/json-button";
 import { SectionLabel } from "@/components/ui/card";
 import { Table, TableWrap, Td, Th, Tr } from "@/components/ui/table";
-import { Bell } from "lucide-react";
+import { NotificationInbox } from "@/components/notifications/notification-inbox";
+import { listInbox } from "@/lib/services/inbox";
 
 export default async function ActivityPage() {
   const user = await requireUser();
-  const logs = await prisma.activityLog.findMany({
-    where: { userId: user.id },
-    include: { campaign: true },
-    orderBy: { createdAt: "desc" },
-    take: 150,
-  });
-  const notifications = await prisma.notification.findMany({
-    where: { userId: user.id },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
+  const [logs, inbox] = await Promise.all([
+    prisma.activityLog.findMany({
+      where: { userId: user.id },
+      include: { campaign: true },
+      orderBy: { createdAt: "desc" },
+      take: 150,
+    }),
+    listInbox(user.id),
+  ]);
   return (
-    <AppShell
-      title="Activity"
-      description="Notifications and a full audit trail of your testing actions."
-      actions={<JsonButton url="/api/notifications" label="Mark all read" variant="secondary" />}
-    >
+    <AppShell title="Notifications">
       <SectionLabel className="mb-3">Notifications</SectionLabel>
-      <div className="mb-10 space-y-2.5">
-        {notifications.length === 0 ? (
-          <EmptyState
-            icon={<Bell className="h-4.5 w-4.5" aria-hidden />}
-            title="No notifications"
-            body="Alerts about tests, messages, and integrations appear here."
-          />
-        ) : (
-          notifications.map((item) => (
-            <div
-              key={item.id}
-              className="flex gap-3 rounded-card border border-line bg-white px-4 py-3.5 shadow-card"
-            >
-              <span
-                className={
-                  item.readAt
-                    ? "mt-1.5 h-2 w-2 shrink-0 rounded-full bg-line-strong"
-                    : "mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand"
-                }
-                aria-hidden
-              />
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-slate-900">{item.title}</div>
-                <div className="mt-0.5 text-sm leading-6 text-muted">{item.body}</div>
-              </div>
-            </div>
-          ))
-        )}
+      <div className="mb-10">
+        <NotificationInbox initial={inbox.notifications} />
       </div>
 
       <SectionLabel className="mb-3">Audit log</SectionLabel>

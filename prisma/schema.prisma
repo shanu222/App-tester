@@ -278,6 +278,13 @@ model UserSettings {
   lastNotificationSentAt DateTime?
   lastDailySummaryOn     DateTime?
   lastDailySummaryStatus String?
+  /**
+   * realtime | daily | weekly | disabled. Default daily at 16:00 Asia/Karachi.
+   */
+  notificationFrequency  String   @default("daily")
+  notificationTime       String   @default("16:00")
+  notificationTimezone   String   @default("Asia/Karachi")
+  notificationWeekday    Int      @default(1)
   defaultKeywords        String[] @default(["need testers", "looking for testers", "Android testers", "Google Play testing", "closed testing", "beta testers", "test my app", "I need Android testers", "app testing"])
   playClosedTestTarget   Int      @default(12)
   playClosedTestDays     Int      @default(14)

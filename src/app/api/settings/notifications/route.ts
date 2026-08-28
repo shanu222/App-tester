@@ -43,6 +43,10 @@ export async function POST(request: Request) {
         email: z.string().optional(),
         enabled: z.boolean().optional(),
         preferences: prefsSchema.optional(),
+        frequency: z.enum(["realtime", "daily", "weekly", "disabled"]).optional(),
+        time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/).optional(),
+        timezone: z.string().min(1).max(80).optional(),
+        weekday: z.number().int().min(0).max(6).optional(),
       }),
     );
     if (body.action === "set-email") {
@@ -61,6 +65,12 @@ export async function POST(request: Request) {
     await saveNotificationPreferences(user.id, {
       enabled: body.enabled,
       preferences: body.preferences,
+      schedule: {
+        frequency: body.frequency,
+        time: body.time,
+        timezone: body.timezone,
+        weekday: body.weekday,
+      },
     });
     const settings = await getNotificationSettings(user.id);
     return json({ ok: true, settings });

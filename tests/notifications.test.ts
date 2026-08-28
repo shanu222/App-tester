@@ -5,6 +5,13 @@ import {
   parseNotificationPreferences,
 } from "../src/lib/notifications/preferences";
 import {
+  digestEventKey,
+  isScheduledSendDue,
+  parseNotificationSchedule,
+  parseNotificationTime,
+  resolveTimeZone,
+} from "../src/lib/notifications/schedule";
+import {
   dailySummaryEmail,
   testerJoinedEmail,
   testNotificationEmail,
@@ -38,6 +45,107 @@ describe("karachiDayKey", () => {
   it("uses Asia/Karachi calendar dates", () => {
     expect(karachiDayKey(new Date("2026-08-28T11:00:00.000Z"))).toBe("2026-08-28");
     expect(karachiDayKey(new Date("2026-08-28T19:00:00.000Z"))).toBe("2026-08-29");
+  });
+});
+
+describe("notification schedule", () => {
+  const karachiFourPm = new Date("2026-08-28T11:00:00.000Z");
+
+  it("defaults to daily at 16:00 Asia/Karachi", () => {
+    expect(parseNotificationSchedule({})).toEqual({
+      frequency: "daily",
+      time: "16:00",
+      timezone: "Asia/Karachi",
+      weekday: 1,
+    });
+  });
+
+  it("treats the default Karachi window as due", () => {
+    expect(
+      isScheduledSendDue(karachiFourPm, {
+        frequency: "daily",
+        time: "16:00",
+        timezone: "Asia/Karachi",
+        weekday: 1,
+      }),
+    ).toBe(true);
+    expect(
+      isScheduledSendDue(new Date("2026-08-28T11:14:00.000Z"), {
+        frequency: "daily",
+        time: "16:00",
+        timezone: "Asia/Karachi",
+        weekday: 1,
+      }),
+    ).toBe(true);
+    expect(
+      isScheduledSendDue(new Date("2026-08-28T11:15:00.000Z"), {
+        frequency: "daily",
+        time: "16:00",
+        timezone: "Asia/Karachi",
+        weekday: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it("sends weekly mail only on the selected weekday", () => {
+    const weeklyFriday = {
+      frequency: "weekly" as const,
+      time: "16:00",
+      timezone: "Asia/Karachi",
+      weekday: 5,
+    };
+    const weeklyMonday = { ...weeklyFriday, weekday: 1 };
+    expect(isScheduledSendDue(karachiFourPm, weeklyFriday)).toBe(true);
+    expect(isScheduledSendDue(karachiFourPm, weeklyMonday)).toBe(false);
+  });
+
+  it("falls back to Asia/Karachi for invalid timezones", () => {
+    expect(resolveTimeZone("Not/AZone")).toBe("Asia/Karachi");
+    expect(parseNotificationTime("16:00:00")).toBe("16:00");
+    expect(parseNotificationTime("25:99")).toBe("16:00");
+    expect(
+      isScheduledSendDue(karachiFourPm, {
+        frequency: "daily",
+        time: "16:00",
+        timezone: "Not/AZone",
+        weekday: 1,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not treat realtime or disabled as scheduled sends", () => {
+    expect(
+      isScheduledSendDue(karachiFourPm, {
+        frequency: "realtime",
+        time: "16:00",
+        timezone: "Asia/Karachi",
+        weekday: 1,
+      }),
+    ).toBe(false);
+    expect(
+      isScheduledSendDue(karachiFourPm, {
+        frequency: "disabled",
+        time: "16:00",
+        timezone: "Asia/Karachi",
+        weekday: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it("builds timezone-local digest keys", () => {
+    expect(digestEventKey("user-1", parseNotificationSchedule({}), karachiFourPm)).toBe(
+      "digest:daily:user-1:2026-08-28",
+    );
+    expect(
+      digestEventKey(
+        "user-1",
+        parseNotificationSchedule({
+          notificationFrequency: "weekly",
+          notificationWeekday: 5,
+        }),
+        karachiFourPm,
+      ),
+    ).toBe("digest:weekly:user-1:2026-08-28");
   });
 });
 
@@ -99,6 +207,10 @@ describe("settings sanitization", () => {
     });
     expect(JSON.stringify(publicView)).not.toMatch(/token/i);
     expect(publicView).not.toHaveProperty("notificationEmailVerificationTokenHash");
+    expect(publicView.frequency).toBe("daily");
+    expect(publicView.time).toBe("16:00");
+    expect(publicView.timezone).toBe("Asia/Karachi");
+    expect(publicView.weekday).toBe(1);
 
     const stripped = omitNotificationSecrets({
       notificationEmail: "developer@example.com",

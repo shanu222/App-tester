@@ -14,6 +14,14 @@ import {
   type NotificationPreferences,
 } from "@/lib/notifications/preferences";
 import {
+  digestEventKey,
+  digestLookbackStart,
+  isScheduledSendDue,
+  parseNotificationSchedule,
+  zonedDateParts,
+  type NotificationSchedule,
+} from "@/lib/notifications/schedule";
+import {
   dailySummaryEmail,
   playIssueEmail,
   testerJoinedEmail,
@@ -40,8 +48,13 @@ export function publicNotificationSettings(settings: {
   lastNotificationSentAt: Date | null;
   lastDailySummaryOn: Date | null;
   lastDailySummaryStatus: string | null;
+  notificationFrequency?: string | null;
+  notificationTime?: string | null;
+  notificationTimezone?: string | null;
+  notificationWeekday?: number | null;
 }) {
   const prefs = parseNotificationPreferences(settings.notificationPreferences);
+  const schedule = parseNotificationSchedule(settings);
   return {
     notificationEmail: settings.notificationEmail,
     verified: Boolean(settings.notificationEmail && settings.notificationEmailVerified),
@@ -52,6 +65,10 @@ export function publicNotificationSettings(settings: {
     lastDailySummaryStatus: settings.lastDailySummaryStatus,
     smtpConfigured: smtpConfigured(),
     preferences: prefs,
+    frequency: schedule.frequency,
+    time: schedule.time,
+    timezone: schedule.timezone,
+    weekday: schedule.weekday,
   };
 }
 
@@ -195,7 +212,11 @@ export async function verifyNotificationEmailToken(token: string) {
 
 export async function saveNotificationPreferences(
   userId: string,
-  input: { enabled?: boolean; preferences?: Partial<NotificationPreferences> },
+  input: {
+    enabled?: boolean;
+    preferences?: Partial<NotificationPreferences>;
+    schedule?: Partial<NotificationSchedule>;
+  },
 ) {
   const current = await prisma.userSettings.upsert({
     where: { userId },
@@ -206,11 +227,21 @@ export async function saveNotificationPreferences(
     ...parseNotificationPreferences(current.notificationPreferences),
     ...(input.preferences || {}),
   };
+  const schedule = parseNotificationSchedule({
+    notificationFrequency: input.schedule?.frequency ?? current.notificationFrequency,
+    notificationTime: input.schedule?.time ?? current.notificationTime,
+    notificationTimezone: input.schedule?.timezone ?? current.notificationTimezone,
+    notificationWeekday: input.schedule?.weekday ?? current.notificationWeekday,
+  });
   return prisma.userSettings.update({
     where: { userId },
     data: {
       emailNotificationsEnabled: input.enabled ?? current.emailNotificationsEnabled,
       notificationPreferences: merged,
+      notificationFrequency: schedule.frequency,
+      notificationTime: schedule.time,
+      notificationTimezone: schedule.timezone,
+      notificationWeekday: schedule.weekday,
     },
   });
 }
@@ -283,10 +314,24 @@ export async function sendDeveloperNotification(input: {
 
   const settings = await prisma.userSettings.findUnique({ where: { userId: input.userId } });
   const prefs = parseNotificationPreferences(settings?.notificationPreferences);
-  const allowed =
-    settings?.emailNotificationsEnabled !== false && preferenceEnabled(prefs, input.preference);
+  const schedule = parseNotificationSchedule(settings || {});
+  const masterOn = settings?.emailNotificationsEnabled !== false && schedule.frequency !== "disabled";
+  const sendNow = masterOn && schedule.frequency === "realtime" && preferenceEnabled(prefs, input.preference);
   const to = settings?.notificationEmailVerified ? settings.notificationEmail || "" : "";
-  const status = !allowed ? "disabled" : !to ? "skipped" : "queued";
+  const status = !masterOn
+    ? "disabled"
+    : !sendNow
+      ? "skipped"
+      : !to
+        ? "skipped"
+        : "queued";
+  const skipReason = !masterOn
+    ? "Email notifications are disabled."
+    : !to
+      ? "No verified notification email."
+      : schedule.frequency === "daily" || schedule.frequency === "weekly"
+        ? "Included in the scheduled summary."
+        : "This alert is turned off.";
 
   try {
     await prisma.emailEvent.create({
@@ -298,7 +343,7 @@ export async function sendDeveloperNotification(input: {
         toAddress: to,
         subject: input.subject,
         status,
-        error: status === "skipped" ? "No verified notification email." : null,
+        error: status === "queued" ? null : skipReason,
         eventKey: input.eventKey,
       },
     });
@@ -483,14 +528,7 @@ export async function notifyRequestLifecycle(input: {
   });
 }
 
-function startOfKarachiDay(date = new Date()) {
-  const day = karachiDayKey(date);
-  return new Date(`${day}T00:00:00+05:00`);
-}
-
-export async function sendDailySummaries() {
-  const day = karachiDayKey();
-  const since = startOfKarachiDay();
+export async function sendDailySummaries(now = new Date()) {
   const settingsRows = await prisma.userSettings.findMany({
     where: {
       notificationEmailVerified: true,
@@ -502,21 +540,30 @@ export async function sendDailySummaries() {
   const results = { sent: 0, failed: 0, skipped: 0, disabled: 0 };
   for (const settings of settingsRows) {
     if (settings.user.deletedAt) continue;
+    const schedule = parseNotificationSchedule(settings);
+    if (!isScheduledSendDue(now, schedule)) continue;
+
     const prefs = parseNotificationPreferences(settings.notificationPreferences);
-    const eventKey = `daily_summary:${settings.userId}:${day}`;
+    const eventKey = digestEventKey(settings.userId, schedule, now);
     const existing = await prisma.emailEvent.findUnique({ where: { eventKey } });
     if (existing) {
       results.skipped += 1;
       continue;
     }
+
+    const local = zonedDateParts(now, schedule.timezone);
+    const since = digestLookbackStart(now, schedule.frequency);
+    const weekly = schedule.frequency === "weekly";
+    const digestType = weekly ? "weekly_summary" : "daily_summary";
+
     if (!prefs.dailySummary || settings.emailNotificationsEnabled === false) {
       try {
         await prisma.emailEvent.create({
           data: {
             userId: settings.userId,
-            type: "daily_summary",
+            type: digestType,
             toAddress: settings.notificationEmail || "",
-            subject: "Daily summary",
+            subject: weekly ? "Weekly summary" : "Daily summary",
             status: "disabled",
             eventKey,
           },
@@ -529,12 +576,12 @@ export async function sendDailySummaries() {
       results.disabled += 1;
       await prisma.userSettings.update({
         where: { userId: settings.userId },
-        data: { lastDailySummaryOn: since, lastDailySummaryStatus: "disabled" },
+        data: { lastDailySummaryOn: now, lastDailySummaryStatus: "disabled" },
       });
       continue;
     }
 
-    const [active, createdToday, archivedToday, testersToday, pending, play, appCounts] = await Promise.all([
+    const [active, createdInWindow, archivedInWindow, testersInWindow, pending, play, appCounts] = await Promise.all([
       prisma.campaign.count({
         where: { userId: settings.userId, published: true, status: "ACTIVE" },
       }),
@@ -588,14 +635,15 @@ export async function sendDailySummaries() {
     const testerByApp = appCounts
       .map((row) => `${row.app.name}: ${row._count.participations}`)
       .join("; ");
+    const windowLabel = weekly ? "in the last 7 days" : "in the last 24 hours";
 
     try {
       await prisma.emailEvent.create({
         data: {
           userId: settings.userId,
-          type: "daily_summary",
+          type: digestType,
           toAddress: settings.notificationEmail!,
-          subject: `TestLoop daily summary — ${day}`,
+          subject: `TestLoop ${weekly ? "weekly" : "daily"} summary — ${local.dateKey}`,
           status: "queued",
           eventKey,
         },
@@ -609,10 +657,11 @@ export async function sendDailySummaries() {
     }
 
     const template = dailySummaryEmail({
-      dateLabel: day,
+      dateLabel: local.dateKey,
+      period: weekly ? "weekly" : "daily",
       lines: [
-        `Testing requests: ${active} active, ${createdToday} new, ${archivedToday} archived`,
-        `Tester activity: ${testersToday} new today, ${pending} pending${testerByApp ? `; ${testerByApp}` : ""}`,
+        `Testing requests: ${active} active, ${createdInWindow} new, ${archivedInWindow} archived`,
+        `Tester activity: ${testersInWindow} new ${windowLabel}, ${pending} pending${testerByApp ? `; ${testerByApp}` : ""}`,
         `Testing status: ${typeCount("OPEN")} open, ${typeCount("CLOSED")} closed, ${typeCount("INTERNAL")} internal`,
         `Google Play: ${playLine}`,
       ],
@@ -638,7 +687,7 @@ export async function sendDailySummaries() {
     await prisma.userSettings.update({
       where: { userId: settings.userId },
       data: {
-        lastDailySummaryOn: since,
+        lastDailySummaryOn: now,
         lastDailySummaryStatus: status,
         lastNotificationSentAt: sent.ok ? new Date() : settings.lastNotificationSentAt,
       },

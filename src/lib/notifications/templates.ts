@@ -115,20 +115,24 @@ export function dailySummaryEmail(input: {
   lines: string[];
   attention: string[];
   dashboardUrl: string;
+  period?: "daily" | "weekly";
 }) {
+  const weekly = input.period === "weekly";
+  const heading = weekly ? "TestLoop weekly summary" : "TestLoop daily summary";
+  const banner = weekly ? "TESTLOOP WEEKLY SUMMARY" : "TESTLOOP DAILY SUMMARY";
   const items = input.lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("");
   const attention = input.attention.length
     ? `<p><strong>Attention required</strong></p><ul>${input.attention.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>`
     : `<p>Nothing needs your attention right now.</p>`;
   const html = wrapEmail(
-    `<h1 style="font-size:20px;margin:0 0 12px">TestLoop daily summary</h1>
+    `<h1 style="font-size:20px;margin:0 0 12px">${heading}</h1>
     <p style="color:#64748b">${escapeHtml(input.dateLabel)}</p>
     <ul>${items}</ul>
     ${attention}
     ${emailButton(input.dashboardUrl, "View in TestLoop")}`,
   );
   const text = [
-    "TESTLOOP DAILY SUMMARY",
+    banner,
     input.dateLabel,
     "",
     ...input.lines,
@@ -138,7 +142,7 @@ export function dailySummaryEmail(input: {
     "",
     `View in TestLoop: ${input.dashboardUrl}`,
   ].join("\n");
-  return { subject: `TestLoop daily summary — ${input.dateLabel}`, html, text };
+  return { subject: `${heading} — ${input.dateLabel}`, html, text };
 }
 
 function escapeHtml(value: string) {

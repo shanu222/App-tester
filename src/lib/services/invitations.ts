@@ -28,12 +28,10 @@ export type TesterAccessResult = {
 /**
  * Give a confirmed tester access to the campaign's Play track.
  *
- * Open tracks complete here: opting in is all Google requires, so TestLoop
- * marks the tester added and returns the official opt-in URL. Internal and
- * closed tracks cannot be automated — the Play Developer API exposes no
- * email-list write — so the tester is parked in ADDING and the developer is
- * told exactly what to paste into Play Console. Nothing is reported as done
- * that Google did not actually do.
+ * Open tracks register the tester in TestLoop and return Google's opt-in URL.
+ * TestLoop does not mark them as added in Google Play — the tester joins on
+ * Play. Internal and closed tracks cannot be automated, so they stay pending
+ * Play Console action.
  */
 export async function grantTesterAccess(input: {
   userId: string;
@@ -61,15 +59,15 @@ export async function grantTesterAccess(input: {
     await setTesterStatus({
       userId: input.userId,
       testerCampaignId: row.id,
-      to: "ADDED",
+      to: "OPT_IN_PENDING",
       note: PLAY_OPEN_TRACK_NOTE,
     });
     await logActivity({
       userId: input.userId,
       campaignId: row.campaignId,
       testerId: row.testerId,
-      action: "TESTER_ACCESS_GRANTED",
-      result: `${row.tester.emailNormalized} · open testing · ${row.campaign.app.packageName}`,
+      action: "TESTER_REGISTERED",
+      result: `${row.tester.emailNormalized} · open testing · TestLoop registered · ${row.campaign.app.packageName}`,
     });
     return { ok: true, mode, detail: PLAY_OPEN_TRACK_NOTE, optInUrl, steps: [] };
   }
@@ -84,7 +82,7 @@ export async function grantTesterAccess(input: {
     userId: input.userId,
     campaignId: row.campaignId,
     testerId: row.testerId,
-    action: "TESTER_AWAITING_PLAY_CONSOLE",
+    action: "TESTER_PENDING_PLAY_CONSOLE",
     result: `${row.tester.emailNormalized} · ${testingType.toLowerCase()} testing · ${row.campaign.app.packageName}`,
   });
   await notify({
@@ -128,7 +126,7 @@ export async function confirmTesterAdded(userId: string, testerCampaignId: strin
     userId,
     testerCampaignId,
     to: "ADDED",
-    note: "Developer confirmed the address was added to the Play Console email list.",
+    note: "Developer confirmed this address was configured in Play Console. Google Play did not confirm it through the API.",
   });
 }
 
@@ -229,7 +227,7 @@ export async function sendInvitation(input: {
     userId: input.userId,
     testerCampaignId: row.id,
     to: "OPT_IN_PENDING",
-    note: "Waiting for Play opt-in. Added ≠ opted in.",
+    note: "Waiting for the tester to join through Google Play. Developer confirmation is not Google Play opt-in.",
   });
   await logActivity({
     userId: input.userId,

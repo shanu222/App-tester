@@ -20,7 +20,7 @@ describe("infrastructure error mapping", () => {
   it("does not claim a random error is a missing table", () => {
     expect(mapInfrastructureError(new Error("socket hang up"))).toBeNull();
     expect(publicErrorMessage(new Error("socket hang up"))).toBe(
-      "Something went wrong. Please try again.",
+      "An unexpected error occurred. No Google Play data was changed.",
     );
   });
 });

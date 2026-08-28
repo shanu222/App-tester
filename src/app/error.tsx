@@ -15,9 +15,9 @@ export default function ErrorBoundary({ error, reset }: { error: Error; reset: (
           <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-red-50 text-red-600">
             <AlertTriangle className="h-5 w-5" aria-hidden />
           </span>
-          <h1 className="mt-5 text-xl font-semibold text-slate-900">Something went wrong</h1>
+          <h1 className="mt-5 text-xl font-semibold text-slate-900">This page could not be loaded</h1>
           <p className="mt-2 text-sm leading-6 text-muted">
-            {error.message || "An unexpected error stopped this page from loading."}
+            {error.message || "An unexpected error stopped this page from loading. No Google Play data was changed."}
           </p>
           <Button type="button" className="mt-6 w-full" onClick={reset}>
             Try again

@@ -1,12 +1,14 @@
 import { parseGoogleApiError, redactSecrets } from "@/lib/integrations/google-api-error";
 
 export const PLAY_USER_ERRORS = {
-  AUTH_EXPIRED: "Your Google Play authorization has expired. Reconnect Google Play to continue.",
+  AUTH_EXPIRED:
+    "TestLoop could not access this Play Console account. Verify that the connected account or service account has the required Google Play Developer API permissions.",
   INSUFFICIENT_PERMISSIONS:
-    "TestLoop is connected, but this Google account does not have the required Google Play permissions for this app.",
+    "The connected Google account does not have sufficient access to this Play Console application.",
   APP_INACCESSIBLE: "This app is no longer accessible through the connected Play Console account.",
-  API_UNAVAILABLE: "Google Play could not be reached. Your TestLoop data has not been changed.",
-  UNSUPPORTED: "Google Play does not currently expose this operation through the Developer API.",
+  API_UNAVAILABLE: "Google Play did not return this information. No changes were made.",
+  UNSUPPORTED:
+    "Google Play does not expose this operation through the current API connection. TestLoop has not claimed the action in Google Play.",
 } as const;
 
 type MappedPlayError = {

@@ -13,6 +13,7 @@ export type PublicTestingPage = {
   developerName: string;
   instructions: string | null;
   description: string | null;
+  versionLabel: string | null;
   pageUrl: string;
 };
 

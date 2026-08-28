@@ -1,17 +1,24 @@
 import { prisma } from "@/lib/db";
 import { countReceivedTesters } from "@/lib/services/network";
 import { safePlayConnection } from "@/lib/services/play-connection";
+import { detectTestingConfiguration, parseTracksSnapshot } from "@/lib/integrations/play-config";
 
 const PLAY_ACTIVITY = [
   "TESTER_ACCESS_GRANTED",
-  "TESTER_AWAITING_PLAY_CONSOLE",
-  "TESTER_ADDED",
-  "TESTER_CREATED",
-  "CAMPAIGN_CREATED",
-  "PLAY_APP_SELECTED",
-  "PLAY_CONNECTED",
-  "PLAY_CONNECT_FAILED",
-  "PLAY_DISCONNECTED",
+    "TESTER_PENDING_PLAY_CONSOLE",
+    "TESTER_AWAITING_PLAY_CONSOLE",
+    "TESTER_REGISTERED",
+    "TESTER_ADDED",
+    "TESTER_CREATED",
+    "CAMPAIGN_CREATED",
+    "PLAY_APP_SELECTED",
+    "PLAY_CONNECTED",
+    "PLAY_CONNECT_FAILED",
+    "PLAY_DISCONNECTED",
+    "PLAY_SYNC_STARTED",
+    "PLAY_REFRESHED",
+    "PLAY_TRACKS_DISCOVERED",
+    "PLAY_TRACKS_FAILED",
 ];
 
 export async function getDashboardStats(userId: string) {
@@ -29,6 +36,8 @@ export async function getDashboardStats(userId: string) {
     pendingTesters,
     activeTesters,
     recentPlayActivity,
+    playAppSnapshots,
+    totalTesters,
   ] = await Promise.all([
     prisma.app.count({ where: { userId } }),
     prisma.campaign.count({ where: { userId, status: "ACTIVE" } }),
@@ -58,7 +67,7 @@ export async function getDashboardStats(userId: string) {
     prisma.googlePlayConnection.findUnique({ where: { userId } }),
     prisma.googlePlayApp.count({ where: { userId } }),
     prisma.testerCampaign.count({
-      where: { userId, status: { in: ["ADDING", "EMAIL_CONFIRMED", "EMAIL_RECEIVED"] } },
+      where: { userId, status: { in: ["ADDING"] } },
     }),
     prisma.testerCampaign.count({
       where: { userId, status: { in: ["ADDED", "INVITATION_SENT", "OPT_IN_PENDING", "OPTED_IN", "TESTING"] } },
@@ -69,6 +78,11 @@ export async function getDashboardStats(userId: string) {
       take: 8,
       select: { id: true, action: true, result: true, createdAt: true },
     }),
+    prisma.googlePlayApp.findMany({
+      where: { userId },
+      select: { tracksSnapshot: true, lastSyncAt: true },
+    }),
+    prisma.testerCampaign.count({ where: { userId } }),
   ]);
 
   const campaignCards = await Promise.all(
@@ -91,6 +105,18 @@ export async function getDashboardStats(userId: string) {
     testersNeeded += Math.max(0, campaign.targetTesters - received);
   }
 
+  let testingConfigured = 0;
+  let openApps = 0;
+  let closedApps = 0;
+  let internalApps = 0;
+  for (const row of playAppSnapshots) {
+    const config = detectTestingConfiguration(parseTracksSnapshot(row.tracksSnapshot));
+    if (config.testingTrackCount > 0) testingConfigured += 1;
+    if (config.openTesting.exists) openApps += 1;
+    if (config.closedTesting.exists) closedApps += 1;
+    if (config.internalTesting.exists) internalApps += 1;
+  }
+
   return {
     apps,
     activeCampaigns,
@@ -106,6 +132,11 @@ export async function getDashboardStats(userId: string) {
     pendingTesters,
     activeTesters,
     recentPlayActivity,
+    testingConfigured,
+    openApps,
+    closedApps,
+    internalApps,
+    totalTesters,
   };
 }
 

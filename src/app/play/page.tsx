@@ -41,7 +41,7 @@ export default async function PlayPage({
   return (
     <AppShell
       title="Google Play"
-      description="Connect and manage your Google Play testing workflow."
+      description="Connect your Play Console, discover existing apps and tracks, then onboard testers in TestLoop. Google Play remains the source of truth."
     >
       {notice ? (
         <div className="mb-6 flex gap-2.5 rounded-card border border-amber-200 bg-amber-50 p-4">

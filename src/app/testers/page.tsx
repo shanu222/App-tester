@@ -75,8 +75,8 @@ export default async function TestersPage({
                 <Th>Campaign</Th>
                 <Th>Status</Th>
                 <Th>Contacted</Th>
-                <Th>Opt-in</Th>
-                <Th>Added</Th>
+                <Th>Opt-in (TestLoop)</Th>
+                <Th>Play confirmed</Th>
                 <Th>Testing</Th>
               </tr>
             </thead>
@@ -102,9 +102,9 @@ export default async function TestersPage({
                     <Td>{row?.campaign.name || "—"}</Td>
                     <Td>{row ? <StatusBadge status={row.status} /> : "—"}</Td>
                     <Td className="whitespace-nowrap text-muted">{formatDate(row?.dateContacted)}</Td>
-                    <Td>{row?.optedIn ? "Yes" : "Pending"}</Td>
+                    <Td>{row?.optedIn ? "Recorded in TestLoop" : "—"}</Td>
                     <Td className="whitespace-nowrap text-muted">
-                      {formatDate(row?.dateAdded || tester.createdAt)}
+                      {row?.accessAdded ? formatDate(row.dateAdded) : "—"}
                     </Td>
                     <Td className="text-muted">{active ? "Activity detected" : "—"}</Td>
                   </Tr>

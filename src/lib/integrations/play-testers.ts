@@ -13,16 +13,16 @@ export const PLAY_TESTER_API_LIMITATION =
   "Google Play controls eligibility for closed and internal testing tracks. TestLoop can manage your campaign and tester records, but individual email-list membership must be handled through the supported Google Play configuration. The Play Developer API does not add individual Gmail addresses to those lists.";
 
 export const PLAY_CLOSED_TESTING_TESTER_NOTE =
-  "Google Play controls eligibility for this closed testing track. Your TestLoop registration is recorded. Open Google Play to continue if you already have access, or wait for the developer to configure eligibility in Play Console.";
+  "Your email has been registered with TestLoop. Because this testing track requires controlled tester membership, the developer may need to add this email to the Play Console tester list.";
 
 export const PLAY_INTERNAL_TESTING_TESTER_NOTE =
-  "Google Play controls eligibility for this internal testing track. Your TestLoop registration is recorded. Open the testing link if the developer has already granted you access.";
+  "Your email has been registered with TestLoop. Because internal testing requires controlled tester membership, the developer may need to add this email in Play Console. TestLoop has not added you to Google Play.";
 
 export const PLAY_OPEN_TRACK_NOTE =
   "Your app already has an open testing track. Testers can join through Google Play using the official opt-in link — TestLoop does not need to add individual Gmail addresses.";
 
 export const PLAY_OPEN_TESTER_READY =
-  "Your TestLoop tester registration is complete. Open Google Play to join the test and install the app. TestLoop does not install the app itself.";
+  "Your TestLoop registration is complete. Use your Google account on Google Play to join the test. TestLoop has not added you to Google Play.";
 
 /**
  * How a tester gets access for a given track.

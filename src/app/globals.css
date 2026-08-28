@@ -107,26 +107,4 @@ summary:focus-visible,
   border: 0;
 }
 
-/*
- * Brand mark: a single infinity between the "l" and "p" of TestLoop.
- * A short dash travels the lemniscate once per cycle. Nothing else animates.
- */
-.brand-infinity-track {
-  stroke-dasharray: 0.16 0.84;
-  stroke-dashoffset: 0;
-  animation: brand-infinity-travel 3.6s linear infinite;
-}
-
-@keyframes brand-infinity-travel {
-  to {
-    stroke-dashoffset: -1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .brand-infinity-track {
-    animation: none;
-    stroke-dasharray: none;
-    opacity: 0.9;
-  }
-}
+/* The wordmark uses a single infinity between "L" and "p". */

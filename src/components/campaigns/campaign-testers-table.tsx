@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/fields";
 import { Table, TableWrap, Td, Th, Tr } from "@/components/ui/table";
 import { EmptyState, StatusBadge } from "@/components/ui/widgets";
 import type { TesterStatus } from "@prisma/client";
+import { CopyButton } from "@/components/ui/copy-button";
 import { formatPlayTimestamp } from "@/components/play/play-connection-panel";
 
 export type CampaignTesterRow = {
@@ -63,6 +64,7 @@ export function CampaignTestersTable({ testers }: { testers: CampaignTesterRow[]
               <Th>Status</Th>
               <Th>Joined</Th>
               <Th>Last activity</Th>
+              <Th>Actions</Th>
             </tr>
           </thead>
           <tbody>
@@ -78,6 +80,9 @@ export function CampaignTestersTable({ testers }: { testers: CampaignTesterRow[]
                 </Td>
                 <Td className="text-muted">{formatPlayTimestamp(row.joinedAt) || "—"}</Td>
                 <Td className="text-muted">{formatPlayTimestamp(row.lastActivityAt) || "—"}</Td>
+                <Td>
+                  {row.email ? <CopyButton value={row.email} label="Copy email" /> : "—"}
+                </Td>
               </Tr>
             ))}
           </tbody>

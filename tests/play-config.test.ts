@@ -109,6 +109,8 @@ describe("recommendTestingMode", () => {
     );
     expect(rec.primary).toBe("OPEN");
     expect(rec.ambiguous).toBe(true);
+    expect(rec.title).toMatch(/Open testing/i);
+    expect(rec.reason).toMatch(/Multiple testing modes/i);
     expect(rec.alternatives.some((item) => item.kind === "CLOSED")).toBe(true);
   });
 
@@ -122,7 +124,10 @@ describe("playTrackUiStatus", () => {
   it("distinguishes live releases from a track that merely exists", () => {
     expect(playTrackUiStatus({ exists: true, releaseStatus: "completed" }).label).toBe("Active");
     expect(playTrackUiStatus({ exists: true, releaseStatus: "draft" }).label).toBe("Draft");
-    expect(playTrackUiStatus({ exists: true, releaseStatus: null }).label).toBe("Track configured");
+    expect(playTrackUiStatus({ exists: true, releaseStatus: null }).label).toBe("Configured");
     expect(playTrackUiStatus({ exists: false, releaseStatus: null }).label).toBe("Not configured");
+    expect(playTrackUiStatus({ exists: false, releaseStatus: null, unsynced: true }).label).toBe(
+      "Not yet synchronized",
+    );
   });
 });

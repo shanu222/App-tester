@@ -175,7 +175,9 @@ export function PlayConnectionPanel({
         </div>
         <div>
           <dt className="text-xs font-medium text-muted">Status</dt>
-          <dd className="mt-1 text-slate-700">{statusLabel(connection.status, connection.connected)}</dd>
+          <dd className="mt-1 text-slate-700">
+            {connection.connected ? "Connected ✓" : statusLabel(connection.status, connection.connected)}
+          </dd>
         </div>
         <div>
           <dt className="text-xs font-medium text-muted">Connection method</dt>
@@ -208,9 +210,21 @@ export function PlayConnectionPanel({
         >
           {pending === "apps" ? "Refreshing…" : "Refresh from Google Play"}
         </Button>
-        {connection.method === "SERVICE_ACCOUNT" ? (
+        {connection.oauthAvailable ? (
+          <a
+            href="/api/google-play/connect/oauth"
+            className="inline-flex h-9.5 items-center rounded-control border border-line-strong bg-white px-4 text-sm font-medium text-slate-700 shadow-card hover:bg-surface"
+          >
+            Replace connection
+          </a>
+        ) : (
           <Button variant="secondary" disabled={pending !== null} onClick={() => setShowWizard(true)}>
-            Replace service account
+            Replace connection
+          </Button>
+        )}
+        {connection.method === "SERVICE_ACCOUNT" && connection.oauthAvailable ? (
+          <Button variant="ghost" disabled={pending !== null} onClick={() => setShowWizard(true)}>
+            Use service account
           </Button>
         ) : null}
         <Button

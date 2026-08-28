@@ -10,7 +10,7 @@ export function StatusBadge({ status }: { status: TesterStatus }) {
       ? "bad"
       : status === "OPTED_IN" || status === "TESTING" || status === "COMPLETED"
         ? "good"
-        : status === "OPT_IN_PENDING" || status === "INSTALL_STATUS_UNKNOWN"
+        : status === "ADDING" || status === "OPT_IN_PENDING" || status === "INSTALL_STATUS_UNKNOWN"
           ? "warn"
           : "accent";
   return <Badge tone={tone}>{TESTER_STATUS_LABELS[status]}</Badge>;

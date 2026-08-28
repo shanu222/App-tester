@@ -7,6 +7,7 @@ describe("tester status transitions", () => {
     expect(canTransition("CONTACTED", "REPLIED")).toBe(true);
     expect(canTransition("REPLIED", "EMAIL_RECEIVED")).toBe(true);
     expect(canTransition("EMAIL_CONFIRMED", "ADDING")).toBe(true);
+    expect(canTransition("EMAIL_CONFIRMED", "OPT_IN_PENDING")).toBe(true);
     expect(canTransition("ADDED", "INVITATION_SENT")).toBe(true);
     expect(canTransition("OPTED_IN", "TESTING")).toBe(true);
   });

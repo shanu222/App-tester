@@ -45,6 +45,7 @@ export type PlayUiStatusKind =
   | "halted"
   | "configured"
   | "notConfigured"
+  | "unknown"
   | "error";
 
 export type PlayUiStatus = {
@@ -61,15 +62,22 @@ export function playTrackUiStatus(input: {
   exists: boolean;
   releaseStatus: string | null | undefined;
   error?: boolean;
+  unsynced?: boolean;
 }): PlayUiStatus {
   if (input.error) return { kind: "error", label: "Error", symbol: "✕" };
-  if (!input.exists) return { kind: "notConfigured", label: "Not configured", symbol: "—" };
+  if (input.unsynced) {
+    return { kind: "unknown", label: "Not yet synchronized", symbol: "?" };
+  }
+  if (!input.exists) return { kind: "notConfigured", label: "Not configured", symbol: "○" };
   const status = (input.releaseStatus || "").toLowerCase();
   if (status === "completed") return { kind: "active", label: "Active", symbol: "✓" };
   if (status === "inprogress") return { kind: "inProgress", label: "In progress", symbol: "◐" };
   if (status === "draft") return { kind: "draft", label: "Draft", symbol: "●" };
   if (status === "halted") return { kind: "halted", label: "Action required", symbol: "⚠" };
-  return { kind: "configured", label: "Track configured", symbol: "✓" };
+  if (!input.releaseStatus) {
+    return { kind: "configured", label: "Configured", symbol: "✓" };
+  }
+  return { kind: "configured", label: "Configured", symbol: "✓" };
 }
 
 export type TestingModeState = {
@@ -152,8 +160,8 @@ export function recommendTestingMode(config: TestingConfiguration): TestingRecom
   if (!open && !closed && !internal) {
     return {
       primary: "NONE",
-      title: "No testing track detected",
-      reason: "TestLoop could not find an active testing track for this app.",
+      title: "No active testing configuration detected",
+      reason: "Configure testing in Google Play Console first. TestLoop will not create or change Play tracks automatically.",
       cta: "Set up testing in Play Console",
       alternatives: [],
       ambiguous: false,
@@ -166,8 +174,8 @@ export function recommendTestingMode(config: TestingConfiguration): TestingRecom
       primary: "OPEN",
       title: "Open testing",
       reason:
-        "Your app already has an active open testing track. TestLoop can use this track for automated tester onboarding.",
-      cta: "Use Open Testing",
+        "This app already has an active open testing track. Open testing is suitable for TestLoop’s automated tester onboarding because users can join the test through Google Play without being individually managed through a closed tester list.",
+      cta: "Manage Open Testing",
       track: track?.track,
       alternatives: [],
       ambiguous: false,
@@ -226,7 +234,7 @@ export function recommendTestingMode(config: TestingConfiguration): TestingRecom
     alternatives.push({
       kind: "CLOSED",
       title: "Closed testing",
-      reason: "Use a restricted track if the developer needs controlled tester access.",
+      reason: "Use this when you want controlled tester access.",
       track: closedTracks.length === 1 ? closedTracks[0]?.track : undefined,
     });
   }
@@ -234,7 +242,7 @@ export function recommendTestingMode(config: TestingConfiguration): TestingRecom
     alternatives.push({
       kind: "INTERNAL",
       title: "Internal testing",
-      reason: "Keep using internal testing for a small QA team.",
+      reason: "Use this for a smaller QA or internal testing group.",
       track: config.internalTesting.tracks[0]?.track,
     });
   }
@@ -244,7 +252,7 @@ export function recommendTestingMode(config: TestingConfiguration): TestingRecom
       primary: "OPEN",
       title: "Open testing",
       reason:
-        "This app already has an active open testing track, making it suitable for automated TestLoop tester onboarding.",
+        "Multiple testing modes detected. Open testing is recommended for TestLoop tester onboarding because users can join through Google Play without being individually managed on a closed tester list. This is a recommendation only — TestLoop will not change your Play Console tracks.",
       cta: "Manage Open Testing",
       track: config.openTesting.tracks[0]?.track,
       alternatives,
@@ -255,7 +263,8 @@ export function recommendTestingMode(config: TestingConfiguration): TestingRecom
   return {
     primary: closed ? "CLOSED" : "INTERNAL",
     title: closed ? "Closed testing" : "Internal testing",
-    reason: "Multiple testing modes are configured. Choose the workflow that matches this campaign.",
+    reason:
+      "Multiple testing modes detected. Choose the workflow that matches this campaign. TestLoop will not change your Play Console tracks.",
     cta: closed ? "Manage Closed Testing" : "Manage Internal Testing",
     track: closed ? closedTracks[0]?.track : config.internalTesting.tracks[0]?.track,
     alternatives,

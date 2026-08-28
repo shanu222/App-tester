@@ -45,7 +45,7 @@ export function publicErrorMessage(error: unknown) {
   if (error instanceof AppError && error.expose) return error.message;
   const mapped = mapInfrastructureError(error);
   if (mapped) return mapped.message;
-  return "Something went wrong. Please try again.";
+  return "An unexpected error occurred. No Google Play data was changed.";
 }
 
 /**

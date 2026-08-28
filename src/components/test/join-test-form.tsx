@@ -40,7 +40,7 @@ export function JoinTestForm({ slug }: { slug: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-8 space-y-4">
+    <form onSubmit={onSubmit} className="mt-5 space-y-4">
       <div>
         <Label htmlFor="gmail">Gmail</Label>
         <Input
@@ -51,11 +51,10 @@ export function JoinTestForm({ slug }: { slug: string }) {
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          placeholder="you@gmail.com"
+          placeholder="yourname@gmail.com"
         />
         <p className="mt-1.5 text-xs leading-5 text-muted">
-          Use the Google account you use with Google Play. TestLoop records your registration;
-          Google Play installs the app.
+          TestLoop records your registration. Google Play remains the source of tester access.
         </p>
       </div>
       {error ? (
@@ -64,7 +63,7 @@ export function JoinTestForm({ slug }: { slug: string }) {
         </p>
       ) : null}
       <Button type="submit" disabled={pending} aria-busy={pending}>
-        {pending ? "Joining…" : "Join test"}
+        {pending ? "Joining…" : "Join Test"}
       </Button>
     </form>
   );
@@ -123,7 +122,7 @@ function JoinResultCard({
                 <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden />
               </Button>
             </a>
-            <CopyButton value={result.optInUrl} label="Copy link" />
+            <CopyButton value={result.optInUrl} label="Copy Testing Link" />
           </div>
         ) : null}
       </div>

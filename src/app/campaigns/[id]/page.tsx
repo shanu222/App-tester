@@ -18,6 +18,8 @@ import { CampaignTestersTable } from "@/components/campaigns/campaign-testers-ta
 import { prisma } from "@/lib/db";
 import { parseTracksSnapshot, PLAY_API_UNAVAILABLE, playTrackDisplayName, playTrackUiStatus } from "@/lib/integrations/play-config";
 import { PlayStatusMark } from "@/components/play/play-status";
+import { SourceBadge } from "@/components/ui/source-badge";
+import { canonicalPlayStoreUrl } from "@/lib/play-url";
 
 export default async function CampaignDetailPage({
   params,
@@ -28,13 +30,8 @@ export default async function CampaignDetailPage({
   const { id } = await params;
   const campaign = await getCampaign(user.id, id);
   const stats = await campaignStats(user.id, id);
-  const remaining = Math.max(0, campaign.targetTesters - stats.optedIn);
   const shareUrl = campaignShareUrl(campaign.publicSlug);
   const accessMode = testerAccessMode(campaign.testingType);
-  const pendingEmails = campaign.testerCampaigns
-    .map((row) => row.detectedEmail || row.tester.email)
-    .filter((email): email is string => Boolean(email));
-  const uniqueEmails = [...new Set(pendingEmails)];
   const waitingEmails = campaign.testerCampaigns
     .filter((row) => row.status === "ADDING")
     .map((row) => row.detectedEmail || row.tester.email)
@@ -58,10 +55,10 @@ export default async function CampaignDetailPage({
   const version =
     playTrack?.releaseName ||
     (playTrack?.versionCodes[0] ? `Version code ${playTrack.versionCodes[0]}` : PLAY_API_UNAVAILABLE);
-  const activeTesters = campaign.testerCampaigns.filter((row) =>
-    ["ADDED", "INVITATION_SENT", "OPT_IN_PENDING", "OPTED_IN", "TESTING", "FEEDBACK_REQUESTED", "FEEDBACK_RECEIVED", "COMPLETED"].includes(row.status),
-  ).length;
-  const pendingTesters = campaign.testerCampaigns.length - activeTesters;
+  const registeredTesters = campaign.testerCampaigns.length;
+  const pendingTesters = waitingEmails.length;
+  const storeUrl = campaign.playStoreUrl || campaign.app.playStoreUrl || canonicalPlayStoreUrl(campaign.app.packageName);
+  const playTestingUrl = campaign.testingUrl || campaign.webOptInUrl;
 
   return (
     <AppShell
@@ -121,69 +118,58 @@ export default async function CampaignDetailPage({
           </div>
         </dl>
 
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          <SourceBadge source="testloop" />
+          <SourceBadge source="google-play" />
+        </div>
+
         <div className="mt-4">
           <div className="mb-1.5 flex justify-between text-xs">
             <span className="text-muted">
-              {stats.optedIn} of {campaign.targetTesters} testers opted in
+              {registeredTesters} of {campaign.targetTesters} testers registered in TestLoop
             </span>
             <span className="font-semibold text-slate-900 tabular-nums">
-              {percent(stats.optedIn, campaign.targetTesters)}%
+              {percent(registeredTesters, campaign.targetTesters)}%
             </span>
           </div>
           <div
             className="h-2 overflow-hidden rounded-full bg-surface-strong"
             role="progressbar"
-            aria-valuenow={percent(stats.optedIn, campaign.targetTesters)}
+            aria-valuenow={percent(registeredTesters, campaign.targetTesters)}
             aria-valuemin={0}
             aria-valuemax={100}
           >
             <span
               className="block h-full rounded-full bg-brand"
-              style={{ width: `${Math.min(100, percent(stats.optedIn, campaign.targetTesters))}%` }}
+              style={{ width: `${Math.min(100, percent(registeredTesters, campaign.targetTesters))}%` }}
             />
           </div>
         </div>
 
-        {campaign.app.playStoreUrl ? (
-          <a
-            className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
-            href={campaign.app.playStoreUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open Google Play
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-          </a>
-        ) : null}
       </section>
 
       <div className="mb-6 flex gap-3 rounded-card border border-blue-200 bg-brand-soft p-4">
         <Info className="mt-0.5 h-4.5 w-4.5 shrink-0 text-brand" aria-hidden />
         <p className="text-sm leading-6 text-blue-900">
-          Required testers: {campaign.requiredTesters} · Opted in: {stats.optedIn} · Remaining: {remaining} ·
-          Active-day window: {campaign.requiredActiveDays}. Based on recorded tester activity — verify official
-          Play Console status before applying for production access. TestLoop does not determine Google&apos;s
-          eligibility.
+          Target testers: {campaign.requiredTesters} · Registered in TestLoop: {registeredTesters} ·
+          Pending Play Console action: {pendingTesters}. These are TestLoop records. Verify official Play
+          Console status before applying for production access.
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Target" value={campaign.targetTesters} />
+        <StatCard label="TestLoop testers" value={registeredTesters} />
+        <StatCard label="Pending Play Console" value={pendingTesters} />
         <StatCard label="Opportunities" value={stats.opportunities} />
-        <StatCard label="Replies" value={stats.replies} />
-        <StatCard label="Gmail addresses" value={stats.emails} />
-        <StatCard label="Added" value={stats.added} />
-        <StatCard label="Opted in" value={stats.optedIn} />
-        <StatCard label="Testing" value={stats.testing} />
-        <StatCard label="Feedback" value={stats.feedback} />
       </div>
 
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Testing links" description="Store and opt-in URLs are stored separately." />
+          <CardHeader title="Testing links" description="TestLoop, Google Play testing, and the Play Store are separate URLs." />
           <dl className="mt-5 space-y-4 text-sm">
             <div>
-              <dt className="text-xs font-medium text-muted">TestLoop testing page</dt>
+              <dt className="text-xs font-medium text-muted">TestLoop tester page</dt>
               <dd className="mt-1 break-all text-slate-700">
                 {shareUrl || "A public testing page is created when this campaign is saved."}
               </dd>
@@ -196,23 +182,47 @@ export default async function CampaignDetailPage({
                     target="_blank"
                     rel="noreferrer"
                   >
-                    Open testing page
+                    Open TestLoop tester page
                     <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                   </a>
                 </div>
               ) : null}
             </div>
             <div>
-              <dt className="text-xs font-medium text-muted">Store URL</dt>
+              <dt className="text-xs font-medium text-muted">Google Play testing link</dt>
               <dd className="mt-1 break-all text-slate-700">
-                {campaign.playStoreUrl || campaign.app.playStoreUrl || "Not stored"}
+                {playTestingUrl || "Not available through Google Play API"}
               </dd>
+              {playTestingUrl ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <CopyButton value={playTestingUrl} label="Copy Google Play link" />
+                  <a
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
+                    href={playTestingUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open Google Play
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                  </a>
+                </div>
+              ) : null}
             </div>
             <div>
-              <dt className="text-xs font-medium text-muted">Google Play opt-in URL</dt>
-              <dd className="mt-1 break-all text-slate-700">
-                {campaign.testingUrl || campaign.webOptInUrl || "No testing link configured — do not invent one."}
-              </dd>
+              <dt className="text-xs font-medium text-muted">Google Play Store</dt>
+              <dd className="mt-1 break-all text-slate-700">{storeUrl}</dd>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <CopyButton value={storeUrl} label="Copy store link" />
+                <a
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
+                  href={storeUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open Play Store
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                </a>
+              </div>
             </div>
             {campaign.playTrack ? (
               <div>
@@ -221,35 +231,37 @@ export default async function CampaignDetailPage({
               </div>
             ) : null}
           </dl>
-          {campaign.testingUrl || campaign.webOptInUrl ? (
-            <a
-              className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
-              href={campaign.testingUrl || campaign.webOptInUrl || undefined}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open Google Play testing link
-              <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-            </a>
-          ) : null}
-          {accessMode === "MANUAL_EMAIL_LIST" && uniqueEmails.length > 0 ? (
+          {accessMode === "MANUAL_EMAIL_LIST" && waitingEmails.length > 0 ? (
             <div className="mt-4 border-t border-line pt-4">
-              <div className="text-xs font-medium text-muted">Copy-ready tester emails</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-xs font-medium text-muted">Pending Play Console action</div>
+                <SourceBadge source="action" />
+              </div>
               <p className="mt-1 text-xs leading-5 text-muted">
-                Paste these into Play Console → Testers. {waitingEmails.length} still waiting for that step.
+                These testers are registered in TestLoop. Google Play has not confirmed they were added.
               </p>
-              <pre className="mt-2 max-h-40 overflow-auto rounded-control border border-line bg-surface p-3 text-xs leading-5 text-slate-700">
-                {uniqueEmails.join("\n")}
-              </pre>
-              <div className="mt-2">
-                <CopyButton value={uniqueEmails.join("\n")} label="Copy emails" />
+              <ul className="mt-2 space-y-2">
+                {campaign.testerCampaigns
+                  .filter((row) => row.status === "ADDING")
+                  .map((row) => {
+                    const email = row.detectedEmail || row.tester.email;
+                    if (!email) return null;
+                    return (
+                      <li
+                        key={row.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-line bg-surface px-3 py-2"
+                      >
+                        <span className="break-all font-mono text-xs text-slate-700">{email}</span>
+                        <CopyButton value={email} label="Copy email" />
+                      </li>
+                    );
+                  })}
+              </ul>
+              <div className="mt-3">
+                <CopyButton value={waitingEmails.join("\n")} label="Copy all pending testers" />
               </div>
             </div>
           ) : null}
-          <p className="mt-4 border-t border-line pt-4 text-xs leading-5 text-muted">
-            In-app telemetry token:{" "}
-            <span className="font-mono text-slate-600">{campaign.telemetryToken}</span> · POST /api/telemetry
-          </p>
         </Card>
 
         <Card>
@@ -333,18 +345,28 @@ export default async function CampaignDetailPage({
 
       <SectionLabel className="mb-3 mt-10">Testers</SectionLabel>
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Total" value={campaign.testerCampaigns.length} />
-        <StatCard label="Active" value={activeTesters} />
-        <StatCard label="Pending" value={pendingTesters} />
+        <StatCard label="TestLoop testers" value={registeredTesters} />
+        <StatCard label="Pending Play Console" value={pendingTesters} />
+        <StatCard label="Play opt-in" value="Unavailable" hint="Not returned by the Play Developer API" />
       </div>
-      {accessMode === "MANUAL_EMAIL_LIST" ? (
-        <p className="mb-4 text-sm leading-6 text-body">{PLAY_TESTER_API_LIMITATION}</p>
-      ) : (
-        <p className="mb-4 text-sm leading-6 text-body">
-          Open testing testers join through Google Play using the official testing link. TestLoop
-          records registration and does not install the app.
+      <div className="mb-4 rounded-card border border-line bg-surface p-4 text-sm leading-6 text-body">
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          <SourceBadge source="limitation" />
+        </div>
+        <p>
+          Individual tester details, opt-in status, and per-tester download/install data are not
+          available through the connected Google Play API. The table below is TestLoop registration
+          data only.
         </p>
-      )}
+        {accessMode === "MANUAL_EMAIL_LIST" ? (
+          <p className="mt-2">{PLAY_TESTER_API_LIMITATION}</p>
+        ) : (
+          <p className="mt-2">
+            Open testing testers join through Google Play using the official testing link. TestLoop
+            does not install the app and does not confirm Play opt-in.
+          </p>
+        )}
+      </div>
       <CampaignTestersTable
         testers={campaign.testerCampaigns.map((row) => ({
           id: row.id,

@@ -23,7 +23,7 @@ export default async function AppsPage() {
           syncedFromPlay: app.syncedFromPlay,
           campaignStatus: app.campaignStatus,
           testersAdded: app.testersAdded,
-          optedInTesters: app.optedInTesters,
+          testersRegistered: app.testerCount,
           testingActivity: app.testingActivity,
           tracks: app.tracks.map((track) => ({
             id: track.id,

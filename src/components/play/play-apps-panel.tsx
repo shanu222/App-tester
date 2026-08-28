@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { Card, CardHeader, SectionLabel } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
   recommendTestingMode,
 } from "@/lib/integrations/play-config";
 import { formatPlayTimestamp } from "@/components/play/play-connection-panel";
+import { SourceBadge } from "@/components/ui/source-badge";
 import { PLAY_TESTER_API_LIMITATION } from "@/lib/integrations/play-testers";
 
 export type PlayAppView = {
@@ -32,9 +33,13 @@ export type PlayAppView = {
   lastSyncAt: string | null;
   tracks: PlayTrackRecord[];
   configuration: ConfigurationSummary;
+  testloop?: {
+    testers: number;
+    pendingPlayAction: number;
+  };
 };
 
-type Filter = "all" | "testing" | "none" | "open" | "closed" | "internal";
+type Filter = "all" | "testing" | "none" | "open" | "closed" | "internal" | "production";
 
 const FILTERS: Array<{ id: Filter; label: string }> = [
   { id: "all", label: "All" },
@@ -43,6 +48,7 @@ const FILTERS: Array<{ id: Filter; label: string }> = [
   { id: "open", label: "Open" },
   { id: "closed", label: "Closed" },
   { id: "internal", label: "Internal" },
+  { id: "production", label: "Production" },
 ];
 
 export function PlayAppsPanel({
@@ -72,6 +78,7 @@ export function PlayAppsPanel({
       if (filter === "open" && !app.configuration.open) return false;
       if (filter === "closed" && !app.configuration.closed) return false;
       if (filter === "internal" && !app.configuration.internal) return false;
+      if (filter === "production" && !app.configuration.production) return false;
       if (!needle) return true;
       return (
         app.name.toLowerCase().includes(needle) ||
@@ -169,12 +176,6 @@ export function PlayAppsPanel({
         <CardHeader
           title="Your Google Play apps"
           description="Applications Google reports for this connection. Play Console remains the source of truth."
-          action={
-            <Button variant="secondary" onClick={refresh} disabled={pending !== null}>
-              <RefreshCw className="mr-2 h-4 w-4" aria-hidden />
-              {pending === "refresh" ? "Refreshing…" : "Refresh from Google Play"}
-            </Button>
-          }
         />
         <p className="mt-2 text-xs text-muted">
           Last synchronized: {formatPlayTimestamp(lastSyncAt) || "Not yet synchronized"}
@@ -191,6 +192,11 @@ export function PlayAppsPanel({
             <EmptyState
               title="No apps discovered yet"
               body="Refresh from Google Play to retrieve the applications this account can access. App discovery uses the Play Developer Reporting API, which must be enabled on the same Google Cloud project."
+              action={
+                <Button variant="secondary" onClick={refresh} disabled={pending !== null}>
+                  {pending === "refresh" ? "Refreshing…" : "Refresh from Google Play"}
+                </Button>
+              }
             />
           </div>
         ) : (
@@ -253,6 +259,7 @@ export function PlayAppsPanel({
           pending={pending}
           newTracks={newTracks}
           onManage={manageTrack}
+          onSync={() => loadApp(selected)}
         />
       ) : null}
     </div>
@@ -271,47 +278,48 @@ function PlayAppCard({
   onSelect: () => void;
 }) {
   const config = app.configuration;
+  const synced = Boolean(app.lastSyncAt);
   return (
     <div
       className={
         selected
-          ? "rounded-control border border-brand bg-white p-4 shadow-card"
-          : "rounded-control border border-line bg-white p-4 shadow-card"
+          ? "rounded-card border border-brand bg-white p-5"
+          : "rounded-card border border-line bg-white p-5"
       }
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 gap-3">
           <AppMark name={app.name} src={app.iconUrl} />
           <div className="min-w-0">
-            <div className="truncate font-medium text-slate-900">{app.name}</div>
+            <div className="truncate text-[15px] font-semibold text-slate-900">{app.name}</div>
             <div className="mt-0.5 truncate font-mono text-xs text-muted">{app.packageName}</div>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Badge tone="good">Google Play · Connected</Badge>
-              <span className="text-xs text-muted">
-                {config.testingTrackCount > 0
-                  ? `${config.testingTrackCount} track${config.testingTrackCount === 1 ? "" : "s"} detected`
-                  : "No testing track"}
-              </span>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <SourceBadge source="google-play" />
+              <Badge tone="good">Connected</Badge>
+              {app.selected ? <SourceBadge source="testloop" /> : null}
             </div>
           </div>
         </div>
-        <Button
-          variant={selected ? "secondary" : "primary"}
-          onClick={onSelect}
-          disabled={pending !== null}
-        >
-          {pending === `sync:${app.packageName}` ? "Loading…" : "Manage testing"}
+        <Button variant={selected ? "secondary" : "primary"} onClick={onSelect} disabled={pending !== null}>
+          {pending === `sync:${app.packageName}`
+            ? "Loading…"
+            : app.selected
+              ? "Manage testing"
+              : "Add to TestLoop"}
         </Button>
       </div>
 
-      <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
-        <ModeRow
-          label="Internal testing"
-          exists={config.internal}
-          active={config.internalActive}
+      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
+        <ModeChip label="Internal" exists={config.internal} active={config.internalActive} synced={synced} />
+        <ModeChip
+          label="Closed"
+          exists={config.closed}
+          active={config.closedActive}
+          synced={synced}
+          extra={config.closedCount > 1 ? `${config.closedCount} tracks` : null}
         />
-        <ModeRow label="Closed testing" exists={config.closed} active={config.closedActive} extra={config.closedCount > 1 ? `${config.closedCount} tracks` : null} />
-        <ModeRow label="Open testing" exists={config.open} active={config.openActive} />
+        <ModeChip label="Open" exists={config.open} active={config.openActive} synced={synced} />
+        <ModeChip label="Production" exists={config.production} active={config.productionActive} synced={synced} />
       </dl>
       <p className="mt-3 text-xs text-muted">
         Last synchronized: {formatPlayTimestamp(app.lastSyncAt) || "Not yet synchronized"}
@@ -320,27 +328,30 @@ function PlayAppCard({
   );
 }
 
-function ModeRow({
+function ModeChip({
   label,
   exists,
   active,
+  synced,
   extra,
 }: {
   label: string;
   exists: boolean;
   active: boolean;
+  synced: boolean;
   extra?: string | null;
 }) {
   const status = playTrackUiStatus({
     exists,
-    releaseStatus: active ? "completed" : exists ? null : null,
+    releaseStatus: active ? "completed" : null,
+    unsynced: !synced,
   });
   return (
-    <div className="rounded-control border border-line bg-surface px-3 py-2">
+    <div>
       <dt className="text-xs font-medium text-muted">{label}</dt>
-      <dd className="mt-1">
-        <PlayStatusMark status={exists && !active ? { kind: "configured", label: "Track configured", symbol: "✓" } : status} />
-        {extra ? <span className="ml-2 text-xs text-muted">{extra}</span> : null}
+      <dd className="mt-0.5">
+        <PlayStatusMark status={status} />
+        {extra ? <span className="ml-1.5 text-xs text-muted">{extra}</span> : null}
       </dd>
     </div>
   );
@@ -351,31 +362,54 @@ function SelectedAppDetail({
   pending,
   newTracks,
   onManage,
+  onSync,
 }: {
   app: PlayAppView;
   pending: string | null;
   newTracks: string[];
   onManage: (packageName: string, track: string) => void;
+  onSync: () => void;
 }) {
   const config = detectTestingConfiguration(app.tracks);
   const recommendation = recommendTestingMode(config);
-  const testingTracks = app.tracks.filter((track) => track.typeGuess !== "PRODUCTION");
   const production = config.production.tracks[0] || null;
   const closedTracks = config.closedTesting.tracks;
+  const synced = Boolean(app.lastSyncAt);
+  const testers = app.testloop || { testers: 0, pendingPlayAction: 0 };
 
   return (
     <div className="space-y-6">
       <Card>
         <SectionLabel>App overview</SectionLabel>
-        <div className="mt-3 flex items-start gap-3">
-          <AppMark name={app.name} src={app.iconUrl} />
-          <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-slate-900">{app.name}</h2>
-            <p className="mt-0.5 font-mono text-xs text-muted">{app.packageName}</p>
-            <div className="mt-2">
-              <Badge tone="good">Google Play · Connected</Badge>
+        <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <AppMark name={app.name} src={app.iconUrl} />
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-slate-900">{app.name}</h2>
+              <p className="mt-0.5 font-mono text-xs text-muted">{app.packageName}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <SourceBadge source="google-play" />
+                <Badge tone="good">Connected</Badge>
+                {app.selected ? (
+                  <>
+                    <SourceBadge source="testloop" />
+                    <span className="text-xs text-muted">App connected to TestLoop</span>
+                  </>
+                ) : null}
+              </div>
+              {app.selected ? (
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  Google Play remains the source of truth.
+                </p>
+              ) : null}
+              <p className="mt-2 text-xs text-muted">
+                Last synchronized: {formatPlayTimestamp(app.lastSyncAt) || "Not yet synchronized"}
+              </p>
             </div>
           </div>
+          <Button variant="secondary" onClick={onSync} disabled={pending !== null}>
+            {pending === `sync:${app.packageName}` ? "Refreshing…" : "Refresh from Google Play"}
+          </Button>
         </div>
       </Card>
 
@@ -388,44 +422,47 @@ function SelectedAppDetail({
       <Card>
         <CardHeader
           title="Testing configuration"
-          description="Detected automatically from Google Play. TestLoop does not ask you which track you use."
+          description="Detected automatically from Google Play."
+          action={<SourceBadge source="google-play" />}
         />
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <DetectedMode
             title="Internal testing"
             exists={config.internalTesting.exists}
             active={config.internalTesting.active}
+            synced={synced}
+            tracks={config.internalTesting.tracks}
           />
           <DetectedMode
             title="Closed testing"
             exists={config.closedTesting.exists}
             active={config.closedTesting.active}
-            count={closedTracks.length}
+            synced={synced}
+            tracks={closedTracks}
           />
           <DetectedMode
             title="Open testing"
             exists={config.openTesting.exists}
             active={config.openTesting.active}
+            synced={synced}
+            tracks={config.openTesting.tracks}
           />
-        </div>
-        {production ? (
-          <div className="mt-4 rounded-control border border-line bg-surface px-4 py-3">
-            <div className="text-xs font-semibold uppercase tracking-[0.06em] text-muted">Production</div>
-            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+          <div className="rounded-control border border-line bg-surface px-4 py-3">
+            <div className="text-sm font-medium text-slate-900">Production</div>
+            <div className="mt-1">
               <PlayStatusMark
                 status={playTrackUiStatus({
-                  exists: true,
-                  releaseStatus: production.releaseStatus,
+                  exists: config.production.exists,
+                  releaseStatus: production?.releaseStatus,
+                  unsynced: !synced,
                 })}
               />
-              <p className="text-xs text-muted">
-                Testing actions never publish to production.
-              </p>
             </div>
+            <p className="mt-2 text-xs leading-5 text-muted">
+              TestLoop does not publish to production or modify production releases.
+            </p>
           </div>
-        ) : (
-          <p className="mt-4 text-sm text-muted">Production · Not configured</p>
-        )}
+        </div>
       </Card>
 
       <RecommendationCard
@@ -437,25 +474,37 @@ function SelectedAppDetail({
 
       {recommendation.primary === "NONE" ? (
         <Card>
-          <CardHeader title="No testing track detected" />
+          <CardHeader title="No active testing configuration detected" />
           <p className="mt-3 text-sm leading-6 text-body">
-            TestLoop could not find an active testing track for this app. Creating a track requires a
-            release in Play Console; the Developer API does not create an empty testing track on its
-            own.
+            Configure testing in Google Play Console first. TestLoop will not create tracks, upload
+            bundles, or change Play Console configuration.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <a href={playConsoleSetupUrl()} target="_blank" rel="noreferrer">
-              <Button>Create open testing in Play Console</Button>
-            </a>
-            <a href={playConsoleSetupUrl()} target="_blank" rel="noreferrer">
-              <Button variant="secondary">Create closed testing</Button>
-            </a>
-            <a href={playConsoleSetupUrl()} target="_blank" rel="noreferrer">
-              <Button variant="secondary">Create internal testing</Button>
-            </a>
-          </div>
+          <a className="mt-4 inline-flex" href={playConsoleSetupUrl()} target="_blank" rel="noreferrer">
+            <Button variant="secondary">Open Play Console</Button>
+          </a>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader title="Tester activity" action={<SourceBadge source="testloop" />} />
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div>
+            <div className="text-xs font-medium text-muted">TestLoop testers</div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{testers.testers}</div>
+          </div>
+          <div>
+            <div className="text-xs font-medium text-muted">Pending Play Console action</div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">
+              {testers.pendingPlayAction}
+            </div>
+          </div>
+        </div>
+        <p className="mt-4 text-sm leading-6 text-body">
+          Individual Google Play tester lists, opt-in status, and per-tester installs are not
+          available through the connected Play Developer API.
+        </p>
+        <SourceBadge source="limitation" className="mt-2" />
+      </Card>
 
       {closedTracks.length > 0 ? (
         <Card>
@@ -479,9 +528,13 @@ function SelectedAppDetail({
         </Card>
       ) : null}
 
-      {testingTracks.length > 0 ? (
+      {app.tracks.length > 0 ? (
         <Card>
-          <CardHeader title="Track details" description="Values come from the Play Developer API. Missing fields are not invented." />
+          <CardHeader
+            title="Track details"
+            description="Values come from the Play Developer API. Missing fields are not invented."
+            action={<SourceBadge source="google-play" />}
+          />
           <ul className="mt-4 space-y-3">
             {app.tracks.map((track) => (
               <li key={track.track} className="rounded-control border border-line px-4 py-3">
@@ -493,12 +546,16 @@ function SelectedAppDetail({
                       disabled={pending !== null}
                       onClick={() => onManage(app.packageName, track.track)}
                     >
-                      {pending === `manage:${app.packageName}:${track.track}` ? "Opening…" : "Manage"}
+                      {pending === `manage:${app.packageName}:${track.track}`
+                        ? "Opening…"
+                        : app.selected
+                          ? "Manage"
+                          : "Add to TestLoop"}
                     </Button>
                   </div>
                 ) : (
                   <p className="mt-3 text-xs text-muted">
-                    Production is read-only here. There is no publish action on this page.
+                    Production is read-only. TestLoop does not publish to production.
                   </p>
                 )}
               </li>
@@ -506,6 +563,28 @@ function SelectedAppDetail({
           </ul>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader title="Sync information" />
+        <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
+          <div>
+            <dt className="text-xs font-medium text-muted">Last synchronized</dt>
+            <dd className="mt-1 text-slate-800">
+              {formatPlayTimestamp(app.lastSyncAt) || "Not yet synchronized"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium text-muted">API status</dt>
+            <dd className="mt-1 text-slate-800">{synced ? "Google Play synced" : "Waiting for Google Play"}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium text-muted">Limitations</dt>
+            <dd className="mt-1 text-slate-800">
+              Individual testers, opt-in, and per-tester installs are not returned by the connected API.
+            </dd>
+          </div>
+        </dl>
+      </Card>
     </div>
   );
 }
@@ -514,25 +593,32 @@ function DetectedMode({
   title,
   exists,
   active,
-  count,
+  synced,
+  tracks,
 }: {
   title: string;
   exists: boolean;
   active: boolean;
-  count?: number;
+  synced: boolean;
+  tracks: PlayTrackRecord[];
 }) {
-  const status = exists
-    ? active
-      ? playTrackUiStatus({ exists: true, releaseStatus: "completed" })
-      : { kind: "configured" as const, label: "Track configured", symbol: "✓" }
-    : playTrackUiStatus({ exists: false, releaseStatus: null });
+  const status = playTrackUiStatus({
+    exists,
+    releaseStatus: active ? "completed" : exists ? null : null,
+    unsynced: !synced,
+  });
   return (
     <div className="rounded-control border border-line px-4 py-3">
       <div className="text-sm font-medium text-slate-900">{title}</div>
       <div className="mt-1">
         <PlayStatusMark status={status} />
       </div>
-      {count && count > 1 ? <p className="mt-1 text-xs text-muted">{count} tracks</p> : null}
+      {tracks.length > 0 ? (
+        <p className="mt-1 text-xs text-muted">
+          {tracks.length} track{tracks.length === 1 ? "" : "s"}
+          {tracks.length > 1 ? ` · ${tracks.map((track) => track.displayName).join(", ")}` : ""}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -551,10 +637,15 @@ function RecommendationCard({
   if (recommendation.primary === "NONE") return null;
   return (
     <Card>
-      <CardHeader
-        title={recommendation.ambiguous ? "Recommended for TestLoop" : "Recommended"}
-        description={recommendation.ambiguous ? "Multiple testing modes are configured. This is a suggestion, not an automatic change." : undefined}
-      />
+        <CardHeader
+          title="Recommended for TestLoop"
+          description={
+            recommendation.ambiguous
+              ? "Multiple testing modes detected. This is a suggestion, not an automatic change."
+              : "TestLoop will not change your Play Console tracks."
+          }
+          action={<SourceBadge source="calculated" />}
+        />
       <h3 className="mt-4 text-base font-semibold text-slate-900">{recommendation.title}</h3>
       <p className="mt-2 text-sm leading-6 text-body">{recommendation.reason}</p>
       {recommendation.track ? (

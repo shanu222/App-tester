@@ -159,7 +159,6 @@ export default async function MyTestingPage() {
                 packageName: row.campaign.app.packageName,
                 configuredUrl: row.campaign.testingUrl || row.campaign.webOptInUrl,
               }).url;
-              const granted = row.accessAdded || ["ADDED", "INVITATION_SENT", "OPT_IN_PENDING", "OPTED_IN", "TESTING", "COMPLETED"].includes(row.status);
               const waiting = row.status === "ADDING";
               const failed = row.status === "ERROR";
               return (
@@ -172,14 +171,8 @@ export default async function MyTestingPage() {
                         {row.campaign.playTrack ? ` · ${row.campaign.playTrack}` : ""}
                       </div>
                     </div>
-                    <Badge tone={failed ? "warn" : granted ? "good" : "neutral"}>
-                      {granted
-                        ? "Access granted"
-                        : waiting
-                          ? "Registered"
-                          : failed
-                            ? "Unable to register"
-                            : TESTER_STATUS_LABELS[row.status]}
+                    <Badge tone={failed ? "warn" : waiting ? "warn" : "neutral"}>
+                      {TESTER_STATUS_LABELS[row.status]}
                     </Badge>
                   </div>
                   {row.lastError ? (
@@ -187,7 +180,7 @@ export default async function MyTestingPage() {
                       {row.lastError}
                     </p>
                   ) : null}
-                  {granted && playUrl ? (
+                  {playUrl ? (
                     <a
                       className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
                       href={playUrl}

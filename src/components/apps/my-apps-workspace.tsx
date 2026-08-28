@@ -24,7 +24,7 @@ export type AppCardModel = {
   syncedFromPlay: boolean;
   campaignStatus: string;
   testersAdded: number;
-  optedInTesters: number;
+  testersRegistered: number;
   testingActivity: number;
   tracks: Array<{ id: string; name: string; testingType: string }>;
   campaign: { id: string; name: string; status: string } | null;
@@ -329,7 +329,7 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
         <div className="grid gap-4 xl:grid-cols-2">
           {visible.map((app) => {
             const target = app.testerTarget || 12;
-            const progress = Math.min(100, Math.round((app.optedInTesters / target) * 100));
+            const progress = Math.min(100, Math.round((app.testersRegistered / target) * 100));
             const manageHref = app.campaign ? `/campaigns/${app.campaign.id}` : `/campaigns?appId=${app.id}`;
             const showManage =
               app.googlePlayStatus === "CLOSED_TESTING" ||
@@ -376,7 +376,7 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
                 <div className="mt-5">
                   <div className="mb-1.5 flex justify-between text-xs">
                     <span className="text-muted">
-                      {app.optedInTesters} of {target} testers opted in
+                      {app.testersRegistered} of {target} testers registered in TestLoop
                     </span>
                     <span className="font-semibold text-slate-900 tabular-nums">{progress}%</span>
                   </div>
@@ -393,21 +393,21 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
                   <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-4 text-center">
                     <div>
                       <dd className="text-lg font-semibold leading-none text-slate-900 tabular-nums">
-                        {app.testersAdded}
+                        {app.testersRegistered}
                       </dd>
-                      <dt className="mt-1 text-xs text-muted">Added</dt>
+                      <dt className="mt-1 text-xs text-muted">TestLoop testers</dt>
                     </div>
                     <div>
                       <dd className="text-lg font-semibold leading-none text-slate-900 tabular-nums">
-                        {app.optedInTesters}
+                        {app.testersAdded}
                       </dd>
-                      <dt className="mt-1 text-xs text-muted">Opted in</dt>
+                      <dt className="mt-1 text-xs text-muted">Developer confirmed</dt>
                     </div>
                     <div>
                       <dd className="text-lg font-semibold leading-none text-slate-900 tabular-nums">
                         {app.testingActivity}
                       </dd>
-                      <dt className="mt-1 text-xs text-muted">Activity</dt>
+                      <dt className="mt-1 text-xs text-muted">Activity (TestLoop)</dt>
                     </div>
                   </dl>
                 </div>

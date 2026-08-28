@@ -39,7 +39,7 @@ export function TesterActions({
           Reject
         </Button>
         <Button type="button" variant="ghost" onClick={() => patch({ optedIn: true })}>
-          Record opt-in
+          Record TestLoop opt-in
         </Button>
         <Button type="button" variant="danger" onClick={() => patch({ block: true })}>
           Block tester

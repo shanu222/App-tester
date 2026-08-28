@@ -14,6 +14,7 @@ import {
 import { grantTesterAccess } from "@/lib/services/invitations";
 import { createOrGetTester, isBlocked, setTesterStatus } from "@/lib/services/testers";
 import type { PublicJoinResult, PublicTestingPage } from "@/lib/testing-page";
+import { parseTracksSnapshot } from "@/lib/integrations/play-config";
 
 export type { PublicJoinResult, PublicTestingPage };
 
@@ -55,9 +56,9 @@ function publicJoinState(
     return { outcome: "FAILED", statusLabel: "Unable to register tester" };
   }
   if (accessAdded || READY_STATUSES.includes(status)) {
-    return { outcome: "READY", statusLabel: "You're ready" };
+    return { outcome: "READY", statusLabel: "TestLoop registration complete" };
   }
-  return { outcome: "REGISTERED", statusLabel: "You're registered" };
+  return { outcome: "REGISTERED", statusLabel: "TestLoop registration complete" };
 }
 
 export async function getPublicTestingPage(slug: string): Promise<PublicTestingPage> {
@@ -78,6 +79,19 @@ export async function getPublicTestingPage(slug: string): Promise<PublicTestingP
     throw new NotFoundError("This testing page is not available.");
   }
 
+  const playApp = await prisma.googlePlayApp.findFirst({
+    where: { userId: campaign.userId, packageName: campaign.app.packageName },
+    select: { tracksSnapshot: true },
+  });
+  const playTracks = parseTracksSnapshot(playApp?.tracksSnapshot);
+  const playTrack =
+    playTracks.find((track) => track.track === campaign.playTrack) ||
+    playTracks.find((track) => track.typeGuess === campaign.testingType) ||
+    null;
+  const versionLabel =
+    playTrack?.releaseName ||
+    (playTrack?.versionCodes[0] ? `Version code ${playTrack.versionCodes[0]}` : null);
+
   return {
     slug: campaign.publicSlug!,
     campaignId: campaign.id,
@@ -95,6 +109,7 @@ export async function getPublicTestingPage(slug: string): Promise<PublicTestingP
       campaign.user.developerName || campaign.user.company || campaign.user.name || "Developer",
     instructions: campaign.testingInstructions,
     description: campaign.description,
+    versionLabel,
     pageUrl: testloopTestingPageUrl(campaign.publicSlug!),
   };
 }
@@ -203,7 +218,7 @@ export async function joinPublicTest(input: {
 
   return {
     ...state,
-    statusLabel: state.outcome === "FAILED" ? state.statusLabel : campaign.testingType === "OPEN" ? "You're ready" : "You're registered",
+    statusLabel: state.outcome === "FAILED" ? state.statusLabel : "TestLoop registration complete",
     detail: state.outcome === "FAILED" ? granted?.detail || PLAY_TESTER_API_LIMITATION : testerDetail,
     email: described.normalized,
     appName: page.appName,

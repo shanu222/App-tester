@@ -8,6 +8,7 @@ const TONE: Record<PlayUiStatus["kind"], string> = {
   draft: "text-slate-600",
   halted: "text-amber-800",
   notConfigured: "text-muted",
+  unknown: "text-muted",
   error: "text-red-700",
 };
 

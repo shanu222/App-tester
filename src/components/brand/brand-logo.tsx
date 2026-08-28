@@ -30,15 +30,6 @@ function InfinityGlyph() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <path
-        d={LEMNISCATE}
-        pathLength={1}
-        className="brand-infinity-track"
-        stroke="#93c5fd"
-        strokeWidth={13}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
     </svg>
   );
 }

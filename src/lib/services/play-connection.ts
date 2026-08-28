@@ -342,6 +342,10 @@ export type DiscoveredApp = {
   lastSyncAt: string | null;
   tracks: PlayTrackRecord[];
   configuration: ConfigurationSummary;
+  testloop: {
+    testers: number;
+    pendingPlayAction: number;
+  };
 };
 
 export type PlayTrackDiscovery = {
@@ -401,6 +405,7 @@ function toDiscoveredApp(row: {
     lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
     tracks,
     configuration: summarizeConfiguration(detectTestingConfiguration(tracks)),
+    testloop: { testers: 0, pendingPlayAction: 0 },
   };
 }
 
@@ -479,7 +484,28 @@ export async function listDiscoveredApps(userId: string): Promise<DiscoveredApp[
     where: { userId },
     orderBy: { name: "asc" },
   });
-  return rows.map(toDiscoveredApp);
+  const appIds = rows.map((row) => row.appId).filter((id): id is string => Boolean(id));
+  const testers = appIds.length
+    ? await prisma.testerCampaign.findMany({
+        where: { userId, appId: { in: appIds } },
+        select: { appId: true, status: true },
+      })
+    : [];
+  const byApp = new Map<string, { testers: number; pendingPlayAction: number }>();
+  for (const row of testers) {
+    if (!row.appId) continue;
+    const current = byApp.get(row.appId) || { testers: 0, pendingPlayAction: 0 };
+    current.testers += 1;
+    if (row.status === "ADDING") current.pendingPlayAction += 1;
+    byApp.set(row.appId, current);
+  }
+  return rows.map((row) => {
+    const app = toDiscoveredApp(row);
+    app.testloop = row.appId
+      ? byApp.get(row.appId) || { testers: 0, pendingPlayAction: 0 }
+      : { testers: 0, pendingPlayAction: 0 };
+    return app;
+  });
 }
 
 /**
@@ -605,6 +631,11 @@ export async function syncPackageTracks(input: {
 
   const previous = parseTracksSnapshot(owned.tracksSnapshot).map((track) => track.track);
   const creds = await resolvePlayCredentials(input.userId);
+  await logActivity({
+    userId: input.userId,
+    action: "PLAY_SYNC_STARTED",
+    result: input.packageName,
+  });
   const result = await listPlayTracks(creds, input.packageName);
   if (!result.ok) {
     await logActivity({
@@ -673,6 +704,7 @@ export async function syncAllPackageTracks(userId: string) {
  * TestLoop campaign and tester rows are not overwritten.
  */
 export async function refreshFromGooglePlay(userId: string) {
+  await logActivity({ userId, action: "PLAY_SYNC_STARTED", result: "refresh" });
   const diagnostics = await verifyPlayConnection({ userId });
   if (!diagnostics.connected) {
     throw new AppError(

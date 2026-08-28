@@ -109,66 +109,36 @@ export default async function DashboardPage() {
         </div>
       ) : null}
 
-      <div className="mt-8 grid gap-4 lg:grid-cols-3">
-        <section className="flex flex-col rounded-card border border-line bg-white p-5 shadow-card">
-          <SectionLabel>Google Play</SectionLabel>
-          <div className="mt-3">
-            <Badge tone={playConnected ? "good" : stats.play.status === "ERROR" ? "bad" : "neutral"}>
-              {playConnected ? "Connected" : stats.play.status === "ERROR" ? "Error" : "Not connected"}
-            </Badge>
-          </div>
-          {stats.play.lastError ? (
-            <p className="mt-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-              {stats.play.lastError}
-            </p>
-          ) : null}
-          <p className="mt-3 flex-1 text-sm leading-6 text-muted">
-            {playConnected
-              ? `${stats.play.accountEmail || "Google Play"} · ${stats.play.method === "OAUTH" ? "OAuth" : "Service account"} · ${stats.playApps} app${stats.playApps === 1 ? "" : "s"}`
-              : "Connect Google Play with OAuth or a service account to manage testing for your real Console apps."}
-          </p>
-          <Link href="/play" className="mt-4 text-sm font-medium text-brand hover:underline">
-            Open Google Play
-          </Link>
-        </section>
-
-        <section className="flex flex-col rounded-card border border-line bg-white p-5 shadow-card">
-          <SectionLabel>My Apps</SectionLabel>
-          <p className="mt-3 flex-1 text-[26px] font-semibold leading-none text-slate-900 tabular-nums">
-            {stats.apps}
-          </p>
-          <Link href="/apps" className="mt-4 text-sm font-medium text-brand hover:underline">
-            Manage apps
-          </Link>
-        </section>
-
-        <section className="flex flex-col rounded-card border border-line bg-white p-5 shadow-card">
-          <SectionLabel>Messages</SectionLabel>
-          <p className="mt-3 flex-1 text-sm text-muted">
-            {unread} unread alert{unread === 1 ? "" : "s"}
-          </p>
-          <Link href="/messages" className="mt-4 text-sm font-medium text-brand hover:underline">
-            Open messages
-          </Link>
-        </section>
+      <SectionLabel className="mb-3 mt-8">Google Play</SectionLabel>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <StatCard
+          label="Connection"
+          value={playConnected ? "Connected" : "Not connected"}
+          hint={stats.play.accountEmail || undefined}
+        />
+        <StatCard label="Play apps" value={stats.playApps} />
+        <StatCard label="Testing configured" value={stats.testingConfigured} />
+        <StatCard label="TestLoop testers" value={stats.totalTesters} />
+        <StatCard label="Pending Play Console" value={stats.pendingTesters} />
       </div>
+      <p className="mt-3 text-sm text-muted">
+        Open {stats.openApps} · Closed {stats.closedApps} · Internal {stats.internalApps} ·{" "}
+        <Link href="/play" className="font-medium text-brand hover:underline">
+          Open Google Play
+        </Link>
+      </p>
 
-      <SectionLabel className="mb-3 mt-10">Testing overview</SectionLabel>
+      <SectionLabel className="mb-3 mt-10">TestLoop activity</SectionLabel>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Active campaigns" value={stats.activeCampaigns} />
         <StatCard label="Testers needed" value={stats.testersNeeded} />
-        <StatCard label="Testers received" value={stats.testersReceived} />
         <StatCard label="Active testers" value={stats.activeTesters} />
-        <StatCard label="Pending testers" value={stats.pendingTesters} />
-        <StatCard label="Testing for others" value={stats.testingForOthers} />
-        <StatCard label="Pending incoming" value={stats.pendingParticipations} />
-        <StatCard label="Completed tests" value={stats.completedTests} />
-        <StatCard label="Reciprocal pending" value={stats.pendingReciprocal} />
+        <StatCard label="Unread alerts" value={unread} />
       </div>
 
       <div className="mt-10 grid gap-8 lg:grid-cols-2">
         <section>
-          <SectionLabel className="mb-3">My testing requests</SectionLabel>
+          <SectionLabel className="mb-3">Recent apps</SectionLabel>
           {stats.campaigns.length === 0 ? (
             <EmptyState
               title="No testing requests yet"
@@ -215,7 +185,7 @@ export default async function DashboardPage() {
           )}
         </section>
         <section>
-          <SectionLabel className="mb-3">My testing activity</SectionLabel>
+          <SectionLabel className="mb-3">Recent tester activity</SectionLabel>
           {testing.length === 0 ? (
             <EmptyState
               title="You are not testing any apps yet"

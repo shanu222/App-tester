@@ -422,7 +422,8 @@ export async function processTesterAccess(participationId: string) {
       return manual;
     }
 
-    // Open testing: access is real as soon as the opt-in URL is available.
+    // Open testing: TestLoop can return Google's opt-in URL. That is not API confirmation
+    // that the tester was added to a Play tester list.
     const optInUrl = participation.campaign.webOptInUrl || result.optInUrl;
     await prisma.testingParticipation.update({
       where: { id: participation.id },
@@ -431,10 +432,10 @@ export async function processTesterAccess(participationId: string) {
     await notify({
       userId: participation.testerUserId,
       type: "tester",
-      title: optInUrl ? "You're ready to test" : "Access granted",
+      title: "TestLoop registration complete",
       body: optInUrl
-        ? `${participation.campaign.app.name} testing access is configured.`
-        : `${participation.campaign.app.name} tester access was configured. No opt-in link is stored for this campaign yet.`,
+        ? `Open Google Play to join the test for ${participation.campaign.app.name}. TestLoop has not added you to Google Play.`
+        : `${participation.campaign.app.name} is registered in TestLoop. Google Play has not confirmed tester list membership.`,
       href: "/testing",
       campaignId: participation.campaignId,
     });
@@ -463,8 +464,8 @@ export async function markParticipationManuallyAdded(ownerUserId: string, partic
   await notify({
     userId: participation.testerUserId,
     type: "tester",
-    title: next === "INVITATION_READY" ? "You're ready to test" : "Access granted",
-    body: "The app owner confirmed your tester access.",
+    title: "Developer confirmed Play Console action",
+    body: "The app owner confirmed they configured your tester access in Play Console. Google Play did not confirm this through the API.",
     href: "/testing",
     campaignId: participation.campaignId,
   });

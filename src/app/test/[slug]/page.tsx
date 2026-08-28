@@ -25,6 +25,12 @@ export async function generateMetadata({
   }
 }
 
+function testingTypeLabel(type: string) {
+  if (type === "OPEN") return "Open Testing";
+  if (type === "INTERNAL") return "Internal Testing";
+  return "Closed Testing";
+}
+
 export default async function PublicTestPage({
   params,
 }: {
@@ -57,26 +63,35 @@ export default async function PublicTestPage({
 
         <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
           <div className="rounded-control border border-line bg-surface px-3 py-2.5">
-            <dt className="text-xs font-medium text-muted">Testing track</dt>
-            <dd className="mt-0.5 font-medium text-slate-900">{page.trackLabel}</dd>
-          </div>
-          <div className="rounded-control border border-line bg-surface px-3 py-2.5">
             <dt className="text-xs font-medium text-muted">Developer</dt>
             <dd className="mt-0.5 font-medium text-slate-900">{page.developerName}</dd>
           </div>
+          <div className="rounded-control border border-line bg-surface px-3 py-2.5">
+            <dt className="text-xs font-medium text-muted">Testing</dt>
+            <dd className="mt-0.5 font-medium text-slate-900">{testingTypeLabel(page.testingType)}</dd>
+          </div>
+          {page.versionLabel ? (
+            <div className="rounded-control border border-line bg-surface px-3 py-2.5 sm:col-span-2">
+              <dt className="text-xs font-medium text-muted">Version</dt>
+              <dd className="mt-0.5 font-medium text-slate-900">{page.versionLabel}</dd>
+            </div>
+          ) : null}
         </dl>
 
-        <p className="mt-6 text-sm leading-6 text-body">
-          Join this beta test through Google Play.
-        </p>
         {page.description ? (
-          <p className="mt-3 text-sm leading-6 text-body">{page.description}</p>
+          <p className="mt-6 text-sm leading-6 text-body">{page.description}</p>
         ) : null}
         {page.instructions ? (
           <p className="mt-3 text-sm leading-6 text-body">{page.instructions}</p>
         ) : null}
 
-        <JoinTestForm slug={page.slug} />
+        <section className="mt-8 border-t border-line pt-8">
+          <h2 className="text-base font-semibold text-slate-900">Join this test</h2>
+          <p className="mt-1 text-sm leading-6 text-muted">
+            Enter the Gmail account you use on Google Play.
+          </p>
+          <JoinTestForm slug={page.slug} />
+        </section>
       </main>
     </PublicChrome>
   );

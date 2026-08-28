@@ -18,6 +18,12 @@ import { parseTracksSnapshot, PLAY_API_UNAVAILABLE, playTrackDisplayName, playTr
 import { PlayStatusMark } from "@/components/play/play-status";
 import { SourceBadge } from "@/components/ui/source-badge";
 import { canonicalPlayStoreUrl } from "@/lib/play-url";
+import { getPlayConnection } from "@/lib/services/play-connection";
+import {
+  PLAY_NOT_CONNECTED_FEATURE,
+  PLAY_REMOVED_NOTE,
+  campaignDependsOnPlayConnection,
+} from "@/lib/play-disconnect";
 
 export default async function CampaignDetailPage({
   params,
@@ -59,15 +65,22 @@ export default async function CampaignDetailPage({
   ).length;
   const googlePlayTesters =
     playTrack?.googleGroupCount == null ? PLAY_API_UNAVAILABLE : playTrack.googleGroupCount;
+  const playConnection = await getPlayConnection(user.id);
+  const playConnected = playConnection?.status === "CONNECTED";
+  const playDependent = campaignDependsOnPlayConnection(campaign);
+  const playRemoved =
+    Boolean(campaign.description?.includes(PLAY_REMOVED_NOTE)) ||
+    (playDependent && !playConnected && campaign.status === "ARCHIVED");
   const storeUrl = campaign.playStoreUrl || campaign.app.playStoreUrl || canonicalPlayStoreUrl(campaign.app.packageName);
-  const playTestingUrl = campaign.testingUrl || campaign.webOptInUrl;
+  const playTestingUrl = playConnected ? campaign.testingUrl || campaign.webOptInUrl : null;
+  const publicPageActive = campaign.published && campaign.status === "ACTIVE";
 
   return (
     <AppShell
       title={campaign.name}
       actions={
         <div className="flex gap-2">
-          {!campaign.published ? (
+          {!campaign.published && !(playDependent && !playConnected) ? (
             <JsonButton url="/api/campaigns" method="PATCH" body={{ id, publish: true }} label="Publish request" />
           ) : null}
           {campaign.status === "DRAFT" || campaign.status === "PAUSED" ? (
@@ -89,7 +102,17 @@ export default async function CampaignDetailPage({
           </Badge>
           <Badge tone="accent">{trackLabel}</Badge>
           <Badge tone={campaign.status === "ACTIVE" ? "good" : "neutral"}>{campaign.status}</Badge>
+          {playRemoved ? <Badge tone="bad">{PLAY_REMOVED_NOTE}</Badge> : null}
         </div>
+
+        {playDependent && !playConnected ? (
+          <p className="mt-4 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">
+            {PLAY_NOT_CONNECTED_FEATURE}{" "}
+            <Link href="/play" className="font-medium text-brand hover:underline">
+              Connect Google Play
+            </Link>
+          </p>
+        ) : null}
 
         <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <div>
@@ -122,7 +145,7 @@ export default async function CampaignDetailPage({
 
         <div className="mt-4 flex flex-wrap gap-1.5">
           <SourceBadge source="testloop" />
-          <SourceBadge source="google-play" />
+          {playConnected ? <SourceBadge source="google-play" /> : null}
         </div>
 
         <div className="mt-4">
@@ -177,9 +200,11 @@ export default async function CampaignDetailPage({
             <div>
               <dt className="text-xs font-medium text-muted">TestLoop tester page</dt>
               <dd className="mt-1 break-all text-slate-700">
-                {shareUrl || "A public testing page is created when this campaign is saved."}
+                {publicPageActive
+                  ? shareUrl || "A public testing page is created when this campaign is saved."
+                  : "This TestLoop testing page is not active."}
               </dd>
-              {shareUrl ? (
+              {publicPageActive && shareUrl ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   <CopyButton value={shareUrl} label="Copy TestLoop link" />
                   <a
@@ -197,7 +222,10 @@ export default async function CampaignDetailPage({
             <div>
               <dt className="text-xs font-medium text-muted">Google Play testing link</dt>
               <dd className="mt-1 break-all text-slate-700">
-                {playTestingUrl || "Not available through Google Play API"}
+                {playTestingUrl ||
+                  (playDependent && !playConnected
+                    ? "Connect Google Play to use this feature."
+                    : "Not available through Google Play API")}
               </dd>
               {playTestingUrl ? (
                 <div className="mt-2 flex flex-wrap gap-2">

@@ -109,12 +109,15 @@ export async function getDashboardStats(userId: string) {
   let openApps = 0;
   let closedApps = 0;
   let internalApps = 0;
-  for (const row of playAppSnapshots) {
-    const config = detectTestingConfiguration(parseTracksSnapshot(row.tracksSnapshot));
-    if (config.testingTrackCount > 0) testingConfigured += 1;
-    if (config.openTesting.exists) openApps += 1;
-    if (config.closedTesting.exists) closedApps += 1;
-    if (config.internalTesting.exists) internalApps += 1;
+  const playLive = playConnection?.status === "CONNECTED";
+  if (playLive) {
+    for (const row of playAppSnapshots) {
+      const config = detectTestingConfiguration(parseTracksSnapshot(row.tracksSnapshot));
+      if (config.testingTrackCount > 0) testingConfigured += 1;
+      if (config.openTesting.exists) openApps += 1;
+      if (config.closedTesting.exists) closedApps += 1;
+      if (config.internalTesting.exists) internalApps += 1;
+    }
   }
 
   return {
@@ -128,7 +131,7 @@ export async function getDashboardStats(userId: string) {
     pendingReciprocal,
     campaigns: campaignCards,
     play: safePlayConnection(playConnection),
-    playApps,
+    playApps: playLive ? playApps : 0,
     pendingTesters,
     activeTesters,
     recentPlayActivity,

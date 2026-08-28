@@ -32,6 +32,13 @@ import {
 } from "@/lib/integrations/play-config";
 import { campaignTestingUrl } from "@/lib/integrations/play-testers";
 import { createCampaign, ensureCampaignPublicFields } from "@/lib/services/campaigns";
+import {
+  PLAY_DISCONNECT_PARTIAL,
+  PLAY_NOT_CONNECTED_FEATURE,
+  campaignDependsOnPlayConnection,
+  stripPlayDisconnectedNote,
+  withPlayDisconnectedNote,
+} from "@/lib/play-disconnect";
 
 /**
  * Shape of the credential blob held in GooglePlayConnection.encryptedCredentials.
@@ -86,15 +93,18 @@ export function getPlayConnection(userId: string) {
  * multi-tenant: the connection is looked up by the caller's own user id, so one
  * developer's credentials can never be used to act on another's behalf.
  */
-export async function resolvePlayCredentials(userId: string): Promise<PlayCredentials> {
+export async function requireConnectedPlay(userId: string) {
   const connection = await getPlayConnection(userId);
-  if (!connection) {
-    throw new AppError("Google Play is not connected. Connect it on the Google Play page first.");
+  if (!connection || connection.status !== "CONNECTED" || !connection.encryptedCredentials) {
+    throw new AppError(PLAY_NOT_CONNECTED_FEATURE, 409, "PLAY_NOT_CONNECTED");
   }
+  return connection;
+}
+
+export async function resolvePlayCredentials(userId: string): Promise<PlayCredentials> {
+  const connection = await requireConnectedPlay(userId);
   if (!connection.encryptedCredentials) {
-    throw new AppError(
-      "Google Play credentials are missing. Reconnect Google Play with a service account or Google OAuth.",
-    );
+    throw new AppError(PLAY_NOT_CONNECTED_FEATURE, 409, "PLAY_NOT_CONNECTED");
   }
 
   let stored: StoredPlayCredentials;
@@ -281,9 +291,7 @@ export async function verifyPlayConnection(input: {
   userId: string;
   packageName?: string;
 }): Promise<PlayDiagnostics> {
-  const connection = await getPlayConnection(input.userId);
-  if (!connection) throw new NotFoundError("Google Play is not connected.");
-
+  const connection = await requireConnectedPlay(input.userId);
   const creds = await resolvePlayCredentials(input.userId);
   const diagnostics =
     creds.method === "SERVICE_ACCOUNT"
@@ -319,17 +327,136 @@ export async function verifyPlayConnection(input: {
   return diagnostics;
 }
 
-export async function disconnectPlay(userId: string) {
-  const connection = await getPlayConnection(userId);
-  if (!connection) return { disconnected: false };
-  // Cascade removes the discovered app cache; managed App rows are untouched.
-  await prisma.googlePlayConnection.delete({ where: { userId } });
-  await logActivity({
-    userId,
-    action: "PLAY_DISCONNECTED",
-    result: connection.googleAccountEmail ?? connection.method,
+export type PlayDisconnectResult = {
+  disconnected: boolean;
+  cleanupCompleted: boolean;
+  campaignsUnpublished: number;
+  playAppsRemoved: number;
+  appsUnsynced: number;
+  error?: string;
+};
+
+/**
+ * Remove TestLoop's synchronized Play cache and unpublish Play-dependent posts.
+ *
+ * This function must never call the Google Play API. It does not delete apps,
+ * tracks, releases, testers, or any other Play Console resource.
+ */
+export async function cleanupPlayDependentTestLoopData(userId: string) {
+  const campaigns = await prisma.campaign.findMany({
+    where: { userId },
+    include: { app: { select: { syncedFromPlay: true } } },
   });
-  return { disconnected: true };
+  const dependent = campaigns.filter((campaign) => campaignDependsOnPlayConnection(campaign));
+
+  for (const campaign of dependent) {
+    await prisma.campaign.update({
+      where: { id: campaign.id },
+      data: {
+        published: false,
+        testingUrl: null,
+        webOptInUrl: null,
+        androidOptInUrl: null,
+        description: withPlayDisconnectedNote(campaign.description),
+        ...(campaign.status === "COMPLETED" ? {} : { status: "ARCHIVED" as const }),
+      },
+    });
+  }
+
+  const unsynced = await prisma.app.updateMany({
+    where: { userId, syncedFromPlay: true },
+    data: {
+      syncedFromPlay: false,
+      lastSyncedAt: null,
+      playConflictNote: null,
+      googlePlayStatus: "NOT_CONFIGURED",
+    },
+  });
+
+  await prisma.testingTrack.updateMany({
+    where: { syncedFromPlay: true, app: { userId } },
+    data: { testingLink: null },
+  });
+
+  const playAppsRemoved = await prisma.googlePlayApp.count({ where: { userId } });
+
+  return {
+    campaignsUnpublished: dependent.length,
+    appsUnsynced: unsynced.count,
+    playAppsRemoved,
+  };
+}
+
+async function clearLegacyPlayIntegration(userId: string) {
+  await prisma.integration.updateMany({
+    where: { userId, provider: "GOOGLE_PLAY" },
+    data: {
+      status: "NOT_CONNECTED",
+      encryptedCredentials: null,
+      lastError: null,
+      displayName: null,
+    },
+  });
+}
+
+/**
+ * Disconnect Google Play for this TestLoop account only.
+ *
+ * Intentionally does not: delete Play apps, delete releases, remove Play
+ * testers, modify tracks, unpublish Play apps, or change production.
+ */
+export async function disconnectPlay(userId: string): Promise<PlayDisconnectResult> {
+  const connection = await getPlayConnection(userId);
+
+  let cleanup = {
+    campaignsUnpublished: 0,
+    appsUnsynced: 0,
+    playAppsRemoved: 0,
+  };
+  let cleanupCompleted = false;
+  try {
+    cleanup = await cleanupPlayDependentTestLoopData(userId);
+    cleanupCompleted = true;
+  } catch (error) {
+    console.error("Play disconnect cleanup failed", error);
+  }
+
+  let disconnected = !connection;
+  try {
+    const remaining = await getPlayConnection(userId);
+    if (remaining) {
+      await prisma.googlePlayConnection.delete({ where: { userId } });
+    }
+    await clearLegacyPlayIntegration(userId);
+    disconnected = true;
+    if (connection) {
+      await logActivity({
+        userId,
+        action: "PLAY_DISCONNECTED",
+        result: connection.googleAccountEmail ?? connection.method,
+      });
+    }
+  } catch (error) {
+    disconnected = !(await getPlayConnection(userId));
+    if (!disconnected) {
+      throw mapInfrastructureError(error) ?? new AppError(
+        "Google Play could not be disconnected. Try again.",
+        500,
+        "PLAY_DISCONNECT_FAILED",
+      );
+    }
+  }
+
+  if (!cleanupCompleted) {
+    return {
+      disconnected,
+      cleanupCompleted: false,
+      ...cleanup,
+      error: PLAY_DISCONNECT_PARTIAL,
+    };
+  }
+
+  return { disconnected, cleanupCompleted: true, ...cleanup };
 }
 
 export type DiscoveredApp = {
@@ -416,8 +543,7 @@ function toDiscoveredApp(row: {
  * reported rather than papered over with an empty list.
  */
 export async function discoverPlayApps(userId: string, options?: { syncTracks?: boolean }) {
-  const connection = await getPlayConnection(userId);
-  if (!connection) throw new NotFoundError("Google Play is not connected.");
+  const connection = await requireConnectedPlay(userId);
 
   const creds = await resolvePlayCredentials(userId);
   const result = await searchPlayApps(creds);
@@ -480,6 +606,9 @@ export async function discoverPlayApps(userId: string, options?: { syncTracks?: 
 }
 
 export async function listDiscoveredApps(userId: string): Promise<DiscoveredApp[]> {
+  const connection = await getPlayConnection(userId);
+  if (!connection || connection.status !== "CONNECTED") return [];
+
   const rows = await prisma.googlePlayApp.findMany({
     where: { userId },
     orderBy: { name: "asc" },
@@ -514,8 +643,7 @@ export async function listDiscoveredApps(userId: string): Promise<DiscoveredApp[
  * source of truth and the package name is the stable identifier.
  */
 export async function selectPlayApp(input: { userId: string; packageName: string }) {
-  const connection = await getPlayConnection(input.userId);
-  if (!connection) throw new NotFoundError("Google Play is not connected.");
+  const connection = await requireConnectedPlay(input.userId);
 
   const discovered = await prisma.googlePlayApp.findUnique({
     where: {
@@ -614,8 +742,7 @@ export async function syncPackageTracks(input: {
   userId: string;
   packageName: string;
 }): Promise<PlayTrackDiscovery> {
-  const connection = await getPlayConnection(input.userId);
-  if (!connection) throw new NotFoundError("Google Play is not connected.");
+  const connection = await requireConnectedPlay(input.userId);
 
   const owned = await prisma.googlePlayApp.findUnique({
     where: {
@@ -746,6 +873,8 @@ export async function managePlayTrack(input: {
     );
   }
 
+  await requireConnectedPlay(input.userId);
+
   const { app } = await selectPlayApp({ userId: input.userId, packageName: input.packageName });
   const discovery = await syncPackageTracks({
     userId: input.userId,
@@ -789,6 +918,30 @@ export async function managePlayTrack(input: {
     orderBy: { updatedAt: "desc" },
   });
   if (existing) {
+    if (existing.status === "ARCHIVED" || !existing.published) {
+      const restored = await prisma.campaign.update({
+        where: { id: existing.id },
+        data: {
+          status: "ACTIVE",
+          published: true,
+          publishedAt: new Date(),
+          startedAt: existing.startedAt ?? new Date(),
+          testingUrl: testingLink,
+          webOptInUrl: testingLink,
+          trackId: trackRow.id,
+          testingType,
+          name: `${app.name} — ${playTrack.displayName}`,
+          description: stripPlayDisconnectedNote(existing.description),
+        },
+      });
+      await logActivity({
+        userId: input.userId,
+        campaignId: restored.id,
+        action: "PLAY_CAMPAIGN_OPENED",
+        result: `${app.packageName} · ${playTrack.track}`,
+      });
+      return { campaignId: restored.id, created: false, playTrack: playTrack.track };
+    }
     const campaign = await ensureCampaignPublicFields(existing);
     await logActivity({
       userId: input.userId,

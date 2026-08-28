@@ -331,11 +331,7 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
             const target = app.testerTarget || 12;
             const progress = Math.min(100, Math.round((app.testersRegistered / target) * 100));
             const manageHref = app.campaign ? `/campaigns/${app.campaign.id}` : `/campaigns?appId=${app.id}`;
-            const showManage =
-              app.googlePlayStatus === "CLOSED_TESTING" ||
-              app.googlePlayStatus === "INTERNAL_TESTING" ||
-              app.googlePlayStatus === "OPEN_TESTING" ||
-              Boolean(app.campaign);
+            const showManage = app.syncedFromPlay || (app.campaign && app.campaign.status !== "ARCHIVED");
             return (
               <Card key={app.id} className="flex flex-col">
                 <div className="flex gap-4">

@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, ShieldCheck } from "lucide-react";
+import { AlertTriangle, KeyRound, ShieldCheck } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ServiceAccountWizard } from "@/components/play/service-account-wizard";
 import { PlayDiagnosticsPanel, type Diagnostics } from "@/components/play/play-diagnostics-panel";
-import { GoogleGlyph } from "@/components/brand/google-glyph";
+import { playConnectionStatusLabel } from "@/lib/play-disconnect";
 
 export type ConnectionView = {
   connected: boolean;
@@ -31,14 +31,8 @@ const METHOD_LABEL = {
 function statusTone(status: string, connected: boolean) {
   if (connected) return "good" as const;
   if (status === "ERROR" || status === "EXPIRED") return "bad" as const;
+  if (status === "CONNECTING") return "warn" as const;
   return "neutral" as const;
-}
-
-function statusLabel(status: string, connected: boolean) {
-  if (connected) return "Connected";
-  if (status === "ERROR") return "Not verified";
-  if (status === "EXPIRED") return "Authorisation expired";
-  return "Not connected";
 }
 
 export function formatPlayTimestamp(value: string | null | undefined) {
@@ -54,6 +48,103 @@ export function formatPlayTimestamp(value: string | null | undefined) {
   });
 }
 
+function DisconnectConfirmModal({
+  pending,
+  cleanupFailed,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  pending: boolean;
+  cleanupFailed: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape" && !pending) onCancel();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel, pending]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center"
+      role="presentation"
+      onClick={() => {
+        if (!pending) onCancel();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="disconnect-play-title"
+        className="w-full max-w-lg rounded-card border border-line bg-white p-5 shadow-xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="disconnect-play-title" className="text-lg font-semibold text-slate-900">
+          Disconnect Google Play?
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-slate-700">
+          Disconnecting will remove your synchronized Google Play data and active Play-dependent
+          testing posts from TestLoop.
+        </p>
+        <p className="mt-3 text-sm leading-6 text-slate-700">
+          If you disconnect, TestLoop will remove the Google Play apps, testing tracks, releases,
+          testing configuration and Play-related testing data currently synchronized to this
+          TestLoop account.
+        </p>
+        <p className="mt-3 text-sm leading-6 text-slate-700">
+          Your actual apps, releases, tracks and testers in Google Play Console will not be deleted
+          or changed.
+        </p>
+        <p className="mt-3 text-sm leading-6 text-slate-700">
+          Your existing TestLoop testing posts that depend on this Google Play connection will also
+          be removed/unpublished from TestLoop.
+        </p>
+        <p className="mt-3 text-sm leading-6 text-slate-700">
+          You must connect Google Play again before creating new Play-connected testing posts or
+          using Play automation. TestLoop cannot create new Play-connected testing posts or
+          perform Google Play automation until you connect Google Play again.
+        </p>
+        <div className="mt-4 flex gap-2.5 rounded-control border border-amber-200 bg-amber-50 p-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+          <p className="text-sm leading-6 text-amber-900">
+            This action affects your TestLoop data only. Your actual Google Play Console data will
+            remain unchanged.
+          </p>
+        </div>
+        {error ? (
+          <p className="mt-4 rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-800">
+            {error}
+          </p>
+        ) : null}
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <Button variant="secondary" disabled={pending} onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            disabled={pending}
+            className="border-red-700 bg-red-600 text-white hover:bg-red-700"
+            onClick={onConfirm}
+          >
+            {pending
+              ? cleanupFailed
+                ? "Retrying…"
+                : "Disconnecting…"
+              : cleanupFailed
+                ? "Retry cleanup"
+                : "Disconnect & Remove Play Data"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PlayConnectionPanel({
   connection,
   onRefresh,
@@ -63,19 +154,21 @@ export function PlayConnectionPanel({
 }) {
   const router = useRouter();
   const [showWizard, setShowWizard] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cleanupFailed, setCleanupFailed] = useState(false);
   const [verification, setVerification] = useState<Diagnostics | null>(null);
 
-  async function post(path: string, action: string) {
-    setPending(action);
+  async function refreshFromPlay() {
+    setPending("apps");
     setError(null);
     setVerification(null);
     try {
-      const response = await fetch(path, {
+      const response = await fetch("/api/google-play/apps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: "{}",
+        body: JSON.stringify({ action: "refresh" }),
       });
       const data = await response.json();
       if (typeof data?.connected === "boolean") {
@@ -93,59 +186,49 @@ export function PlayConnectionPanel({
     }
   }
 
-  const disconnected = !connection.connected;
-
-  if (disconnected && !showWizard && connection.status === "NOT_CONNECTED") {
-    return (
-      <Card>
-        <CardHeader
-          title="Google Play"
-          description="Connect TestLoop to your Google Play developer account to discover your apps, testing tracks and releases."
-        />
-        <p className="mt-4 flex items-start gap-2 text-sm leading-6 text-body">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
-          TestLoop never asks for your Google Play or Google password.
-        </p>
-
-        <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-5">
-          {connection.oauthAvailable ? (
-            <a
-              href="/api/google-play/connect/oauth"
-              className="inline-flex h-9.5 items-center gap-2 rounded-control bg-brand px-4 text-sm font-medium text-white shadow-card transition-colors hover:bg-brand/90"
-            >
-              <GoogleGlyph />
-              Connect Google Play
-            </a>
-          ) : (
-            <Button onClick={() => setShowWizard(true)}>Connect Google Play</Button>
-          )}
-          {connection.oauthAvailable ? (
-            <Button variant="secondary" onClick={() => setShowWizard(true)}>
-              <KeyRound className="mr-2 h-4 w-4" aria-hidden />
-              Connect with service account
-            </Button>
-          ) : null}
-        </div>
-        {!connection.oauthAvailable ? (
-          <p className="mt-3 text-xs leading-5 text-muted">
-            Connecting with Google is unavailable because this server has no Google OAuth client
-            configured. Use a service account, or set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.
-          </p>
-        ) : null}
-
-        <p className="mt-5 border-t border-line pt-4 text-xs leading-5 text-muted">
-          Authorisation uses Google&apos;s supported OAuth or service-account flow. Credentials stay
-          encrypted on the server and are never sent to the browser.
-        </p>
-      </Card>
-    );
+  async function confirmDisconnectAction() {
+    setPending("disconnect");
+    setError(null);
+    try {
+      const response = await fetch("/api/google-play/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setError(data?.error || `Request failed (HTTP ${response.status}).`);
+        return;
+      }
+      if (data?.disconnected && data?.cleanupCompleted === false) {
+        setCleanupFailed(true);
+        setError(
+          data?.error ||
+            "Google Play was disconnected, but some TestLoop data could not be removed.",
+        );
+        onRefresh?.();
+        router.refresh();
+        return;
+      }
+      setConfirmDisconnect(false);
+      setCleanupFailed(false);
+      onRefresh?.();
+      router.refresh();
+    } catch {
+      setError("Google Play could not be reached. Your TestLoop data has not been changed.");
+    } finally {
+      setPending(null);
+    }
   }
 
-  if (disconnected && showWizard) {
+  const statusLabel = playConnectionStatusLabel(connection);
+  const leftoverRecord = !connection.connected && connection.status !== "NOT_CONNECTED";
+
+  if (!connection.connected && showWizard) {
     return (
       <Card>
         <CardHeader
-          title="Connect with a service account"
+          title="Connect Google Play with a service account"
           description="Six steps in Google Cloud and Play Console, then TestLoop verifies the key against the real API."
         />
         <div className="mt-5 border-t border-line pt-5">
@@ -155,16 +238,78 @@ export function PlayConnectionPanel({
     );
   }
 
+  if (!connection.connected) {
+    return (
+      <Card>
+        <CardHeader
+          title="Google Play"
+          description="Connect TestLoop to your Google Play Developer account to discover your existing apps, testing tracks and releases."
+          action={<Badge tone={statusTone(connection.status, false)}>{statusLabel}</Badge>}
+        />
+        <p className="mt-1 text-sm font-medium text-slate-800">Google Play not connected</p>
+        <p className="mt-2 text-sm leading-6 text-body">
+          Connect your Google Play Developer account to use Play-connected TestLoop testing.
+        </p>
+        <p className="mt-4 flex items-start gap-2 text-sm leading-6 text-body">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
+          TestLoop never asks for your Google Play password.
+        </p>
+
+        {connection.lastError ? (
+          <div className="mt-4 rounded-control border border-red-200 bg-red-50 px-3 py-2">
+            <p className="text-sm leading-6 text-red-800">{connection.lastError}</p>
+            {connection.errorCode ? (
+              <p className="mt-1 font-mono text-[11px] text-red-700">{connection.errorCode}</p>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-5">
+          <Button onClick={() => setShowWizard(true)}>
+            <KeyRound className="mr-2 h-4 w-4" aria-hidden />
+            Connect Google Play with Service Account
+          </Button>
+          {leftoverRecord ? (
+            <Button variant="danger" onClick={() => setConfirmDisconnect(true)}>
+              Disconnect
+            </Button>
+          ) : null}
+        </div>
+        <p className="mt-4 text-xs leading-5 text-muted">
+          TestLoop uses a Google Play service account with the permissions you grant in Google Play
+          Console. Your credentials are securely stored on the server.
+        </p>
+        {error ? (
+          <p className="mt-4 rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-800">
+            {error}
+          </p>
+        ) : null}
+        {confirmDisconnect ? (
+          <DisconnectConfirmModal
+            pending={pending === "disconnect"}
+            cleanupFailed={cleanupFailed}
+            error={error}
+            onCancel={() => {
+              if (pending === "disconnect") return;
+              setConfirmDisconnect(false);
+              setCleanupFailed(false);
+              setError(null);
+            }}
+            onConfirm={confirmDisconnectAction}
+          />
+        ) : null}
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader
-        title="Google Play connected"
-        action={
-          <Badge tone={statusTone(connection.status, connection.connected)}>
-            {statusLabel(connection.status, connection.connected)}
-          </Badge>
-        }
+        title="Google Play"
+        description="TestLoop can now discover your existing Play Console apps, testing tracks and releases."
+        action={<Badge tone="good">{statusLabel}</Badge>}
       />
+      <p className="mt-1 text-sm font-medium text-slate-800">Google Play connected</p>
 
       <dl className="mt-5 grid gap-4 border-t border-line pt-5 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <div className="min-w-0">
@@ -175,14 +320,12 @@ export function PlayConnectionPanel({
         </div>
         <div>
           <dt className="text-xs font-medium text-muted">Status</dt>
-          <dd className="mt-1 text-slate-700">
-            {connection.connected ? "Connected ✓" : statusLabel(connection.status, connection.connected)}
-          </dd>
+          <dd className="mt-1 text-slate-700">Connected</dd>
         </div>
         <div>
           <dt className="text-xs font-medium text-muted">Connection method</dt>
           <dd className="mt-1 text-slate-700">
-            {connection.method ? METHOD_LABEL[connection.method] : "—"}
+            {connection.method ? METHOD_LABEL[connection.method] : "Service account"}
           </dd>
         </div>
         <div>
@@ -203,40 +346,26 @@ export function PlayConnectionPanel({
       ) : null}
 
       <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-4">
-        <Button
-          variant="secondary"
-          disabled={pending !== null}
-          onClick={() => post("/api/google-play/apps", "apps")}
-        >
+        <Button variant="secondary" disabled={pending !== null} onClick={refreshFromPlay}>
           {pending === "apps" ? "Refreshing…" : "Refresh from Google Play"}
         </Button>
-        {connection.oauthAvailable ? (
-          <a
-            href="/api/google-play/connect/oauth"
-            className="inline-flex h-9.5 items-center rounded-control border border-line-strong bg-white px-4 text-sm font-medium text-slate-700 shadow-card hover:bg-surface"
-          >
-            Replace connection
-          </a>
-        ) : (
-          <Button variant="secondary" disabled={pending !== null} onClick={() => setShowWizard(true)}>
-            Replace connection
-          </Button>
-        )}
-        {connection.method === "SERVICE_ACCOUNT" && connection.oauthAvailable ? (
-          <Button variant="ghost" disabled={pending !== null} onClick={() => setShowWizard(true)}>
-            Use service account
-          </Button>
-        ) : null}
+        <Button variant="secondary" disabled={pending !== null} onClick={() => setShowWizard(true)}>
+          Replace service account
+        </Button>
         <Button
           variant="danger"
           disabled={pending !== null}
-          onClick={() => post("/api/google-play/disconnect", "disconnect")}
+          onClick={() => {
+            setCleanupFailed(false);
+            setError(null);
+            setConfirmDisconnect(true);
+          }}
         >
-          {pending === "disconnect" ? "Disconnecting…" : "Disconnect"}
+          Disconnect
         </Button>
       </div>
 
-      {error ? (
+      {error && !confirmDisconnect ? (
         <p className="mt-4 rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-800">
           {error}
         </p>
@@ -246,6 +375,20 @@ export function PlayConnectionPanel({
         <div className="mt-5 border-t border-line pt-5">
           <ServiceAccountWizard onCancel={() => setShowWizard(false)} />
         </div>
+      ) : null}
+      {confirmDisconnect ? (
+        <DisconnectConfirmModal
+          pending={pending === "disconnect"}
+          cleanupFailed={cleanupFailed}
+          error={error}
+          onCancel={() => {
+            if (pending === "disconnect") return;
+            setConfirmDisconnect(false);
+            setCleanupFailed(false);
+            setError(null);
+          }}
+          onConfirm={confirmDisconnectAction}
+        />
       ) : null}
     </Card>
   );

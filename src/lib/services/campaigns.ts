@@ -6,6 +6,10 @@ import { isDemoMode } from "@/lib/env";
 import { campaignTestingUrl } from "@/lib/integrations/play-testers";
 import { uniqueSlug } from "@/lib/slug";
 import { env } from "@/lib/env";
+import {
+  PLAY_NOT_CONNECTED_FIRST,
+  campaignDependsOnPlayConnection,
+} from "@/lib/play-disconnect";
 
 /**
  * Reserve the public /test/{slug} path for a campaign. Slugs are global because
@@ -20,6 +24,16 @@ export async function allocateCampaignSlug(desired: string) {
     });
     return Boolean(existing);
   });
+}
+
+async function requirePlayConnectionForPost(userId: string) {
+  const play = await prisma.googlePlayConnection.findUnique({
+    where: { userId },
+    select: { status: true, encryptedCredentials: true },
+  });
+  if (play?.status !== "CONNECTED" || !play.encryptedCredentials) {
+    throw new AppError(PLAY_NOT_CONNECTED_FIRST, 409, "PLAY_NOT_CONNECTED");
+  }
 }
 
 const ALLOWED_CAMPAIGN: Record<CampaignStatus, CampaignStatus[]> = {
@@ -128,6 +142,9 @@ export async function createCampaign(
 ) {
   const app = await prisma.app.findFirst({ where: { id: input.appId, userId } });
   if (!app) throw new NotFoundError("App not found.");
+  if (campaignDependsOnPlayConnection({ playTrack: input.playTrack ?? null, app })) {
+    await requirePlayConnectionForPost(userId);
+  }
   const webOptInUrl = input.webOptInUrl || app.webOptInUrl || undefined;
   if (input.published) {
     const duplicate = await prisma.campaign.findFirst({
@@ -190,10 +207,16 @@ export async function createCampaign(
 }
 
 export async function publishCampaign(userId: string, id: string) {
-  const campaign = await prisma.campaign.findFirst({ where: { id, userId } });
+  const campaign = await prisma.campaign.findFirst({
+    where: { id, userId },
+    include: { app: { select: { syncedFromPlay: true } } },
+  });
   if (!campaign) throw new NotFoundError("Campaign not found.");
   if (campaign.status === "ARCHIVED" || campaign.status === "COMPLETED") {
     throw new AppError("This campaign cannot be published.");
+  }
+  if (campaignDependsOnPlayConnection(campaign)) {
+    await requirePlayConnectionForPost(userId);
   }
   const duplicate = await prisma.campaign.findFirst({
     where: { userId, appId: campaign.appId, published: true, status: "ACTIVE", id: { not: id } },

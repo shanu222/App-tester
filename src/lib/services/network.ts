@@ -5,6 +5,7 @@ import { createOrGetTester, setTesterStatus } from "@/lib/services/testers";
 import { confirmTesterAdded, grantTesterAccess } from "@/lib/services/invitations";
 import { describeEmail } from "@/lib/email-extract";
 import { parseTracksSnapshot, playTrackDisplayName } from "@/lib/integrations/play-config";
+import { campaignDependsOnPlayConnection, isPlayConnectionActive } from "@/lib/play-disconnect";
 import { campaignTestingUrl } from "@/lib/integrations/play-testers";
 
 const RECEIVED_STATUSES = [
@@ -172,8 +173,12 @@ export async function listPublishedRequests(
   const testerLoad = await prisma.testingParticipation.count({
     where: { testerUserId: viewerId, status: { notIn: ["COMPLETED", "DECLINED"] } },
   });
+  const visible = campaigns.filter((campaign) => {
+    if (!campaignDependsOnPlayConnection(campaign)) return true;
+    return playSet.has(campaign.userId);
+  });
   return Promise.all(
-    campaigns.map(async (campaign) => {
+    visible.map(async (campaign) => {
       const testersReceived = await countReceivedTesters(campaign.id);
       const remaining = Math.max(0, campaign.targetTesters - testersReceived);
       const match = matchExplanation({
@@ -218,6 +223,12 @@ export async function getPublicRequest(viewerId: string, campaignId: string) {
     include: { app: true, user: true, track: true },
   });
   if (!campaign) throw new NotFoundError("Testing request not found.");
+  const play = await prisma.googlePlayConnection.findUnique({
+    where: { userId: campaign.userId },
+  });
+  if (campaignDependsOnPlayConnection(campaign) && !isPlayConnectionActive(play?.status)) {
+    throw new NotFoundError("Testing request not found.");
+  }
   const hidden = await blockedIdsFor(viewerId);
   if (hidden.includes(campaign.userId) && campaign.userId !== viewerId) {
     throw new ForbiddenError("This request is not available.");
@@ -234,9 +245,6 @@ export async function getPublicRequest(viewerId: string, campaignId: string) {
       gmail: true,
       playEnrollmentStatus: true,
     },
-  });
-  const play = await prisma.googlePlayConnection.findUnique({
-    where: { userId: campaign.userId },
   });
   const playApp = await prisma.googlePlayApp.findFirst({
     where: { userId: campaign.userId, packageName: campaign.app.packageName },
@@ -314,9 +322,19 @@ export async function acceptTestingRequest(testerUserId: string, campaignId: str
   }
   const campaign = await prisma.campaign.findFirst({
     where: { id: campaignId, published: true, status: "ACTIVE" },
+    include: { app: { select: { syncedFromPlay: true } } },
   });
   if (!campaign) throw new NotFoundError("Testing request not found.");
   if (campaign.userId === testerUserId) throw new AppError("You cannot accept your own request.");
+  if (campaignDependsOnPlayConnection(campaign)) {
+    const play = await prisma.googlePlayConnection.findUnique({
+      where: { userId: campaign.userId },
+      select: { status: true },
+    });
+    if (!isPlayConnectionActive(play?.status)) {
+      throw new NotFoundError("This testing request is no longer available.");
+    }
+  }
   const blocked = await prisma.developerBlock.findFirst({
     where: {
       OR: [

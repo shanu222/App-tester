@@ -2,7 +2,7 @@ import { handleRouteError, json } from "@/lib/http";
 import { requireUser } from "@/auth";
 import { disconnectPlay } from "@/lib/services/play-connection";
 
-/** Remove the developer's stored Play credentials and discovered app cache. */
+/** Disconnect Play for this TestLoop account and remove synchronized Play data. Never calls Google Play APIs. */
 export async function POST() {
   try {
     const user = await requireUser();

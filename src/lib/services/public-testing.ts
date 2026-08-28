@@ -15,6 +15,7 @@ import { grantTesterAccess } from "@/lib/services/invitations";
 import { createOrGetTester, isBlocked, setTesterStatus } from "@/lib/services/testers";
 import type { PublicJoinResult, PublicTestingPage } from "@/lib/testing-page";
 import { parseTracksSnapshot } from "@/lib/integrations/play-config";
+import { campaignDependsOnPlayConnection, isPlayConnectionActive } from "@/lib/play-disconnect";
 
 export type { PublicJoinResult, PublicTestingPage };
 
@@ -65,7 +66,7 @@ export async function getPublicTestingPage(slug: string): Promise<PublicTestingP
   const campaign = await prisma.campaign.findUnique({
     where: { publicSlug: slug },
     include: {
-      app: { select: { name: true, packageName: true, iconUrl: true } },
+      app: { select: { name: true, packageName: true, iconUrl: true, syncedFromPlay: true } },
       user: { select: { developerName: true, name: true, company: true } },
       track: { select: { name: true } },
     },
@@ -77,6 +78,15 @@ export async function getPublicTestingPage(slug: string): Promise<PublicTestingP
     campaign.status === "COMPLETED"
   ) {
     throw new NotFoundError("This testing page is not available.");
+  }
+  if (campaignDependsOnPlayConnection(campaign)) {
+    const play = await prisma.googlePlayConnection.findUnique({
+      where: { userId: campaign.userId },
+      select: { status: true },
+    });
+    if (!isPlayConnectionActive(play?.status)) {
+      throw new NotFoundError("This testing page is not available.");
+    }
   }
 
   const playApp = await prisma.googlePlayApp.findFirst({

@@ -24,7 +24,7 @@ export default async function DeveloperPublicPage({
   const profile = publicDeveloper(user);
   const appRows = await prisma.app.findMany({
     where: { userId: user.id },
-    select: { name: true, packageName: true },
+    select: { id: true, name: true },
   });
 
   return (
@@ -74,7 +74,7 @@ export default async function DeveloperPublicPage({
         <div className="space-y-2.5">
           {appRows.map((app) => (
             <div
-              key={app.packageName}
+              key={app.id}
               className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-white px-4 py-3.5 shadow-card"
             >
               <span className="font-medium text-slate-900">{app.name}</span>

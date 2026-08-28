@@ -65,7 +65,7 @@ export async function createApp(
   userId: string,
   input: {
     name: string;
-    packageName: string;
+    packageName?: string | null;
     testingType?: "INTERNAL" | "CLOSED" | "OPEN";
     testingTrack?: string;
     googlePlayUrl?: string;
@@ -74,25 +74,34 @@ export async function createApp(
     iconUrl?: string;
     testerTarget?: number;
     googlePlayStatus?: GooglePlayStatus;
+    syncedFromPlay?: boolean;
   },
 ) {
-  const packageName = input.packageName.trim();
-  if (!isValidPackageName(packageName)) {
-    throw new AppError("Package name must look like com.example.app.");
-  }
-  const existing = await prisma.app.findUnique({
-    where: { userId_packageName: { userId, packageName } },
-  });
-  if (existing) {
-    throw new AppError(`${existing.name} is already added to My Apps.`);
+  const testingType = input.testingType || "CLOSED";
+  const packageName = input.packageName?.trim() || "";
+  const storeUrl = (input.googlePlayUrl || "").trim();
+
+  if (packageName) {
+    if (!isValidPackageName(packageName)) {
+      throw new AppError("Package name must look like com.example.app.");
+    }
+    const existing = await prisma.app.findUnique({
+      where: { userId_packageName: { userId, packageName } },
+    });
+    if (existing) {
+      throw new AppError(`${existing.name} is already added to My Apps.`);
+    }
   }
 
-  const storeUrl = (input.googlePlayUrl || "").trim();
-  if (!storeUrl) {
-    throw new AppError("Google Play URL is required.");
+  let playStoreUrl: string | undefined;
+  if (storeUrl) {
+    if (!packageName) {
+      throw new AppError("A package name is required when adding a Google Play URL.");
+    }
+    const validated = validatePlayStoreUrl(packageName, storeUrl);
+    if (!validated.ok) throw new AppError(validated.error);
+    playStoreUrl = validated.url;
   }
-  const validated = validatePlayStoreUrl(packageName, storeUrl);
-  if (!validated.ok) throw new AppError(validated.error);
 
   const testingUrl = (input.testingUrl || input.googlePlayLink || "").trim() || undefined;
   if (testingUrl && /\/store\/apps\/details/i.test(testingUrl)) {
@@ -101,26 +110,29 @@ export async function createApp(
     );
   }
 
-  const testingType = input.testingType || "CLOSED";
+  const syncedFromPlay = Boolean(input.syncedFromPlay);
   const status =
     input.googlePlayStatus ||
-    (testingType === "INTERNAL"
-      ? "INTERNAL_TESTING"
-      : testingType === "OPEN"
-        ? "OPEN_TESTING"
-        : "CLOSED_TESTING");
+    (syncedFromPlay
+      ? testingType === "INTERNAL"
+        ? "INTERNAL_TESTING"
+        : testingType === "OPEN"
+          ? "OPEN_TESTING"
+          : "CLOSED_TESTING"
+      : "NOT_CONFIGURED");
 
   const app = await prisma.app.create({
     data: {
       userId,
       name: input.name.trim(),
-      packageName,
+      packageName: packageName || null,
       testingType,
       googlePlayStatus: status,
       testerTarget: input.testerTarget ?? 12,
-      playStoreUrl: validated.url,
+      playStoreUrl,
       webOptInUrl: testingUrl,
       iconUrl: input.iconUrl?.trim() || undefined,
+      syncedFromPlay,
       isDemo: isDemoMode(),
       tracks: input.testingTrack
         ? {
@@ -135,7 +147,7 @@ export async function createApp(
     },
     include: { tracks: true },
   });
-  await logActivity({ userId, action: "APP_CREATED", result: app.packageName });
+  await logActivity({ userId, action: "APP_CREATED", result: app.name });
   return app;
 }
 
@@ -175,6 +187,9 @@ export async function listAppsWithStats(userId: string) {
         optedInTesters: stats.optedIn,
         testingActivity: stats.testing,
         testerCount: stats.current,
+        testingTypes: Array.from(
+          new Set([app.testingType, ...app.campaigns.map((campaign) => campaign.testingType)]),
+        ),
       };
     }),
   );

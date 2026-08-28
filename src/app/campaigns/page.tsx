@@ -16,7 +16,7 @@ export default async function CampaignsPage({
 }) {
   const user = await requireUser();
   const params = await searchParams;
-  const [campaigns, playConnection, googlePlayApps, sources] = await Promise.all([
+  const [campaigns, playConnection, googlePlayApps, sources, manualApps] = await Promise.all([
     listCampaigns(user.id),
     getPlayConnection(user.id),
     prisma.googlePlayApp.findMany({
@@ -25,6 +25,10 @@ export default async function CampaignsPage({
       orderBy: { name: "asc" },
     }),
     prisma.facebookSource.findMany({ where: { userId: user.id } }),
+    prisma.app.findMany({
+      where: { userId: user.id, syncedFromPlay: false },
+      orderBy: { name: "asc" },
+    }),
   ]);
   const playConnected = isPlayConnectionActive(playConnection?.status);
 
@@ -34,21 +38,38 @@ export default async function CampaignsPage({
         initialAppId={params.appId}
         playConnected={playConnected}
         lastSyncAt={playConnection?.lastSyncAt?.toISOString() ?? null}
-        apps={googlePlayApps.map((row) => ({
-          id: row.appId || "",
-          name: row.app?.name || row.name,
-          packageName: row.packageName,
-          playStoreUrl: row.app?.playStoreUrl || canonicalPlayStoreUrl(row.packageName),
-          webOptInUrl: row.app?.webOptInUrl || null,
-          iconUrl: row.iconUrl || row.app?.iconUrl || null,
-          testerTarget: row.app?.testerTarget ?? 12,
-          lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
-          playTracks: parseTracksSnapshot(row.tracksSnapshot),
-          testingTracks: (row.app?.tracks || []).map((track) => ({
-            id: track.id,
-            playTrack: track.trackId,
+        apps={[
+          ...googlePlayApps.map((row) => ({
+            id: row.appId || "",
+            name: row.app?.name || row.name,
+            packageName: row.packageName,
+            source: "play" as const,
+            playStoreUrl: row.app?.playStoreUrl || canonicalPlayStoreUrl(row.packageName),
+            webOptInUrl: row.app?.webOptInUrl || null,
+            iconUrl: row.iconUrl || row.app?.iconUrl || null,
+            testerTarget: row.app?.testerTarget ?? 12,
+            lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
+            playTracks: parseTracksSnapshot(row.tracksSnapshot),
+            testingTracks: (row.app?.tracks || []).map((track) => ({
+              id: track.id,
+              playTrack: track.trackId,
+            })),
           })),
-        }))}
+          ...manualApps.map((app) => ({
+            id: app.id,
+            name: app.name,
+            packageName: app.packageName,
+            source: "manual" as const,
+            testingType: app.testingType,
+            playStoreUrl: app.playStoreUrl,
+            webOptInUrl: app.webOptInUrl,
+            iconUrl: app.iconUrl,
+            testerTarget: app.testerTarget,
+            lastSyncAt: null,
+            playTracks: [],
+            testingTracks: [],
+          })),
+        ]}
         sources={sources.map((item) => ({ id: item.id, name: item.name }))}
       />
       <PublishedRequestsList

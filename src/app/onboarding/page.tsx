@@ -25,8 +25,8 @@ export default async function OnboardingPage() {
     { n: 1, title: "Account", done: true, href: "/dashboard" },
     { n: 2, title: "Developer profile", done: user.profileCompleted, href: "/profile/complete" },
     { n: 3, title: "Add first Android app", done: apps > 0, href: "/apps" },
-    { n: 4, title: "Connect Google Play", done: playConnected, href: "/play" },
-    { n: 5, title: "Select a Play Console app", done: selectedPlayApps > 0, href: "/play" },
+    { n: 4, title: "Connect Google Play (optional)", done: playConnected, href: "/play" },
+    { n: 5, title: "Select a Play Console app (optional)", done: selectedPlayApps > 0, href: "/play" },
     { n: 6, title: "Create first testing campaign", done: campaigns > 0 || published > 0, href: "/campaigns" },
   ];
 

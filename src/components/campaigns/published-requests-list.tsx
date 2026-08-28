@@ -24,7 +24,7 @@ export type TestingRequestCardData = {
   updatedAt: string;
   pausedAt: string | null;
   appName: string;
-  packageName: string;
+  packageName: string | null;
   playConnected: boolean;
 };
 

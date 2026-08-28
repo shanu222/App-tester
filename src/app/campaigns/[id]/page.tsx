@@ -47,7 +47,10 @@ export default async function CampaignDetailPage({
   const playApp = await prisma.googlePlayApp.findFirst({
     where: {
       userId: user.id,
-      OR: [{ appId: campaign.appId }, { packageName: campaign.app.packageName }],
+      OR: [
+        { appId: campaign.appId },
+        ...(campaign.app.packageName ? [{ packageName: campaign.app.packageName }] : []),
+      ],
     },
   });
   const playTracks = parseTracksSnapshot(playApp?.tracksSnapshot);
@@ -89,8 +92,11 @@ export default async function CampaignDetailPage({
   const playRemoved =
     Boolean(campaign.description?.includes(PLAY_REMOVED_NOTE)) ||
     (playDependent && !playConnected && campaign.status === "ARCHIVED");
-  const storeUrl = campaign.playStoreUrl || campaign.app.playStoreUrl || canonicalPlayStoreUrl(campaign.app.packageName);
-  const playTestingUrl = playConnected ? campaign.testingUrl || campaign.webOptInUrl : null;
+  const storeUrl =
+    campaign.playStoreUrl ||
+    campaign.app.playStoreUrl ||
+    (campaign.app.packageName ? canonicalPlayStoreUrl(campaign.app.packageName) : null);
+  const playTestingUrl = campaign.testingUrl || campaign.webOptInUrl;
   const publicPageActive = campaign.published && campaign.status === "ACTIVE";
 
   return (
@@ -163,17 +169,19 @@ export default async function CampaignDetailPage({
             <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
               Testing configuration
             </p>
-            <SourceBadge source="google-play" />
+            {campaign.app.syncedFromPlay ? <SourceBadge source="google-play" /> : <Badge>Manual App</Badge>}
           </div>
           <dl className="mt-3 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <dt className="text-xs font-medium text-muted">Testing type</dt>
               <dd className="mt-1 font-medium text-slate-900">{testingTypeLabel(campaign.testingType)}</dd>
             </div>
-            <div>
-              <dt className="text-xs font-medium text-muted">Track</dt>
-              <dd className="mt-1 font-mono text-slate-900">{campaign.playTrack || trackLabel}</dd>
-            </div>
+            {campaign.playTrack ? (
+              <div>
+                <dt className="text-xs font-medium text-muted">Track</dt>
+                <dd className="mt-1 font-mono text-slate-900">{campaign.playTrack}</dd>
+              </div>
+            ) : null}
             <div>
               <dt className="text-xs font-medium text-muted">Status</dt>
               <dd className="mt-1">
@@ -207,7 +215,7 @@ export default async function CampaignDetailPage({
             <div className="sm:col-span-2">
               <dt className="text-xs font-medium text-muted">Google Play testing link</dt>
               <dd className="mt-1 break-all text-slate-700">
-                {playTestingUrl || "Not available through Google Play API"}
+                {playTestingUrl || (campaign.app.syncedFromPlay ? "Not available through Google Play API" : "No testing link provided")}
               </dd>
               {playTestingUrl ? (
                 <a
@@ -291,6 +299,7 @@ export default async function CampaignDetailPage({
               <dd className="mt-1 text-slate-900">{formatDateTime(campaign.publishedAt)}</dd>
             </div>
           </dl>
+          {campaign.app.packageName ? (
           <details className="mt-4 text-sm">
             <summary className="cursor-pointer font-medium text-brand">View details</summary>
             <dl className="mt-3 grid gap-3 rounded-control border border-line bg-surface p-3 text-sm sm:grid-cols-2">
@@ -318,6 +327,7 @@ export default async function CampaignDetailPage({
               </div>
             </dl>
           </details>
+          ) : null}
         </div>
       </section>
 
@@ -362,9 +372,11 @@ export default async function CampaignDetailPage({
               <dt className="text-xs font-medium text-muted">Google Play testing link</dt>
               <dd className="mt-1 break-all text-slate-700">
                 {playTestingUrl ||
-                  (playDependent && !playConnected
-                    ? "Connect Google Play to use this feature."
-                    : "Not available through Google Play API")}
+                  (campaign.app.syncedFromPlay
+                    ? playDependent && !playConnected
+                      ? "Connect Google Play to use this feature."
+                      : "Not available through Google Play API"
+                    : "No testing link provided")}
               </dd>
               {playTestingUrl ? (
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -383,7 +395,8 @@ export default async function CampaignDetailPage({
             </div>
             <div>
               <dt className="text-xs font-medium text-muted">Google Play Store</dt>
-              <dd className="mt-1 break-all text-slate-700">{storeUrl}</dd>
+              <dd className="mt-1 break-all text-slate-700">{storeUrl || "Not stored"}</dd>
+              {storeUrl ? (
               <div className="mt-2 flex flex-wrap gap-2">
                 <CopyButton value={storeUrl} label="Copy store link" />
                 <a
@@ -396,6 +409,7 @@ export default async function CampaignDetailPage({
                   <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                 </a>
               </div>
+              ) : null}
             </div>
             {campaign.playTrack ? (
               <div>

@@ -1,25 +1,28 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Card, CardHeader } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input, Label, Select } from "@/components/ui/fields";
+import { Input, Select } from "@/components/ui/fields";
 import { EmptyState } from "@/components/ui/widgets";
-import { TechnicalDetails } from "@/components/ui/technical-details";
-import { parsePlayStoreUrl } from "@/lib/play-url";
+import { TestingTypeBadge } from "@/components/ui/testing-type-badge";
+import { AppMark } from "@/components/brand/app-mark";
+import { AddAppWizard, type PlayAppOption } from "@/components/apps/add-app-wizard";
+import { connectionLabel } from "@/lib/manual-app";
 import { Plus, RefreshCw, Search } from "lucide-react";
 
 export type AppCardModel = {
   id: string;
   name: string;
-  packageName: string;
+  packageName: string | null;
   playStoreUrl: string | null;
   webOptInUrl: string | null;
   iconUrl: string | null;
   googlePlayStatus: string;
   testingType: string;
+  testingTypes: string[];
   testerTarget: number;
   playConflictNote: string | null;
   syncedFromPlay: boolean;
@@ -40,35 +43,25 @@ type PlayNewApp = {
 
 const FILTERS = [
   { id: "ALL", label: "All" },
-  { id: "PRODUCTION", label: "Production" },
-  { id: "CLOSED_TESTING", label: "Closed Testing" },
-  { id: "INTERNAL_TESTING", label: "Internal Testing" },
-  { id: "OPEN_TESTING", label: "Open Testing" },
-  { id: "CAMPAIGN_ACTIVE", label: "Campaign Active" },
-  { id: "CAMPAIGN_INACTIVE", label: "Campaign Inactive" },
+  { id: "MANUAL", label: "Manual" },
+  { id: "PLAY", label: "Google Play" },
+  { id: "CLOSED", label: "Closed" },
+  { id: "INTERNAL", label: "Internal" },
+  { id: "OPEN", label: "Open" },
+  { id: "CAMPAIGN_ACTIVE", label: "Active request" },
 ];
 
-function statusTone(status: string): "good" | "accent" | "warn" | "neutral" {
-  if (status === "PRODUCTION") return "good";
-  if (status === "CLOSED_TESTING") return "accent";
-  if (status === "PRODUCTION_REVIEW" || status === "OPEN_TESTING") return "warn";
-  return "neutral";
-}
-
-function statusLabel(status: string) {
-  return status.replaceAll("_", " ");
-}
-
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
-export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
+export function MyAppsWorkspace({
+  apps,
+  playApps,
+  playConnected,
+  lastSyncAt,
+}: {
+  apps: AppCardModel[];
+  playApps: PlayAppOption[];
+  playConnected: boolean;
+  lastSyncAt?: string | null;
+}) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("ALL");
   const [showForm, setShowForm] = useState(false);
@@ -80,12 +73,13 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return apps.filter((app) => {
-      if (q && !app.name.toLowerCase().includes(q) && !app.packageName.toLowerCase().includes(q)) {
-        return false;
-      }
+      if (q && !app.name.toLowerCase().includes(q)) return false;
       if (filter === "CAMPAIGN_ACTIVE") return app.campaignStatus === "ACTIVE";
-      if (filter === "CAMPAIGN_INACTIVE") return app.campaignStatus !== "ACTIVE";
-      if (filter !== "ALL") return app.googlePlayStatus === filter;
+      if (filter === "MANUAL") return !app.syncedFromPlay;
+      if (filter === "PLAY") return app.syncedFromPlay;
+      if (filter === "CLOSED" || filter === "INTERNAL" || filter === "OPEN") {
+        return app.testingTypes.includes(filter) || app.testingType === filter;
+      }
       return true;
     });
   }, [apps, query, filter]);
@@ -129,57 +123,51 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
     }
   }
 
-  async function onCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    const form = new FormData(event.currentTarget);
-    const packageName = String(form.get("packageName") || "").trim();
-    const googlePlayUrl = String(form.get("googlePlayUrl") || "").trim();
-    const parsed = parsePlayStoreUrl(googlePlayUrl);
-    if (parsed && parsed.packageName !== packageName) {
-      setError("Package name does not match the Google Play URL.");
-      return;
-    }
-    const response = await fetch("/api/apps", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: form.get("name"),
-        packageName,
-        googlePlayUrl,
-        testingUrl: form.get("testingUrl") || undefined,
-        testingType: form.get("testingType"),
-        testingTrack: form.get("testingTrack") || undefined,
-        iconUrl: form.get("iconUrl") || undefined,
-        testerTarget: Number(form.get("testerTarget") || 12),
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setError(data.error || "Could not save app");
-      return;
-    }
-    window.location.reload();
-  }
+  const wizardApps: PlayAppOption[] = [
+    ...playApps,
+    ...apps
+      .filter((app) => !app.syncedFromPlay)
+      .map((app) => ({
+        id: app.id,
+        name: app.name,
+        packageName: app.packageName,
+        source: "manual" as const,
+        testingType: (app.testingType === "OPEN" || app.testingType === "INTERNAL" ? app.testingType : "CLOSED") as
+          | "INTERNAL"
+          | "CLOSED"
+          | "OPEN",
+        playStoreUrl: app.playStoreUrl,
+        webOptInUrl: app.webOptInUrl,
+        iconUrl: app.iconUrl,
+        testerTarget: app.testerTarget,
+        lastSyncAt: null,
+        playTracks: [],
+        testingTracks: [],
+      })),
+  ];
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <p className="max-w-2xl text-sm leading-6 text-muted">
-          Store listing URLs and closed-testing opt-in URLs are stored separately. Tester counts come from
-          recorded TestLoop activity, not invented Play Console numbers.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" aria-busy={syncing} onClick={syncPlay} disabled={syncing}>
-            <RefreshCw className={syncing ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden />
-            {syncing ? "Syncing…" : "Sync Google Play"}
-          </Button>
-          <Button type="button" onClick={() => setShowForm((open) => !open)}>
-            <Plus className="h-4 w-4" aria-hidden />
-            Add app
-          </Button>
-        </div>
+      <div className="flex flex-wrap items-start justify-end gap-2">
+        <Button type="button" variant="secondary" aria-busy={syncing} onClick={syncPlay} disabled={syncing}>
+          <RefreshCw className={syncing ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden />
+          {syncing ? "Syncing…" : "Sync Google Play"}
+        </Button>
+        <Button type="button" onClick={() => setShowForm(true)}>
+          <Plus className="h-4 w-4" aria-hidden />
+          Add app
+        </Button>
       </div>
+
+      {showForm ? (
+        <AddAppWizard
+          apps={wizardApps}
+          sources={[]}
+          playConnected={playConnected}
+          lastSyncAt={lastSyncAt}
+          onCancel={() => setShowForm(false)}
+        />
+      ) : null}
 
       <div className="flex flex-wrap gap-3">
         <div className="relative w-full max-w-sm">
@@ -194,19 +182,14 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
             id="apps-search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search by app or package name"
+            placeholder="Search apps"
             className="pl-9"
           />
         </div>
         <label htmlFor="apps-filter" className="sr-only">
           Filter apps
         </label>
-        <Select
-          id="apps-filter"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          className="w-full max-w-xs"
-        >
+        <Select id="apps-filter" value={filter} onChange={(event) => setFilter(event.target.value)} className="w-full max-w-xs">
           {FILTERS.map((item) => (
             <option key={item.id} value={item.id}>
               {item.label}
@@ -216,10 +199,7 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
       </div>
 
       {error ? (
-        <p
-          role="alert"
-          className="rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-700"
-        >
+        <p role="alert" className="rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-700">
           {error}
         </p>
       ) : null}
@@ -231,30 +211,15 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
 
       {newPlayApps.length > 0 ? (
         <Card>
-          <CardHeader
-            title="New apps available in Google Play"
-            description="These apps exist in your Play Console but not yet in TestLoop."
-          />
+          <p className="text-[15px] font-semibold text-slate-900">New apps in Google Play</p>
           <div className="mt-4 space-y-2.5">
             {newPlayApps.map((app) => (
               <div
                 key={app.packageName}
                 className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-line bg-surface px-4 py-3"
               >
-                <div className="min-w-0">
-                  <div className="truncate font-medium text-slate-900">{app.name}</div>
-                  <div className="mt-0.5">
-                    <TechnicalDetails>
-                      <p>Package name: {app.packageName}</p>
-                    </TechnicalDetails>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => importPlayApp(app.packageName)}
-                  disabled={syncing}
-                >
+                <div className="truncate font-medium text-slate-900">{app.name}</div>
+                <Button type="button" variant="secondary" onClick={() => importPlayApp(app.packageName)} disabled={syncing}>
                   Add to My Apps
                 </Button>
               </div>
@@ -263,65 +228,10 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
         </Card>
       ) : null}
 
-      {showForm ? (
-        <Card>
-          <CardHeader
-            title="Add Android app"
-            description="Package name must match the Google Play URL."
-            action={
-              <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
-                Cancel
-              </Button>
-            }
-          />
-          <form onSubmit={onCreate} className="mt-5 grid gap-4 md:grid-cols-2">
-            <div>
-              <Label>App name</Label>
-              <Input name="name" placeholder="My New App" required />
-            </div>
-            <div>
-              <Label>Package name</Label>
-              <Input name="packageName" placeholder="com.example.myapp" required />
-            </div>
-            <div className="md:col-span-2">
-              <Label>Google Play URL</Label>
-              <Input name="googlePlayUrl" placeholder="https://play.google.com/store/apps/details?id=com.example.myapp" required />
-            </div>
-            <div>
-              <Label>App icon URL</Label>
-              <Input name="iconUrl" placeholder="https://…" />
-            </div>
-            <div>
-              <Label>Testing type</Label>
-              <Select name="testingType" defaultValue="CLOSED">
-                <option value="INTERNAL">Internal testing</option>
-                <option value="CLOSED">Closed testing</option>
-                <option value="OPEN">Open testing</option>
-              </Select>
-            </div>
-            <div>
-              <Label>Testing track</Label>
-              <Input name="testingTrack" placeholder="Closed testing" />
-            </div>
-            <div>
-              <Label>Testing / opt-in link</Label>
-              <Input name="testingUrl" placeholder="Leave empty unless you have a real opt-in URL" />
-            </div>
-            <div>
-              <Label>Campaign target</Label>
-              <Input name="testerTarget" type="number" defaultValue={12} />
-            </div>
-            <div className="flex items-end md:col-span-2">
-              <Button type="submit">Save app</Button>
-            </div>
-          </form>
-        </Card>
-      ) : null}
-
       {apps.length === 0 && !showForm ? (
         <EmptyState
           title="No apps yet"
-          body="Add your first Android app to publish a testing request and connect Google Play tracks."
+          body="Add an app from Google Play, or publish a manual testing request."
           action={
             <Button type="button" onClick={() => setShowForm(true)}>
               Add an app
@@ -329,99 +239,33 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
           }
         />
       ) : visible.length === 0 ? (
-        <EmptyState title="No apps match this search" body="Try a different name, package, or filter." />
+        <EmptyState title="No apps match this search" body="Try a different name or filter." />
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {visible.map((app) => {
-            const target = app.testerTarget || 12;
-            const progress = Math.min(100, Math.round((app.testersRegistered / target) * 100));
+            const types = app.testingTypes.length ? app.testingTypes : [app.testingType];
             const manageHref = app.campaign ? `/campaigns/${app.campaign.id}` : `/campaigns?appId=${app.id}`;
-            const showManage = app.syncedFromPlay || (app.campaign && app.campaign.status !== "ARCHIVED");
             return (
               <Card key={app.id} className="flex flex-col">
                 <div className="flex gap-4">
-                  {app.iconUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={app.iconUrl}
-                      alt=""
-                      className="h-14 w-14 shrink-0 rounded-control border border-line object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-control bg-brand-soft text-sm font-semibold text-brand">
-                      {initials(app.name)}
-                    </div>
-                  )}
+                  <AppMark src={app.iconUrl} name={app.name} size={56} />
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        href={`/apps/${app.id}`}
-                        className="truncate text-base font-semibold text-slate-900 hover:text-brand"
-                      >
-                        {app.name}
-                      </Link>
-                      <Badge tone={statusTone(app.googlePlayStatus)}>{statusLabel(app.googlePlayStatus)}</Badge>
-                      {app.campaign ? (
-                        <Badge tone={app.campaign.status === "ACTIVE" ? "good" : "neutral"}>{app.campaign.status}</Badge>
-                      ) : (
-                        <Badge>No campaign</Badge>
-                      )}
+                    <Link href={`/apps/${app.id}`} className="truncate text-base font-semibold text-slate-900 hover:text-brand">
+                      {app.name}
+                    </Link>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {types.map((type) => (
+                        <TestingTypeBadge key={type} type={type} />
+                      ))}
+                      <Badge tone={app.syncedFromPlay ? "good" : "neutral"}>{connectionLabel(app.syncedFromPlay)}</Badge>
                     </div>
-                    <div className="mt-2">
-                      <TechnicalDetails>
-                        <p>Package name: {app.packageName}</p>
-                      </TechnicalDetails>
-                    </div>
-                    <div className="mt-1 truncate text-xs text-muted">
-                      {app.tracks[0]?.name || app.testingType} · {app.campaign?.name || "No testing campaign yet"}
-                    </div>
+                    {app.campaign ? (
+                      <p className="mt-2 truncate text-sm text-muted">{app.campaign.name}</p>
+                    ) : (
+                      <p className="mt-2 text-sm text-muted">No testing request yet</p>
+                    )}
                   </div>
                 </div>
-
-                <div className="mt-5">
-                  <div className="mb-1.5 flex justify-between text-xs">
-                    <span className="text-muted">
-                      {app.testersRegistered} of {target} testers registered in TestLoop
-                    </span>
-                    <span className="font-semibold text-slate-900 tabular-nums">{progress}%</span>
-                  </div>
-                  <div
-                    className="h-2 overflow-hidden rounded-full bg-surface-strong"
-                    role="progressbar"
-                    aria-valuenow={progress}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                  >
-                    <div className="h-full rounded-full bg-brand" style={{ width: `${Math.max(progress, 2)}%` }} />
-                  </div>
-
-                  <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-4 text-center">
-                    <div>
-                      <dd className="text-lg font-semibold leading-none text-slate-900 tabular-nums">
-                        {app.testersRegistered}
-                      </dd>
-                      <dt className="mt-1 text-xs text-muted">TestLoop testers</dt>
-                    </div>
-                    <div>
-                      <dd className="text-lg font-semibold leading-none text-slate-900 tabular-nums">
-                        {app.testersAdded}
-                      </dd>
-                      <dt className="mt-1 text-xs text-muted">Developer confirmed</dt>
-                    </div>
-                    <div>
-                      <dd className="text-lg font-semibold leading-none text-slate-900 tabular-nums">
-                        {app.testingActivity}
-                      </dd>
-                      <dt className="mt-1 text-xs text-muted">Activity (TestLoop)</dt>
-                    </div>
-                  </dl>
-                </div>
-
-                {app.playConflictNote ? (
-                  <p className="mt-4 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-                    {app.playConflictNote}
-                  </p>
-                ) : null}
 
                 <div className="mt-5 flex flex-wrap items-center gap-2">
                   {app.playStoreUrl ? (
@@ -433,17 +277,13 @@ export function MyAppsWorkspace({ apps }: { apps: AppCardModel[] }) {
                     >
                       Open Google Play
                     </a>
-                  ) : (
-                    <span className="text-xs text-muted">No Play Store URL stored</span>
-                  )}
-                  {showManage ? (
-                    <Link
-                      href={manageHref}
-                      className="inline-flex h-9.5 items-center rounded-control border border-line-strong bg-white px-4 text-sm font-medium text-slate-700 shadow-card transition-colors hover:bg-surface hover:text-slate-900"
-                    >
-                      Manage testing
-                    </Link>
                   ) : null}
+                  <Link
+                    href={manageHref}
+                    className="inline-flex h-9.5 items-center rounded-control border border-line-strong bg-white px-4 text-sm font-medium text-slate-700 shadow-card transition-colors hover:bg-surface hover:text-slate-900"
+                  >
+                    {app.campaign ? "Manage testing" : "Publish testing"}
+                  </Link>
                 </div>
               </Card>
             );

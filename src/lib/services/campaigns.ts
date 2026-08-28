@@ -8,7 +8,8 @@ import { campaignTestingUrl } from "@/lib/integrations/play-testers";
 import { campaignAccessFields, detectTrackAccess } from "@/lib/integrations/play-access";
 import { uniqueSlug } from "@/lib/slug";
 import { env } from "@/lib/env";
-import { PLAY_NOT_CONNECTED_FIRST } from "@/lib/play-disconnect";
+import { PLAY_NOT_CONNECTED_FIRST, campaignDependsOnPlayConnection } from "@/lib/play-disconnect";
+import { optionalHttpUrl, parseManualGroupInput } from "@/lib/manual-app";
 import {
   detectTestingConfiguration,
   parseTracksSnapshot,
@@ -96,7 +97,7 @@ export async function ensureCampaignPublicFields<
     publicSlug: string | null;
     testingUrl: string | null;
     webOptInUrl: string | null;
-    app: { name: string; packageName: string };
+    app: { name: string; packageName?: string | null };
   },
 >(campaign: T): Promise<T> {
   const data: { publicSlug?: string; testingUrl?: string } = {};
@@ -204,7 +205,9 @@ export async function createCampaign(
   input: {
     name: string;
     appId?: string;
+    appName?: string;
     packageName?: string;
+    mode?: "play" | "manual";
     trackId?: string;
     /** Real Play Console track name, e.g. "internal" or "alpha". */
     playTrack?: string;
@@ -215,6 +218,7 @@ export async function createCampaign(
     playStoreUrl?: string;
     webOptInUrl?: string;
     androidOptInUrl?: string;
+    googleGroup?: string;
     durationDays?: number;
     description?: string;
     testingInstructions?: string;
@@ -224,11 +228,19 @@ export async function createCampaign(
     skipPlayRefresh?: boolean;
   },
 ) {
-  await requirePlayConnectionForPost(userId);
-
   let app = input.appId
     ? await prisma.app.findFirst({ where: { id: input.appId, userId } })
     : null;
+  const manual =
+    input.mode === "manual" ||
+    Boolean(app && !app.syncedFromPlay && !input.playTrack && input.mode !== "play");
+
+  if (manual) {
+    return createManualCampaign(userId, input, app);
+  }
+
+  await requirePlayConnectionForPost(userId);
+
   const packageName = input.packageName || app?.packageName;
   if (!packageName) throw new NotFoundError("App not found.");
 
@@ -240,7 +252,7 @@ export async function createCampaign(
 
   const { requested } = await resolvePlayTestingTrack({
     userId,
-    packageName: app.packageName,
+    packageName,
     playTrack: input.playTrack,
     fingerprint: input.playFingerprint,
     refresh: Boolean(input.published),
@@ -329,6 +341,124 @@ export async function createCampaign(
   return campaign;
 }
 
+async function createManualCampaign(
+  userId: string,
+  input: {
+    name: string;
+    appId?: string;
+    appName?: string;
+    testingType?: "INTERNAL" | "CLOSED" | "OPEN";
+    targetTesters?: number;
+    webOptInUrl?: string;
+    googleGroup?: string;
+    durationDays?: number;
+    description?: string;
+    testingInstructions?: string;
+    reciprocalOpen?: boolean;
+    published?: boolean;
+    sourceId?: string;
+  },
+  existingApp: { id: string; name: string; webOptInUrl: string | null; androidOptInUrl: string | null } | null,
+) {
+  const testingType = input.testingType || "CLOSED";
+  const link = optionalHttpUrl(input.webOptInUrl);
+  if (!link.ok) throw new AppError(link.error);
+  const group = parseManualGroupInput(input.googleGroup);
+  if (group.error) throw new AppError(group.error);
+
+  let app = existingApp;
+  if (!app) {
+    const appName = (input.appName || input.name).trim();
+    if (appName.length < 2) throw new AppError("Enter an app name.");
+    app = await prisma.app.create({
+      data: {
+        userId,
+        name: appName,
+        packageName: null,
+        testingType,
+        googlePlayStatus: "NOT_CONFIGURED",
+        testerTarget: input.targetTesters ?? 12,
+        webOptInUrl: link.url || undefined,
+        syncedFromPlay: false,
+        isDemo: isDemoMode(),
+      },
+    });
+    await logActivity({ userId, action: "APP_CREATED", result: app.name });
+  } else if (link.url && !existingApp?.webOptInUrl) {
+    await prisma.app.update({
+      where: { id: app.id },
+      data: { webOptInUrl: link.url, testingType, testerTarget: input.targetTesters ?? 12 },
+    });
+  }
+
+  if (input.published) {
+    const duplicate = await prisma.campaign.findFirst({
+      where: {
+        userId,
+        appId: app.id,
+        published: true,
+        status: "ACTIVE",
+        testingType,
+        playTrack: null,
+      },
+    });
+    if (duplicate) {
+      throw new AppError(
+        "An active testing request already exists for this app and testing type.",
+        409,
+        "CAMPAIGN_DUPLICATE",
+        { existingCampaignId: duplicate.id },
+      );
+    }
+  }
+
+  const publicSlug = await allocateCampaignSlug(app.name || input.name);
+  const testingUrl = campaignTestingUrl({
+    testingType,
+    packageName: null,
+    configuredUrl: link.url || app.webOptInUrl,
+  }).url;
+  const access = detectTrackAccess(testingType, null, {
+    testingAccessMethod:
+      testingType === "OPEN" ? "open" : group.email || group.joinUrl ? "google_group" : "individual",
+    googleGroupConfigured: Boolean(group.email || group.joinUrl),
+    googleGroupEmail: group.email,
+  });
+  const campaign = await prisma.campaign.create({
+    data: {
+      userId,
+      appId: app.id,
+      playTrack: null,
+      publicSlug,
+      testingUrl,
+      sourceId: input.sourceId,
+      name: input.name.trim(),
+      testingType,
+      ...campaignAccessFields(access),
+      targetTesters: input.targetTesters ?? 12,
+      requiredTesters: input.targetTesters ?? 12,
+      durationDays: input.durationDays ?? 14,
+      requiredActiveDays: input.durationDays ?? 14,
+      description: input.description,
+      testingInstructions: input.testingInstructions,
+      reciprocalOpen: input.reciprocalOpen ?? true,
+      published: Boolean(input.published),
+      publishedAt: input.published ? new Date() : null,
+      status: input.published ? "ACTIVE" : "DRAFT",
+      startedAt: input.published ? new Date() : null,
+      webOptInUrl: link.url || app.webOptInUrl,
+      isDemo: isDemoMode(),
+    },
+  });
+  await logActivity({
+    userId,
+    campaignId: campaign.id,
+    action: "CAMPAIGN_CREATED",
+    result: campaign.name,
+  });
+  return campaign;
+}
+
 export async function publishCampaign(userId: string, id: string) {
   const campaign = await prisma.campaign.findFirst({
     where: { id, userId },
@@ -338,10 +468,25 @@ export async function publishCampaign(userId: string, id: string) {
   if (campaign.status === "ARCHIVED" || campaign.status === "COMPLETED") {
     throw new AppError("This campaign cannot be published.");
   }
+  if (!campaignDependsOnPlayConnection(campaign)) {
+    const updated = await prisma.campaign.update({
+      where: { id },
+      data: {
+        published: true,
+        publishedAt: campaign.publishedAt ?? new Date(),
+        status: campaign.status === "DRAFT" || campaign.status === "PAUSED" ? "ACTIVE" : campaign.status,
+        startedAt: campaign.startedAt ?? new Date(),
+      },
+    });
+    await logActivity({ userId, campaignId: id, action: "CAMPAIGN_PUBLISHED", result: updated.name });
+    return updated;
+  }
   await requirePlayConnectionForPost(userId);
+  const packageName = campaign.app.packageName;
+  if (!packageName) throw new AppError(PLAY_NOT_CONNECTED_FIRST, 409, "PLAY_NOT_CONNECTED");
   const { requested } = await resolvePlayTestingTrack({
     userId,
-    packageName: campaign.app.packageName,
+    packageName,
     playTrack: campaign.playTrack || undefined,
     refresh: true,
   });

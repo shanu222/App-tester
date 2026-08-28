@@ -92,10 +92,12 @@ export async function getPublicTestingPage(slug: string): Promise<PublicTestingP
     }
   }
 
-  const playApp = await prisma.googlePlayApp.findFirst({
-    where: { userId: campaign.userId, packageName: campaign.app.packageName },
-    select: { tracksSnapshot: true },
-  });
+  const playApp = campaign.app.packageName
+    ? await prisma.googlePlayApp.findFirst({
+        where: { userId: campaign.userId, packageName: campaign.app.packageName },
+        select: { tracksSnapshot: true },
+      })
+    : null;
   const playTracks = parseTracksSnapshot(playApp?.tracksSnapshot);
   const playTrack =
     playTracks.find((track) => track.track === campaign.playTrack) ||

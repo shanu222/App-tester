@@ -4,27 +4,35 @@ import { requireCompleteProfile, requireUser } from "@/auth";
 import { createCampaign, listCampaigns, publishCampaign, removeTestingPost, stopTestingRequest, deleteTestingPost, transitionCampaign } from "@/lib/services/campaigns";
 import type { CampaignStatus } from "@prisma/client";
 
-const createSchema = z.object({
-  name: z.string().min(2),
-  appId: z.string().optional(),
-  packageName: z.string().trim().min(1).optional(),
-  trackId: z.string().optional(),
-  playTrack: z.string().max(120).optional(),
-  playFingerprint: z.string().max(500).optional(),
-  sourceId: z.string().optional(),
-  targetTesters: z.number().int().min(1).max(200).optional(),
-  testingType: z.enum(["INTERNAL", "CLOSED", "OPEN"]).optional(),
-  playStoreUrl: z.string().optional(),
-  webOptInUrl: z.string().optional(),
-  androidOptInUrl: z.string().optional(),
-  durationDays: z.number().int().min(1).max(90).optional(),
-  description: z.string().max(4000).optional(),
-  testingInstructions: z.string().max(4000).optional(),
-  reciprocalOpen: z.boolean().optional(),
-  published: z.boolean().optional(),
-}).refine((value) => Boolean(value.appId || value.packageName), {
-  message: "Choose a Google Play app.",
-});
+const createSchema = z
+  .object({
+    name: z.string().min(2),
+    appId: z.string().optional(),
+    appName: z.string().min(2).optional(),
+    packageName: z.string().trim().min(1).optional(),
+    mode: z.enum(["play", "manual"]).optional(),
+    trackId: z.string().optional(),
+    playTrack: z.string().max(120).optional(),
+    playFingerprint: z.string().max(500).optional(),
+    sourceId: z.string().optional(),
+    targetTesters: z.number().int().min(1).max(200).optional(),
+    testingType: z.enum(["INTERNAL", "CLOSED", "OPEN"]).optional(),
+    playStoreUrl: z.string().optional(),
+    webOptInUrl: z.string().optional(),
+    androidOptInUrl: z.string().optional(),
+    googleGroup: z.string().max(500).optional(),
+    durationDays: z.number().int().min(1).max(90).optional(),
+    description: z.string().max(4000).optional(),
+    testingInstructions: z.string().max(4000).optional(),
+    reciprocalOpen: z.boolean().optional(),
+    published: z.boolean().optional(),
+  })
+  .refine((value) => {
+    if (value.mode === "manual") return Boolean(value.appId || value.appName);
+    return Boolean(value.appId || value.packageName);
+  }, {
+    message: "Choose an app.",
+  });
 
 export async function GET() {
   try {

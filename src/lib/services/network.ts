@@ -286,10 +286,12 @@ export async function getPublicRequest(viewerId: string, campaignId: string) {
       playEnrollmentStatus: true,
     },
   });
-  const playApp = await prisma.googlePlayApp.findFirst({
-    where: { userId: campaign.userId, packageName: campaign.app.packageName },
-    select: { tracksSnapshot: true },
-  });
+  const playApp = campaign.app.packageName
+    ? await prisma.googlePlayApp.findFirst({
+        where: { userId: campaign.userId, packageName: campaign.app.packageName },
+        select: { tracksSnapshot: true },
+      })
+    : null;
   const playTracks = parseTracksSnapshot(playApp?.tracksSnapshot);
   const playTrack = playTrackFor(campaign, playTracks);
   const access = campaignAccess(campaign, playTrack);
@@ -431,10 +433,12 @@ async function loadParticipationAccess(participationId: string) {
     },
   });
   if (!row) throw new NotFoundError("Participation not found.");
-  const playApp = await prisma.googlePlayApp.findFirst({
-    where: { userId: row.campaign.userId, packageName: row.campaign.app.packageName },
-    select: { tracksSnapshot: true },
-  });
+  const playApp = row.campaign.app.packageName
+    ? await prisma.googlePlayApp.findFirst({
+        where: { userId: row.campaign.userId, packageName: row.campaign.app.packageName },
+        select: { tracksSnapshot: true },
+      })
+    : null;
   const playTrack = playTrackFor(row.campaign, parseTracksSnapshot(playApp?.tracksSnapshot));
   const access = campaignAccess(row.campaign, playTrack);
   const testing = campaignTestingUrl({

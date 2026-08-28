@@ -66,15 +66,15 @@ export function playConsoleTesterSteps(testingType: TestingType): string[] {
   ];
 }
 
-export function playOptInUrl(packageName: string) {
-  const trimmed = packageName.trim();
+export function playOptInUrl(packageName?: string | null) {
+  const trimmed = packageName?.trim() || "";
   if (!trimmed) return null;
   return `https://play.google.com/apps/testing/${trimmed}`;
 }
 
 export function campaignTestingUrl(input: {
   testingType: TestingType;
-  packageName: string;
+  packageName?: string | null;
   configuredUrl?: string | null;
 }): { url: string | null; reason: string | null } {
   const configured = input.configuredUrl?.trim();
@@ -82,12 +82,13 @@ export function campaignTestingUrl(input: {
   if (input.testingType === "INTERNAL") {
     return {
       url: null,
-      reason:
-        "Internal testing opt-in links are issued by Play Console as apps/internaltest/… and are not exposed by the Play Developer API. Copy the link from Play Console → Internal testing → Testers.",
+      reason: input.packageName?.trim()
+        ? "Internal testing opt-in links are issued by Play Console as apps/internaltest/… and are not exposed by the Play Developer API. Copy the link from Play Console → Internal testing → Testers."
+        : "No testing link provided.",
     };
   }
   const url = playOptInUrl(input.packageName);
   return url
     ? { url, reason: null }
-    : { url: null, reason: "This app has no package name, so no opt-in URL can be built." };
+    : { url: null, reason: "No testing link provided." };
 }

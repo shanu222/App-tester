@@ -437,7 +437,7 @@ model App {
   id               String           @id @default(cuid())
   userId           String
   name             String
-  packageName      String
+  packageName      String?
   platform         String           @default("Android")
   testingType      TestingType      @default(CLOSED)
   googlePlayStatus GooglePlayStatus @default(NOT_CONFIGURED)

@@ -66,8 +66,9 @@ async function trackAccessForCampaign(campaign: {
   testingAccessMethod: string | null;
   googleGroupConfigured: boolean | null;
   googleGroupEmail: string | null;
-  app: { packageName: string };
+  app: { packageName?: string | null };
 }) {
+  if (!campaign.app.packageName) return detectTrackAccess(campaign.testingType, null, campaign);
   const playApp = await prisma.googlePlayApp.findFirst({
     where: { userId: campaign.userId, packageName: campaign.app.packageName },
     select: { tracksSnapshot: true },

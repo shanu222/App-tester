@@ -5,7 +5,7 @@ import { listAppsWithStats, createApp } from "@/lib/services/apps";
 
 const schema = z.object({
   name: z.string().min(2),
-  packageName: z.string().min(3),
+  packageName: z.string().min(3).optional(),
   testingType: z.enum(["INTERNAL", "CLOSED", "OPEN"]).optional(),
   testingTrack: z.string().optional(),
   googlePlayUrl: z.string().optional(),

@@ -42,6 +42,12 @@ describe("campaign testing URL", () => {
     expect(result.reason).toMatch(/internaltest/i);
   });
 
+  it("does not invent an opt-in URL for a manual app without a package name", () => {
+    const result = campaignTestingUrl({ testingType: "OPEN", packageName: null });
+    expect(result.url).toBeNull();
+    expect(result.reason).toMatch(/No testing link/i);
+  });
+
   it("marks open testing as opt-in and closed/internal as Play track testers", () => {
     expect(testerAccessMode("OPEN")).toBe("OPEN_OPT_IN");
     expect(testerAccessMode("CLOSED")).toBe("PLAY_TRACK_TESTERS");

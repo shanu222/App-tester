@@ -6,7 +6,7 @@ export type PublicTestingPage = {
   campaignId: string;
   campaignName: string;
   appName: string;
-  packageName: string;
+  packageName: string | null;
   iconUrl: string | null;
   testingType: TestingType;
   trackLabel: string;
@@ -31,7 +31,7 @@ export type PublicJoinResult = {
   detail: string;
   email: string;
   appName: string;
-  packageName: string;
+  packageName: string | null;
   trackLabel: string;
   developerName: string;
   optInUrl: string | null;

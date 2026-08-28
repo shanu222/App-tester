@@ -2,6 +2,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { StatCard, EmptyState } from "@/components/ui/widgets";
 import { requireUser } from "@/auth";
 import { getDashboardStats } from "@/lib/services/dashboard";
+import { listDeveloperPayments } from "@/lib/services/managed-testing";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ function ModeMark({ ok, label }: { ok: boolean; label: string }) {
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [stats, unread, testing] = await Promise.all([
+  const [stats, unread, testing, billing] = await Promise.all([
     getDashboardStats(user.id),
     prisma.notification.count({ where: { userId: user.id, readAt: null } }),
     prisma.testingParticipation.findMany({
@@ -31,6 +32,7 @@ export default async function DashboardPage() {
       orderBy: { updatedAt: "desc" },
       take: 5,
     }),
+    listDeveloperPayments(user.id),
   ]);
   const playConnected = stats.play.connected;
   const steps = [
@@ -66,10 +68,23 @@ export default async function DashboardPage() {
             <p className="mt-2 max-w-xl text-sm leading-6 text-slate-700">
               Purchase a tester package and TestLoop coordinates consenting testing participants for your app.
             </p>
+            {billing.activePackage ? (
+              <p className="mt-2 text-sm text-slate-600">
+                Active package: {billing.activePackage.packageName}. Remaining tester allocation:{" "}
+                {billing.allocation.remaining}.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-muted">No approved tester package yet.</p>
+            )}
           </div>
-          <Link href="/managed-testing">
-            <Button>View packages</Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/settings">
+              <Button variant="secondary">Payments & Packages</Button>
+            </Link>
+            <Link href="/managed-testing">
+              <Button>View packages</Button>
+            </Link>
+          </div>
         </div>
       </div>
 

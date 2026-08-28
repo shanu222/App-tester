@@ -4,9 +4,11 @@ import { requireAdmin } from "@/auth";
 import {
   adminAddManagedTester,
   adminAllocateTesters,
+  adminApprovePayment,
   adminListManagedTesting,
   adminMarkPaymentFailed,
   adminMarkPaymentPaid,
+  adminRejectPayment,
 } from "@/lib/services/managed-testing";
 
 export async function GET() {
@@ -21,23 +23,39 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireAdmin();
+    const admin = await requireAdmin();
     const body = await parseJson(
       request,
       z.object({
-        action: z.enum(["mark-paid", "mark-failed", "add-tester", "allocate"]),
+        action: z.enum(["mark-paid", "mark-failed", "add-tester", "allocate", "approve", "reject"]),
         paymentPublicId: z.string().optional(),
         campaignPublicId: z.string().optional(),
+        adminNote: z.string().optional(),
         name: z.string().optional(),
         email: z.string().optional(),
         googleAccountEmail: z.string().optional().nullable(),
         consented: z.boolean().optional(),
       }),
     );
-    if (body.action === "mark-paid") {
+    if (body.action === "approve" || body.action === "mark-paid") {
       if (!body.paymentPublicId) return json({ error: "Payment required." }, 400);
-      const result = await adminMarkPaymentPaid(body.paymentPublicId);
+      const result = body.action === "approve"
+        ? await adminApprovePayment({
+            adminUserId: admin.id,
+            paymentPublicId: body.paymentPublicId,
+            adminNote: body.adminNote,
+          })
+        : await adminMarkPaymentPaid(body.paymentPublicId, admin.id);
       return json({ ok: true, ...result });
+    }
+    if (body.action === "reject") {
+      if (!body.paymentPublicId) return json({ error: "Payment required." }, 400);
+      await adminRejectPayment({
+        adminUserId: admin.id,
+        paymentPublicId: body.paymentPublicId,
+        adminNote: body.adminNote || "",
+      });
+      return json({ ok: true });
     }
     if (body.action === "mark-failed") {
       if (!body.paymentPublicId) return json({ error: "Payment required." }, 400);

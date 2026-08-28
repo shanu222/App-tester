@@ -17,6 +17,7 @@ export async function sendSmtpEmail(input: {
   subject: string;
   text: string;
   html?: string;
+  attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>;
 }): Promise<SmtpSendResult> {
   const to = input.to.trim();
   if (!to) return { ok: false, error: "No recipient address was provided.", skipped: true };
@@ -45,6 +46,11 @@ export async function sendSmtpEmail(input: {
       subject: input.subject,
       text: input.text,
       html: input.html,
+      attachments: input.attachments?.map((file) => ({
+        filename: file.filename,
+        content: file.content,
+        contentType: file.contentType,
+      })),
     });
     return { ok: true };
   } catch {

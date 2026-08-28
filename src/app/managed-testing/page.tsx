@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
-import { listDeveloperManagedCampaigns, listManagedPackages } from "@/lib/services/managed-testing";
+import { listDeveloperManagedCampaigns, listDeveloperPayments, listManagedPackages } from "@/lib/services/managed-testing";
+import { PaymentsPackagesPanel } from "@/components/managed-testing/payments-packages-panel";
 import { PackageCards } from "@/components/managed-testing/package-cards";
 import { ManagedTestingNotice } from "@/components/managed-testing/compliance-notice";
 import { CardHeader, SectionLabel } from "@/components/ui/card";
@@ -12,9 +13,10 @@ import Link from "next/link";
 
 export default async function ManagedTestingPage() {
   const user = await requireUser();
-  const [packages, workspace] = await Promise.all([
+  const [packages, workspace, billing] = await Promise.all([
     listManagedPackages(),
     listDeveloperManagedCampaigns(user.id),
+    listDeveloperPayments(user.id),
   ]);
 
   return (
@@ -23,6 +25,14 @@ export default async function ManagedTestingPage() {
       description="Purchase a tester package, then TestLoop coordinates consenting testing participants for your app."
     >
       <ManagedTestingNotice />
+
+      <div className="mt-6">
+        <PaymentsPackagesPanel
+          payments={billing.payments}
+          activePackage={billing.activePackage}
+          allocation={billing.allocation}
+        />
+      </div>
 
       {workspace.pendingPayments.length > 0 ? (
         <div className="mt-6 space-y-3">

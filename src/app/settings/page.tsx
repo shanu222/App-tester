@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { SettingsForms } from "@/components/settings/settings-forms";
 import { NotificationsForm } from "@/components/settings/notifications-form";
 import { getNotificationSettings } from "@/lib/services/notifications";
+import { listDeveloperPayments } from "@/lib/services/managed-testing";
+import { PaymentsPackagesPanel } from "@/components/managed-testing/payments-packages-panel";
 import { CompanyAboutBlurb } from "@/components/brand/company-attribution";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,12 +17,18 @@ export default async function SettingsPage() {
   const settings = await prisma.userSettings.findUnique({ where: { userId: user.id } });
   const templates = await prisma.messageTemplate.findMany({ where: { userId: user.id, campaignId: null } });
   const notifications = await getNotificationSettings(user.id);
+  const billing = await listDeveloperPayments(user.id);
   return (
     <AppShell title="Settings">
       <div className="space-y-6">
         <Suspense fallback={null}>
           <NotificationsForm initial={notifications} />
         </Suspense>
+        <PaymentsPackagesPanel
+          payments={billing.payments}
+          activePackage={billing.activePackage}
+          allocation={billing.allocation}
+        />
         <Card>
           <CardHeader
             title="Google Play"

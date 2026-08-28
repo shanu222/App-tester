@@ -89,7 +89,7 @@ export function PackageCards({ packages }: { packages: Pack[] }) {
                 disabled={pending !== null}
                 onClick={() => void buy(pack)}
               >
-                {pending === pack.code ? "Starting…" : pack.contactOnly ? "Contact us" : "Buy Now"}
+                {pending === pack.code ? "Starting…" : pack.contactOnly ? "Contact us" : "Purchase Package"}
               </Button>
             </article>
           );

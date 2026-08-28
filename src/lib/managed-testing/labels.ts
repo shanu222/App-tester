@@ -42,17 +42,22 @@ export function campaignStatusTone(status: ManagedCampaignStatus): BadgeTone {
 }
 
 export const PAYMENT_STATUS_LABELS: Record<ManagedPaymentStatus, string> = {
-  PENDING: "Pending",
-  PAID: "Paid",
+  PENDING: "Pending payment",
+  PENDING_PAYMENT: "Pending payment",
+  PROOF_SUBMITTED: "Proof submitted",
+  UNDER_REVIEW: "Payment under review",
+  APPROVED: "Approved",
+  PAID: "Approved",
+  REJECTED: "Rejected",
   FAILED: "Failed",
   REFUNDED: "Refunded",
   CANCELLED: "Cancelled",
 };
 
 export function paymentStatusTone(status: ManagedPaymentStatus): BadgeTone {
-  if (status === "PAID") return "good";
-  if (status === "FAILED" || status === "CANCELLED") return "bad";
-  if (status === "REFUNDED") return "warn";
+  if (status === "PAID" || status === "APPROVED") return "good";
+  if (status === "FAILED" || status === "CANCELLED" || status === "REJECTED") return "bad";
+  if (status === "REFUNDED" || status === "UNDER_REVIEW" || status === "PROOF_SUBMITTED") return "warn";
   return "warn";
 }
 

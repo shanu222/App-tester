@@ -4,6 +4,7 @@ import { getManagedCampaignForUser, listSelectableApps } from "@/lib/services/ma
 import { CampaignSetupForm } from "@/components/managed-testing/campaign-setup-form";
 import { Card, CardHeader } from "@/components/ui/card";
 import { redirect } from "next/navigation";
+import { paymentIsActivated } from "@/lib/managed-testing/methods";
 
 export default async function ManagedCampaignSetupPage({
   params,
@@ -16,7 +17,7 @@ export default async function ManagedCampaignSetupPage({
     getManagedCampaignForUser(user.id, publicId),
     listSelectableApps(user.id),
   ]);
-  if (campaign.paymentStatus !== "PAID") redirect(`/managed-testing/payments/${campaign.paymentPublicId}`);
+  if (!paymentIsActivated(campaign.paymentStatus)) redirect(`/managed-testing/payments/${campaign.paymentPublicId}`);
   if (campaign.status === "ACTIVE" || campaign.status === "COMPLETED") {
     redirect(`/managed-testing/${publicId}`);
   }

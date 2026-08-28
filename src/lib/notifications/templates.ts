@@ -300,6 +300,92 @@ export function managedTestingDailyReportEmail(input: {
   return { subject: heading, html, text };
 }
 
+export function adminPaymentReviewEmail(input: {
+  developerName: string;
+  developerEmail: string;
+  packageName: string;
+  testerCount: number;
+  amountLabel: string;
+  methodLabel: string;
+  transactionReference: string;
+  developerReference: string | null;
+  submittedAt: string;
+  reviewUrl: string;
+  statusLabel: string;
+  hasProof: boolean;
+}) {
+  const rows = [
+    ["Developer", input.developerName],
+    ["Email", input.developerEmail],
+    ["Package", input.packageName],
+    ["Testers", String(input.testerCount)],
+    ["Amount", input.amountLabel],
+    ["Payment method", input.methodLabel],
+    ["TestLoop reference", input.transactionReference],
+    ["Developer reference", input.developerReference || "Not provided"],
+    ["Submitted", input.submittedAt],
+    ["Status", input.statusLabel],
+    ["Payment proof", input.hasProof ? "Attached" : "Not attached"],
+  ];
+  const htmlRows = rows
+    .map(
+      ([label, value]) =>
+        `<tr><td style="padding:6px 0;color:#64748b;width:180px">${escapeHtml(label)}</td><td style="padding:6px 0;font-weight:600">${escapeHtml(value)}</td></tr>`,
+    )
+    .join("");
+  const html = wrapEmail(
+    `<p>A developer submitted payment proof for a managed testing package.</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;font-size:14px;line-height:1.5">${htmlRows}</table>
+    ${emailButton(input.reviewUrl, "Review payment")}`,
+  );
+  const text = [
+    "A developer submitted payment proof for a managed testing package.",
+    ...rows.map(([label, value]) => `${label}: ${value}`),
+    `Review payment: ${input.reviewUrl}`,
+  ].join("\n");
+  return { subject: `Payment under review · ${input.packageName} · ${input.developerEmail}`, html, text };
+}
+
+export function developerPaymentApprovedEmail(input: {
+  packageName: string;
+  testerCount: number;
+  amountLabel: string;
+  setupUrl: string;
+}) {
+  const html = wrapEmail(
+    `<p>Your ${escapeHtml(input.packageName)} payment was approved.</p>
+    <p>${input.testerCount} managed testers are now allocated to your TestLoop account. Create the testing campaign to continue.</p>
+    ${emailButton(input.setupUrl, "Open package")}`,
+  );
+  const text = `Your ${input.packageName} payment was approved.\n\n${input.testerCount} managed testers are now allocated to your TestLoop account.\n\nOpen package:\n${input.setupUrl}\n`;
+  return { subject: `Payment approved · ${input.packageName}`, html, text };
+}
+
+export function developerPaymentRejectedEmail(input: {
+  packageName: string;
+  amountLabel: string;
+  note: string | null;
+  retryUrl: string;
+}) {
+  const note = input.note?.trim()
+    ? `<p style="margin:16px 0;padding:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px">${escapeHtml(input.note.trim())}</p>`
+    : "";
+  const html = wrapEmail(
+    `<p>TestLoop could not approve the ${escapeHtml(input.packageName)} payment (${escapeHtml(input.amountLabel)}).</p>
+    ${note}
+    <p>You can upload a new payment proof from your TestLoop account. The package stays inactive until a later payment is approved.</p>
+    ${emailButton(input.retryUrl, "Resubmit payment proof")}`,
+  );
+  const text = [
+    `TestLoop could not approve the ${input.packageName} payment (${input.amountLabel}).`,
+    input.note?.trim() ? `Note: ${input.note.trim()}` : "",
+    `Resubmit payment proof:\n${input.retryUrl}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  return { subject: `Payment not approved · ${input.packageName}`, html, text };
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")

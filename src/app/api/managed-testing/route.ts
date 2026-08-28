@@ -5,6 +5,7 @@ import {
   confirmStubPayment,
   listDeveloperManagedCampaigns,
   listManagedPackages,
+  selectPaymentMethod,
   startCheckout,
 } from "@/lib/services/managed-testing";
 
@@ -27,15 +28,21 @@ export async function POST(request: Request) {
     const body = await parseJson(
       request,
       z.object({
-        action: z.enum(["checkout", "confirm-stub"]),
+        action: z.enum(["checkout", "confirm-stub", "select-method"]),
         packageCode: z.string().optional(),
         paymentPublicId: z.string().optional(),
+        methodId: z.string().optional(),
       }),
     );
     if (body.action === "checkout") {
       if (!body.packageCode) return json({ error: "Select a package." }, 400);
       const result = await startCheckout(user.id, body.packageCode);
       return json({ ok: true, ...result });
+    }
+    if (body.action === "select-method") {
+      if (!body.paymentPublicId || !body.methodId) return json({ error: "Choose a payment method." }, 400);
+      const payment = await selectPaymentMethod(user.id, body.paymentPublicId, body.methodId);
+      return json({ ok: true, payment });
     }
     if (!body.paymentPublicId) return json({ error: "Payment required." }, 400);
     const result = await confirmStubPayment(user.id, body.paymentPublicId);

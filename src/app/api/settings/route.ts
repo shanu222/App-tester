@@ -3,13 +3,15 @@ import { json, handleRouteError, parseJson } from "@/lib/http";
 import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
 import { sanitizeUser } from "@/lib/services/users";
+import { omitNotificationSecrets } from "@/lib/services/notifications";
 
 export async function GET() {
   try {
     const user = await requireUser();
     const settings = await prisma.userSettings.findUnique({ where: { userId: user.id } });
     const templates = await prisma.messageTemplate.findMany({ where: { userId: user.id } });
-    return json({ user: sanitizeUser(user), settings, templates });
+    const safeSettings = settings ? omitNotificationSecrets(settings) : settings;
+    return json({ user: sanitizeUser(user), settings: safeSettings, templates });
   } catch (error) {
     return handleRouteError(error);
   }
@@ -70,7 +72,7 @@ export async function PATCH(request: Request) {
       },
       create: { userId: user.id },
     });
-    return json({ settings });
+    return json({ settings: omitNotificationSecrets(settings) });
   } catch (error) {
     return handleRouteError(error);
   }

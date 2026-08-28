@@ -2,6 +2,7 @@ import { CampaignStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { NotFoundError, AppError } from "@/lib/errors";
 import { logActivity } from "@/lib/audit";
+import { notifyRequestLifecycle } from "@/lib/services/notifications";
 import { isDemoMode } from "@/lib/env";
 import { campaignTestingUrl } from "@/lib/integrations/play-testers";
 import { campaignAccessFields, detectTrackAccess } from "@/lib/integrations/play-access";
@@ -402,6 +403,14 @@ export async function removeTestingPost(userId: string, id: string) {
     action: "CAMPAIGN_REMOVED",
     result: updated.name,
   });
+  if (updated.status === "ARCHIVED") {
+    await notifyRequestLifecycle({
+      userId,
+      campaignId: id,
+      appName: updated.name,
+      kind: "archived",
+    }).catch(() => undefined);
+  }
   return updated;
 }
 
@@ -464,6 +473,14 @@ export async function transitionCampaign(
     action: `CAMPAIGN_${to}`,
     result: updated.name,
   });
+  if (to === "ARCHIVED" || to === "COMPLETED") {
+    await notifyRequestLifecycle({
+      userId,
+      campaignId: id,
+      appName: updated.name,
+      kind: to === "ARCHIVED" ? "archived" : "completed",
+    }).catch(() => undefined);
+  }
   return updated;
 }
 

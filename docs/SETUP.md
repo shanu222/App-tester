@@ -29,7 +29,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 Set:
 
 - `ENCRYPTION_KEY` — 64 hex characters
-- `CRON_SECRET` — random string
+- `CRON_SECRET` — cryptographically secure random value (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
 - `DATABASE_URL` — already set for Compose
 - `DEMO_MODE=true` for local mock adapters
 

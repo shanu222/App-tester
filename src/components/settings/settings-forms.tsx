@@ -113,7 +113,7 @@ export function SettingsForms({
       </Card>
 
       <Card>
-        <CardHeader title="Automation & notifications" description="Nothing is sent automatically unless you enable it." />
+        <CardHeader title="Automation & in-app alerts" description="These alerts appear inside TestLoop. Email alerts are configured above." />
         <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
           <Checkbox
             name="requireCommentApproval"
@@ -131,7 +131,7 @@ export function SettingsForms({
             label="Notify new opportunities"
           />
           <Checkbox name="notifyReplies" defaultChecked={settings.notifyReplies} label="Notify replies" />
-          <Checkbox name="notifyTesters" defaultChecked={settings.notifyTesters} label="Notify tester events" />
+          <Checkbox name="notifyTesters" defaultChecked={settings.notifyTesters} label="In-app: tester events" />
           <Checkbox
             name="notifyIntegrations"
             defaultChecked={settings.notifyIntegrations}

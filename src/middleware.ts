@@ -20,6 +20,8 @@ const PUBLIC_PREFIXES = [
   "/api/health",
   "/api/cron",
   "/api/telemetry",
+  "/api/notifications/verify",
+  "/notifications/verify",
   "/test",
   "/api/test",
 ];

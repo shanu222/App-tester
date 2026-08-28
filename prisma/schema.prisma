@@ -265,6 +265,19 @@ model UserSettings {
   notifyTesters          Boolean  @default(true)
   notifyIntegrations     Boolean  @default(true)
   notifyFeedback         Boolean  @default(true)
+  /**
+   * Verified address for TestLoop SMTP notifications. Independent of Play/login email.
+   */
+  notificationEmail      String?
+  notificationEmailVerified Boolean @default(false)
+  pendingNotificationEmail String?
+  notificationEmailVerificationTokenHash String?
+  notificationEmailVerificationExpiresAt DateTime?
+  emailNotificationsEnabled Boolean @default(true)
+  notificationPreferences Json?
+  lastNotificationSentAt DateTime?
+  lastDailySummaryOn     DateTime?
+  lastDailySummaryStatus String?
   defaultKeywords        String[] @default(["need testers", "looking for testers", "Android testers", "Google Play testing", "closed testing", "beta testers", "test my app", "I need Android testers", "app testing"])
   playClosedTestTarget   Int      @default(12)
   playClosedTestDays     Int      @default(14)
@@ -764,6 +777,7 @@ model EmailEvent {
   subject    String?
   status     String
   error      String?
+  eventKey   String?   @unique
   createdAt  DateTime  @default(now())
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)

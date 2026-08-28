@@ -1,5 +1,5 @@
 import { json } from "@/lib/http";
-import { googleOAuthConfigured, isDemoMode } from "@/lib/env";
+import { googleOAuthConfigured, isDemoMode, smtpConfigured } from "@/lib/env";
 import { firebaseAuthConfigured } from "@/lib/firebase/config";
 import { credentialsEncryptionConfigured } from "@/lib/encryption";
 import { prisma } from "@/lib/db";
@@ -57,5 +57,6 @@ export async function GET() {
     signIn: { provider: "firebase", configured: firebaseAuthConfigured() },
     googleApiAccess: { configured: googleOAuthConfigured() },
     credentialsAtRest: { configured: credentialsEncryptionConfigured() },
+    smtp: { configured: smtpConfigured() },
   });
 }

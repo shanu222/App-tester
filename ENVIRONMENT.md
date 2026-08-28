@@ -10,7 +10,7 @@ There is no login system. `APP_URL` should be `https://app-tester-three.vercel.a
 | `DIRECT_URL` | yes on Vercel | Direct / unpooled URL for Prisma migrations |
 | `APP_URL` | yes | Public origin, e.g. `https://app-tester-three.vercel.app` |
 | `ENCRYPTION_KEY` | yes in prod | AES-256-GCM key (64 hex chars) for OAuth tokens and service-account JSON |
-| `CRON_SECRET` | yes in prod | Bearer secret for `/api/cron/tick` |
+| `CRON_SECRET` | yes in prod | Bearer secret for `/api/cron/tick` and `/api/cron/daily-testing-summary`. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Set in Vercel → Project → Settings → Environment Variables. |
 | `DEMO_MODE` | yes | `true` only in development. Production must be `false` |
 | `DEFAULT_USER_EMAIL` | no | Email of the single workspace user (default `owner@local`) |
 | `GOOGLE_CLIENT_ID` | for Gmail send + Play OAuth | Google Cloud OAuth client. Not a login provider. |

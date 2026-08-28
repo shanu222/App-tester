@@ -19,6 +19,7 @@ import {
   type PlayCredentials,
 } from "@/lib/integrations/play-auth";
 import { listPlayTracks, searchPlayApps, type ServiceAccountJson } from "@/lib/integrations/play";
+import { notifyPlaySyncIssue, notifyPlayTrackChange } from "@/lib/services/notifications";
 import { canonicalPlayStoreUrl } from "@/lib/play-url";
 import type { PlayTrackRecord } from "@/lib/integrations/types";
 import {
@@ -557,6 +558,7 @@ export async function discoverPlayApps(userId: string, options?: { syncTracks?: 
       action: "PLAY_APP_DISCOVERY_FAILED",
       result: result.code,
     });
+    await notifyPlaySyncIssue(userId).catch(() => undefined);
     throw new AppError(result.error);
   }
 
@@ -770,6 +772,7 @@ export async function syncPackageTracks(input: {
       action: "PLAY_TRACKS_FAILED",
       result: `${input.packageName} · ${result.code}`,
     });
+    await notifyPlaySyncIssue(input.userId, owned.name).catch(() => undefined);
     throw new AppError(
       result.error,
       result.code === "PLAY_AUTH_EXPIRED" ? 409 : result.code === "PLAY_UNAVAILABLE" ? 503 : 400,
@@ -800,6 +803,9 @@ export async function syncPackageTracks(input: {
       newTracks.length ? ` · new: ${newTracks.join(", ")}` : ""
     }`,
   });
+  if (newTracks.length) {
+    await notifyPlayTrackChange(input.userId, owned.id, owned.name).catch(() => undefined);
+  }
 
   return {
     packageName: input.packageName,
@@ -834,6 +840,7 @@ export async function refreshFromGooglePlay(userId: string) {
   await logActivity({ userId, action: "PLAY_SYNC_STARTED", result: "refresh" });
   const diagnostics = await verifyPlayConnection({ userId });
   if (!diagnostics.connected) {
+    await notifyPlaySyncIssue(userId).catch(() => undefined);
     throw new AppError(
       diagnostics.errorMessage || "Your Google Play authorization has expired. Reconnect Google Play to continue.",
       409,

@@ -2,12 +2,16 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
 import { SettingsForms } from "@/components/settings/settings-forms";
+import { NotificationsForm } from "@/components/settings/notifications-form";
+import { getNotificationSettings } from "@/lib/services/notifications";
+import { Suspense } from "react";
 import Link from "next/link";
 
 export default async function SettingsPage() {
   const user = await requireUser();
   const settings = await prisma.userSettings.findUnique({ where: { userId: user.id } });
   const templates = await prisma.messageTemplate.findMany({ where: { userId: user.id, campaignId: null } });
+  const notifications = await getNotificationSettings(user.id);
   return (
     <AppShell title="Settings">
       <div className="mb-6 flex flex-wrap gap-2 text-sm">
@@ -21,31 +25,36 @@ export default async function SettingsPage() {
           Alerts
         </Link>
       </div>
-      <SettingsForms
-        user={{
-          name: user.name || "",
-          email: user.email,
-          developerName: user.developerName || "",
-          company: user.company || "",
-        }}
-        settings={{
-          commentsPerHour: settings?.commentsPerHour ?? 3,
-          commentsPerDay: settings?.commentsPerDay ?? 8,
-          processedPostsPerDay: settings?.processedPostsPerDay ?? 40,
-          messagesPerDay: settings?.messagesPerDay ?? 15,
-          requireCommentApproval: settings?.requireCommentApproval ?? true,
-          allowAutomatedEmail: settings?.allowAutomatedEmail ?? false,
-          notifyOpportunities: settings?.notifyOpportunities ?? true,
-          notifyReplies: settings?.notifyReplies ?? true,
-          notifyTesters: settings?.notifyTesters ?? true,
-          notifyIntegrations: settings?.notifyIntegrations ?? true,
-          notifyFeedback: settings?.notifyFeedback ?? true,
-          playClosedTestTarget: settings?.playClosedTestTarget ?? 12,
-          playClosedTestDays: settings?.playClosedTestDays ?? 14,
-          defaultKeywords: (settings?.defaultKeywords || []).join("\n"),
-        }}
-        templates={templates.map((item) => ({ key: item.key, name: item.name, body: item.body }))}
-      />
+      <div className="space-y-6">
+        <Suspense fallback={null}>
+          <NotificationsForm initial={notifications} />
+        </Suspense>
+        <SettingsForms
+          user={{
+            name: user.name || "",
+            email: user.email,
+            developerName: user.developerName || "",
+            company: user.company || "",
+          }}
+          settings={{
+            commentsPerHour: settings?.commentsPerHour ?? 3,
+            commentsPerDay: settings?.commentsPerDay ?? 8,
+            processedPostsPerDay: settings?.processedPostsPerDay ?? 40,
+            messagesPerDay: settings?.messagesPerDay ?? 15,
+            requireCommentApproval: settings?.requireCommentApproval ?? true,
+            allowAutomatedEmail: settings?.allowAutomatedEmail ?? false,
+            notifyOpportunities: settings?.notifyOpportunities ?? true,
+            notifyReplies: settings?.notifyReplies ?? true,
+            notifyTesters: settings?.notifyTesters ?? true,
+            notifyIntegrations: settings?.notifyIntegrations ?? true,
+            notifyFeedback: settings?.notifyFeedback ?? true,
+            playClosedTestTarget: settings?.playClosedTestTarget ?? 12,
+            playClosedTestDays: settings?.playClosedTestDays ?? 14,
+            defaultKeywords: (settings?.defaultKeywords || []).join("\n"),
+          }}
+          templates={templates.map((item) => ({ key: item.key, name: item.name, body: item.body }))}
+        />
+      </div>
     </AppShell>
   );
 }

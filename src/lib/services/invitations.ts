@@ -1,8 +1,6 @@
 import { prisma } from "@/lib/db";
 import { AppError, NotFoundError } from "@/lib/errors";
 import { logActivity, notify } from "@/lib/audit";
-import { sendTransactionalEmail } from "@/lib/email";
-import { env } from "@/lib/env";
 import { assertOutreachAllowed, recordOutreach } from "@/lib/rate-limit";
 import { renderTemplate, DEFAULT_TEMPLATES } from "@/lib/templates";
 import { readCredentials } from "@/lib/integrations/store";
@@ -22,8 +20,9 @@ import {
   GROUP_JOIN_NEXT_STEP,
   type TesterJoinKind,
 } from "@/lib/integrations/play-access";
-import { parseTracksSnapshot } from "@/lib/integrations/play-config";
+import { parseTracksSnapshot, playTrackDisplayName } from "@/lib/integrations/play-config";
 import { setTesterStatus } from "@/lib/services/testers";
+import { notifyTesterJoined } from "@/lib/services/notifications";
 import type { PlayEnrollmentStatus } from "@prisma/client";
 import type { PlayEnrollmentOutcome } from "@/lib/integrations/play";
 
@@ -48,6 +47,8 @@ export async function notifyCampaignOwner(input: {
   emailSubject?: string;
   emailText?: string;
 }) {
+  void input.emailSubject;
+  void input.emailText;
   await notify({
     userId: input.ownerUserId,
     type: "tester",
@@ -55,17 +56,6 @@ export async function notifyCampaignOwner(input: {
     body: input.body,
     href: input.href,
     campaignId: input.campaignId,
-  });
-  if (!input.emailSubject || !input.emailText) return;
-  const owner = await prisma.user.findUnique({
-    where: { id: input.ownerUserId },
-    select: { email: true },
-  });
-  if (!owner?.email) return;
-  await sendTransactionalEmail({
-    to: owner.email,
-    subject: input.emailSubject,
-    text: input.emailText,
   });
 }
 
@@ -118,27 +108,44 @@ export async function grantTesterAccess(input: {
   if (!row) throw new NotFoundError("Tester campaign not found.");
   if (!row.tester.emailNormalized) throw new AppError("Confirm a tester email first.");
   if (!row.emailConfirmed) throw new AppError("Confirm the email before adding the tester.");
+  const granted = row;
 
-  const testingType = row.campaign.track?.testingType ?? row.campaign.testingType;
+  const testingType = granted.campaign.track?.testingType ?? granted.campaign.testingType;
   const mode = testerAccessMode(testingType);
   const access = await trackAccessForCampaign({
-    userId: row.campaign.userId,
+    userId: granted.campaign.userId,
     testingType,
-    playTrack: row.campaign.playTrack,
-    testingAccessMethod: row.campaign.testingAccessMethod,
-    googleGroupConfigured: row.campaign.googleGroupConfigured,
-    googleGroupEmail: row.campaign.googleGroupEmail,
-    app: row.campaign.app,
+    playTrack: granted.campaign.playTrack,
+    testingAccessMethod: granted.campaign.testingAccessMethod,
+    googleGroupConfigured: granted.campaign.googleGroupConfigured,
+    googleGroupEmail: granted.campaign.googleGroupEmail,
+    app: granted.campaign.app,
   });
   const testing = campaignTestingUrl({
     testingType,
-    packageName: row.campaign.app.packageName,
-    configuredUrl: row.campaign.testingUrl || row.campaign.webOptInUrl,
+    packageName: granted.campaign.app.packageName,
+    configuredUrl: granted.campaign.testingUrl || granted.campaign.webOptInUrl,
   });
   const optInUrl = testing.url;
-  const reviewUrl = `${env.appUrl.replace(/\/$/, "")}/campaigns/${row.campaignId}`;
-  const testerName = row.tester.name || row.tester.emailNormalized || "Tester";
-  const trackName = row.campaign.playTrack || testingType.toLowerCase();
+  const testerCount = await prisma.testerCampaign.count({ where: { campaignId: granted.campaignId } });
+  const trackLabel = playTrackDisplayName(granted.campaign.playTrack || testingType.toLowerCase());
+
+  async function emailOwner(status: string, actionRequired: string | null, joinKind: TesterJoinKind) {
+    await notifyTesterJoined({
+      ownerUserId: input.userId,
+      campaignId: granted.campaignId,
+      testerKey: granted.testerId,
+      testerId: granted.testerId,
+      appName: granted.campaign.app.name,
+      testingType,
+      trackLabel,
+      testerStatus: status,
+      testerCount,
+      targetTesters: granted.campaign.targetTesters,
+      actionRequired,
+      joinKind,
+    });
+  }
 
   if (testingType === "OPEN") {
     await setTesterStatus({
@@ -154,6 +161,7 @@ export async function grantTesterAccess(input: {
       action: "TESTER_REGISTERED",
       result: `${row.tester.emailNormalized} · open testing · ${row.campaign.app.packageName}`,
     });
+    await emailOwner("Ready to test", null, "open");
     return {
       ok: true,
       mode,
@@ -183,28 +191,7 @@ export async function grantTesterAccess(input: {
       action: "TESTER_GROUP_JOIN",
       result: `${row.tester.emailNormalized} · google group · ${row.campaign.app.packageName}`,
     });
-    await notifyCampaignOwner({
-      ownerUserId: input.userId,
-      campaignId: row.campaignId,
-      title: "New tester joined your TestLoop testing request",
-      body: `Tester accepted your testing request and is joining the configured Google Group. App: ${row.campaign.app.name}. Tester: ${testerName}.`,
-      href: `/campaigns/${row.campaignId}`,
-      emailSubject: "New tester joined your TestLoop testing request",
-      emailText: [
-        "A new tester wants to test:",
-        row.campaign.app.name,
-        "",
-        `Testing type: ${testingType === "INTERNAL" ? "Internal Testing" : "Closed Testing"}`,
-        `Tester: ${testerName}`,
-        `Google account: ${row.tester.emailNormalized}`,
-        `Testing track: ${trackName}`,
-        "",
-        "Tester accepted your testing request and is joining the configured Google Group.",
-        "You do not need to add this Gmail to a Play tester list.",
-        "",
-        `Review tester: ${reviewUrl}`,
-      ].join("\n"),
-    });
+    await emailOwner("Joining Google Group", null, "google_group");
     return {
       ok: true,
       mode,
@@ -232,27 +219,13 @@ export async function grantTesterAccess(input: {
     action: "TESTER_PENDING_PLAY_CONSOLE",
     result: `${row.tester.emailNormalized} · ${testingType.toLowerCase()} · ${row.campaign.app.packageName}`,
   });
-  await notifyCampaignOwner({
-    ownerUserId: input.userId,
-    campaignId: row.campaignId,
-    title: "New tester request",
-    body: `Tester: ${testerName}. Google account: ${row.tester.emailNormalized}. App: ${row.campaign.app.name}. Testing track: ${trackName}. Action required: Add this tester to the Google Play ${testingType === "INTERNAL" ? "internal" : "closed"}-testing tester list.`,
-    href: `/campaigns/${row.campaignId}`,
-    emailSubject: "New tester joined your TestLoop testing request",
-    emailText: [
-      "A new tester wants to test:",
-      row.campaign.app.name,
-      "",
-      `Testing type: ${testingType === "INTERNAL" ? "Internal Testing" : "Closed Testing"}`,
-      `Tester: ${testerName}`,
-      `Google account: ${row.tester.emailNormalized}`,
-      `Testing track: ${trackName}`,
-      "",
-      "Action required: Add this tester to the Google Play closed-testing tester list.",
-      "",
-      `Review tester: ${reviewUrl}`,
-    ].join("\n"),
-  });
+  await emailOwner(
+    "Waiting for developer",
+    testingType === "INTERNAL"
+      ? "Google Play requires this tester to be added to the internal-testing tester list manually. TestLoop cannot add individual Gmail addresses through the Play API."
+      : "Google Play requires this tester to be added to the closed-test tester list manually. TestLoop cannot add individual Gmail addresses through the Play API.",
+    "individual",
+  );
   return {
     ok: true,
     mode,

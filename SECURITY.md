@@ -4,7 +4,8 @@
 - OAuth refresh tokens and service-account JSON are encrypted with AES-256-GCM (`ENCRYPTION_KEY`).
 - There is no login. The app uses a single workspace user.
 - Prisma parameterizes SQL.
-- Cron jobs require `Authorization: Bearer $CRON_SECRET`.
+- Cron jobs require `Authorization: Bearer $CRON_SECRET`. Missing configuration returns a server error; the secret is never sent to the browser.
+- SMTP credentials stay server-side and must not appear in `NEXT_PUBLIC_*`, logs, or API responses.
 - Conservative outreach rate limits default to 3 comments/hour and 8/day.
 - Human approval is the default for comments.
 - Block list + declined testers are not re-contacted for that campaign.

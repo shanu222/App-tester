@@ -34,10 +34,12 @@ Set these in Vercel → Settings → Environment Variables for **Production** (a
 DEMO_MODE=false
 APP_URL=https://app-tester-three.vercel.app
 ENCRYPTION_KEY=<64 hex chars: openssl rand -hex 32>
-CRON_SECRET=<openssl rand -hex 32>
+CRON_SECRET=<node -e "console.log(require('crypto').randomBytes(32).toString('hex'))">
 DATABASE_URL=<pooled — keep Neon value>
 DIRECT_URL=<direct — keep Neon value>
 ```
+
+SMTP variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`) are already configured on this Vercel project. Do not rename, remove, or expose them. Do not add `NEXT_PUBLIC_` copies.
 
 Optional OAuth (not a login):
 
@@ -68,13 +70,20 @@ Meta App Dashboard also needs the Privacy Policy URL: `https://YOUR-PROJECT.verc
 
 ## Cron
 
-`vercel.json` schedules `GET /api/cron/tick` once per day so the project deploys on the **Hobby** plan.
+`vercel.json` schedules:
 
-On **Pro**, change the schedule to every 15 minutes:
+- `GET /api/cron/tick` at `0 0 * * *` (daily job runner)
+- `GET /api/cron/daily-testing-summary` at `0 11 * * *` (≈ 4:00 PM Pakistan Standard Time, Asia/Karachi)
+
+Both endpoints require `CRON_SECRET`. Vercel Cron sends `Authorization: Bearer $CRON_SECRET` automatically when that variable exists. Unauthenticated callers cannot trigger the daily summary.
+
+On **Pro**, the job runner (`/api/cron/tick`) can run more often:
 
 ```json
 "schedule": "*/15 * * * *"
 ```
+
+Keep `/api/cron/daily-testing-summary` at `0 11 * * *` so the digest stays at approximately 4:00 PM Asia/Karachi.
 
 Jobs are idempotent and time out at 25s (serverless-safe). This is not a persistent worker. For high volume, run the same queue against the same database from an external worker.
 

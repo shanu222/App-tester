@@ -4,7 +4,9 @@
 - OAuth refresh tokens and service-account JSON are encrypted with AES-256-GCM (`ENCRYPTION_KEY`).
 - There is no login. The app uses a single workspace user.
 - Prisma parameterizes SQL.
-- Cron jobs require `Authorization: Bearer $CRON_SECRET`.
+- Cron jobs require `Authorization: Bearer $CRON_SECRET`. Missing `CRON_SECRET` returns a server configuration error; a wrong secret is rejected. The secret is never returned to the browser.
+- SMTP credentials (`SMTP_PASSWORD`, `SMTP_USER`, and the rest of the SMTP_* variables) stay server-side. They must not be placed in `NEXT_PUBLIC_*`, logged, committed, or included in API/error payloads.
+- Notification verification tokens are stored as SHA-256 hashes with an expiry. Plaintext tokens are not saved.
 - Conservative outreach rate limits default to 3 comments/hour and 8/day.
 - Human approval is the default for comments.
 - Block list + declined testers are not re-contacted for that campaign.
@@ -17,4 +19,4 @@
 
 1. Generate a new `ENCRYPTION_KEY`.
 2. Reconnect integrations (old ciphertext cannot be decrypted with a new key).
-3. Rotate `CRON_SECRET` and update the Vercel cron header or query param.
+3. Rotate `CRON_SECRET` in Vercel → Project → Settings → Environment Variables. Generate a new value with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.

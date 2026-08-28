@@ -23,6 +23,13 @@ export const env = {
   encryptionKey: process.env.ENCRYPTION_KEY || "",
   cronSecret: process.env.CRON_SECRET || "",
   authSecret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "dev-only-insecure-secret-change-me",
+  smtpHost: process.env.SMTP_HOST || "",
+  smtpPort: Number.parseInt(process.env.SMTP_PORT || "587", 10) || 587,
+  smtpSecure: /^(1|true|yes)$/i.test(process.env.SMTP_SECURE || ""),
+  smtpUser: process.env.SMTP_USER || "",
+  smtpPassword: process.env.SMTP_PASSWORD || "",
+  smtpFromEmail: process.env.SMTP_FROM_EMAIL || "",
+  smtpFromName: process.env.SMTP_FROM_NAME || "TestLoop",
   googleClientId: process.env.GOOGLE_CLIENT_ID || "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
   facebookClientId: process.env.FACEBOOK_CLIENT_ID || "",
@@ -46,6 +53,10 @@ export function assertProductionSecrets() {
 
 export function isDemoMode() {
   return env.demoMode && env.nodeEnv !== "production";
+}
+
+export function smtpConfigured() {
+  return Boolean(env.smtpHost && env.smtpUser && env.smtpPassword && env.smtpFromEmail);
 }
 
 /**

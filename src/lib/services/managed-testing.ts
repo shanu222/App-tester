@@ -36,9 +36,11 @@ import {
   type PaymentMethodId,
 } from "@/lib/managed-testing/methods";
 import { testerDisplayLabel, validateManagedCampaignSetup } from "@/lib/managed-testing/setup";
-import { isUsdTwelvePackage } from "@/lib/managed-testing/usd-twelve";
+import { isUsdTwelvePackage, parseUsdTwelveFulfillment } from "@/lib/managed-testing/usd-twelve";
+import { issuePaymentConfirmToken } from "@/lib/managed-testing/payment-confirm-token";
 import { fulfillUsdTwelvePackage } from "@/lib/services/usd-twelve-package";
-import { usdTwelveDeveloperApprovedEmail } from "@/lib/notifications/templates";
+import { formatDateTime } from "@/lib/utils";
+import { logActivity } from "@/lib/audit";
 import {
   isScheduledSendDue,
   parseNotificationTime,
@@ -52,6 +54,8 @@ import {
   adminPaymentReviewEmail,
   developerPaymentApprovedEmail,
   developerPaymentRejectedEmail,
+  usdTwelveAdminProofReviewEmail,
+  usdTwelveDeveloperActivatedEmail,
 } from "@/lib/notifications/templates";
 
 const INVITE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
@@ -245,6 +249,7 @@ async function markPaymentPaid(paymentId: string, provider: "STUB" | "MANUAL", r
       reviewedAt: new Date(),
       reviewedById: reviewerId,
       provider: provider === "STUB" ? "STUB" : payment.provider,
+      confirmTokenUsedAt: payment.confirmTokenUsedAt ?? new Date(),
     },
     include: { package: true },
   });
@@ -253,22 +258,35 @@ async function markPaymentPaid(paymentId: string, provider: "STUB" | "MANUAL", r
     const fulfilled = await fulfillUsdTwelvePackage(updated.id);
     const href = `/managed-testing/${fulfilled?.campaignPublicId || campaign.publicId}`;
     const campaignLink = `${env.appUrl.replace(/\/$/, "")}${href}`;
-    const approvedMail = usdTwelveDeveloperApprovedEmail({
+    const approvedMail = usdTwelveDeveloperActivatedEmail({
       packageName: payment.package.name,
       amountLabel: formatPackageAmount(payment.amountPkr, payment.currency),
       campaignUrl: campaignLink,
+      transactionReference: payment.transactionReference,
+      confirmedAt: formatDateTime(updated.paidAt || new Date()),
     });
     await notifyDeveloper(payment.userId, {
       type: "managed_payment_paid",
       eventKey: `managed_paid:${payment.id}`,
-      title: "Managed testing package active",
-      body: `${payment.package.name} is active. 12 testers are being coordinated for a 14-day programme.`,
+      title: "Payment confirmed · testing package active",
+      body: `${payment.package.name} is active. Payment confirmed and 12 testers are being invited.`,
       href,
     });
     const user = await prisma.user.findUnique({ where: { id: payment.userId }, select: { email: true } });
     if (user?.email) {
       await sendSmtpEmail({ to: user.email, ...approvedMail });
     }
+    await logActivity({
+      userId: payment.userId,
+      action: "managed_payment_confirmed",
+      result: "ok",
+      metadata: {
+        paymentPublicId: payment.publicId,
+        transactionReference: payment.transactionReference,
+        confirmedAt: (updated.paidAt || new Date()).toISOString(),
+        packageCode: updated.package.code,
+      },
+    });
     return { campaignPublicId: fulfilled?.campaignPublicId || campaign.publicId, alreadyPaid: false as const };
   }
   const setupUrl = `${env.appUrl.replace(/\/$/, "")}/managed-testing/${campaign.publicId}/setup`;
@@ -411,6 +429,8 @@ export async function submitPaymentProof(input: {
     throw new AppError("This payment is already under review or approved.");
   }
   const submittedAt = new Date();
+  const usdTwelve = isUsdTwelvePackage(payment.package.code);
+  const issued = usdTwelve ? issuePaymentConfirmToken(payment.publicId) : null;
   const updated = await prisma.managedTestingPayment.update({
     where: { id: payment.id },
     data: {
@@ -426,37 +446,67 @@ export async function submitPaymentProof(input: {
       adminNote: null,
       reviewedAt: null,
       reviewedById: null,
+      confirmTokenHash: issued?.nonceHash ?? null,
+      confirmTokenExpiresAt: issued?.expiresAt ?? null,
+      confirmTokenUsedAt: null,
     },
     include: { package: true, campaign: true },
   });
-  const reviewUrl = `${env.appUrl.replace(/\/$/, "")}/admin/managed-testing/payments/${updated.publicId}`;
-  const mail = adminPaymentReviewEmail({
-    developerName: payment.user.developerName || payment.user.name || payment.user.email,
-    developerEmail: payment.user.email,
-    packageName: payment.package.name,
-    testerCount: payment.package.testerCount,
-    amountLabel: formatPackageAmount(payment.amountPkr, payment.currency),
-    methodLabel: method.label,
-    transactionReference: payment.transactionReference,
-    developerReference: updated.developerReference,
-    submittedAt: submittedAt.toISOString(),
-    reviewUrl,
-    statusLabel: "Payment under review",
-    hasProof: true,
-  });
-  await sendSmtpEmail({
-    to: PAYMENTS_ADMIN_EMAIL,
-    subject: mail.subject,
-    text: mail.text,
-    html: mail.html,
-    attachments: [
-      {
-        filename: updated.proofFileName || "payment-proof",
-        content: input.file.bytes,
-        contentType: valid.mime,
-      },
-    ],
-  });
+  const origin = env.appUrl.replace(/\/$/, "");
+  const attachments = [
+    {
+      filename: updated.proofFileName || "payment-proof",
+      content: input.file.bytes,
+      contentType: valid.mime,
+    },
+  ];
+  if (usdTwelve && issued) {
+    const fulfillment = parseUsdTwelveFulfillment(payment.fulfillment);
+    const app = fulfillment
+      ? await prisma.app.findFirst({ where: { id: fulfillment.appId, userId: payment.userId }, select: { name: true } })
+      : null;
+    const mail = usdTwelveAdminProofReviewEmail({
+      developerName: payment.user.developerName || payment.user.name || payment.user.email,
+      developerEmail: payment.user.email,
+      appName: app?.name || "App",
+      amountLabel: formatPackageAmount(payment.amountPkr, payment.currency),
+      methodLabel: method.label,
+      transactionReference: payment.transactionReference,
+      submittedAt: formatDateTime(submittedAt),
+      confirmUrl: `${origin}/admin/managed-testing/confirm-payment?token=${encodeURIComponent(issued.token)}`,
+      hasProof: true,
+    });
+    await sendSmtpEmail({
+      to: PAYMENTS_ADMIN_EMAIL,
+      subject: mail.subject,
+      text: mail.text,
+      html: mail.html,
+      attachments,
+    });
+  } else {
+    const reviewUrl = `${origin}/admin/managed-testing/payments/${updated.publicId}`;
+    const mail = adminPaymentReviewEmail({
+      developerName: payment.user.developerName || payment.user.name || payment.user.email,
+      developerEmail: payment.user.email,
+      packageName: payment.package.name,
+      testerCount: payment.package.testerCount,
+      amountLabel: formatPackageAmount(payment.amountPkr, payment.currency),
+      methodLabel: method.label,
+      transactionReference: payment.transactionReference,
+      developerReference: updated.developerReference,
+      submittedAt: submittedAt.toISOString(),
+      reviewUrl,
+      statusLabel: "Payment under review",
+      hasProof: true,
+    });
+    await sendSmtpEmail({
+      to: PAYMENTS_ADMIN_EMAIL,
+      subject: mail.subject,
+      text: mail.text,
+      html: mail.html,
+      attachments,
+    });
+  }
   await notifyDeveloper(input.userId, {
     type: "managed_payment_submitted",
     eventKey: `managed_proof:${payment.id}:${submittedAt.toISOString()}`,

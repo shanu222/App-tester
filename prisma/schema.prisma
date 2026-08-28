@@ -1209,6 +1209,9 @@ model ManagedTestingPayment {
   reviewedAt           DateTime?
   reviewedById         String?
   fulfillment          Json?
+  confirmTokenHash     String?
+  confirmTokenExpiresAt DateTime?
+  confirmTokenUsedAt   DateTime?
   paidAt               DateTime?
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt

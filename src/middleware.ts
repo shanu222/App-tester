@@ -24,6 +24,8 @@ const PUBLIC_PREFIXES = [
   "/notifications/verify",
   "/managed-testing/join",
   "/api/managed-testing/join",
+  "/admin/managed-testing/confirm-payment",
+  "/api/admin/managed-testing/confirm-payment",
   "/test",
   "/api/test",
 ];

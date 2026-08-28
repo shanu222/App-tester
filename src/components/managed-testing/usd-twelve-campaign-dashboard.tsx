@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { TestingTypeBadge } from "@/components/ui/testing-type-badge";
 import { Table, TableWrap, Td, Th, Tr } from "@/components/ui/table";
 import { campaignStatusTone } from "@/lib/managed-testing/labels";
+import { paymentIsActivated } from "@/lib/managed-testing/methods";
 import { usdTwelveProgressStatus } from "@/lib/managed-testing/usd-twelve";
 import type { ManagedAssignmentStatus, ManagedCampaignStatus, ManagedPaymentStatus } from "@prisma/client";
 
@@ -36,6 +37,15 @@ export function UsdTwelveCampaignDashboard({ campaign }: { campaign: CampaignVie
   const confirmed = campaign.stats.confirmed;
   const pending = Math.max(0, 12 - confirmed);
 
+  const paymentConfirmed = paymentIsActivated(campaign.paymentStatus);
+  const packageActive = campaign.status === "ACTIVE" || campaign.status === "COMPLETED";
+  const testersInvited = campaign.stats.invitationsSent >= campaign.testerTarget;
+  const steps = [
+    { label: "Payment Confirmed", done: paymentConfirmed },
+    { label: "Testing Package Active", done: packageActive },
+    { label: "12 Testers Invited", done: testersInvited },
+  ];
+
   return (
     <AppShell title="Managed Testing" description="12 Testers / 14 Days · tester coordination and testing evidence">
       {completed ? (
@@ -44,14 +54,31 @@ export function UsdTwelveCampaignDashboard({ campaign }: { campaign: CampaignVie
         </p>
       ) : null}
 
+      <ol className="mt-4 grid gap-2 sm:grid-cols-3">
+        {steps.map((step) => (
+          <li
+            key={step.label}
+            className={
+              step.done
+                ? "rounded-card border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-medium text-emerald-800"
+                : "rounded-card border border-line bg-white px-3 py-2.5 text-sm text-muted"
+            }
+          >
+            {step.done ? "✓ " : "○ "}
+            {step.label}
+          </li>
+        ))}
+      </ol>
+
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <h2 className="text-xl font-semibold text-slate-900">{campaign.app?.name || "Campaign"}</h2>
         <TestingTypeBadge type={campaign.testingType} />
         <Badge tone={campaignStatusTone(campaign.status)}>{testingLabel}</Badge>
-        <Badge tone="good">PAID</Badge>
+        <Badge tone="good">{paymentConfirmed ? "Payment Confirmed" : campaign.paymentStatus}</Badge>
       </div>
       <p className="mt-1 text-sm text-muted">
-        App: {campaign.app?.name || "—"} · Package: 12 Testers / 14 Days · Payment: PAID · Testing: {testingLabel}
+        App: {campaign.app?.name || "—"} · Package: 12 Testers / 14 Days · Payment:{" "}
+        {paymentConfirmed ? "Payment Confirmed" : "Payment Under Review"} · Testing: {testingLabel}
       </p>
       <p className="mt-1 text-sm text-muted">
         Day {campaign.progress.day} of {campaign.progress.durationDays}

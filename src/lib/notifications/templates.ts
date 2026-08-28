@@ -541,6 +541,72 @@ export function usdTwelveDeveloperApprovedEmail(input: {
   return { subject: `Payment approved · ${input.packageName}`, html, text };
 }
 
+export function usdTwelveAdminProofReviewEmail(input: {
+  developerName: string;
+  developerEmail: string;
+  appName: string;
+  amountLabel: string;
+  methodLabel: string;
+  transactionReference: string;
+  submittedAt: string;
+  confirmUrl: string;
+  hasProof: boolean;
+}) {
+  const rows: Array<[string, string]> = [
+    ["Developer", input.developerName],
+    ["Developer email", input.developerEmail],
+    ["App", input.appName],
+    ["Package", "12 Testers / 14 Days"],
+    ["Amount paid", input.amountLabel],
+    ["Payment method", input.methodLabel],
+    ["TestLoop payment/reference ID", input.transactionReference],
+    ["Submitted", input.submittedAt],
+    ["Status", "Payment under review"],
+    ["Payment proof", input.hasProof ? "Attached" : "Not attached"],
+  ];
+  const html = wrapEmail(
+    `<p>A developer submitted payment proof for a TestLoop paid testing package. Verify the transfer against the receiving account, then confirm.</p>
+    ${kvTable(rows)}
+    ${emailButton(input.confirmUrl, "CONFIRM PAYMENT")}
+    <p style="color:#64748b;font-size:13px">This confirmation link is signed, single-use, and expires. Confirming activates the 12-tester / 14-day campaign and sends tester invitation emails.</p>`,
+  );
+  const text = [
+    "A developer submitted payment proof for a TestLoop paid testing package.",
+    "",
+    ...rows.map(([label, value]) => `${label}: ${value}`),
+    "",
+    `CONFIRM PAYMENT: ${input.confirmUrl}`,
+    "",
+    "This confirmation link is signed, single-use, and expires.",
+  ].join("\n");
+  return { subject: `Payment under review · 12 Testers / 14 Days · ${input.developerEmail}`, html, text };
+}
+
+export function usdTwelveDeveloperActivatedEmail(input: {
+  packageName: string;
+  amountLabel: string;
+  campaignUrl: string;
+  transactionReference: string;
+  confirmedAt: string;
+}) {
+  const html = wrapEmail(
+    `<p>Your payment has been confirmed and your testing campaign has been activated.</p>
+    <p>${escapeHtml(input.packageName)} (${escapeHtml(input.amountLabel)}) is now coordinating 12 testers for 14 days.</p>
+    <p>TestLoop reference: ${escapeHtml(input.transactionReference)}<br>Confirmed: ${escapeHtml(input.confirmedAt)}</p>
+    ${emailButton(input.campaignUrl, "Open managed testing")}`,
+  );
+  const text = [
+    "Your payment has been confirmed and your testing campaign has been activated.",
+    "",
+    `${input.packageName} (${input.amountLabel}) is now coordinating 12 testers for 14 days.`,
+    `TestLoop reference: ${input.transactionReference}`,
+    `Confirmed: ${input.confirmedAt}`,
+    "",
+    `Open managed testing: ${input.campaignUrl}`,
+  ].join("\n");
+  return { subject: `Payment confirmed · ${input.packageName}`, html, text };
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")

@@ -69,3 +69,12 @@ export type UsdTwelveFulfillment = {
   testingType: "INTERNAL" | "CLOSED" | "OPEN";
   testingUrl: string;
 };
+
+export function parseUsdTwelveFulfillment(value: unknown): UsdTwelveFulfillment | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const testingType = row.testingType;
+  if (testingType !== "INTERNAL" && testingType !== "CLOSED" && testingType !== "OPEN") return null;
+  if (typeof row.appId !== "string" || typeof row.testingUrl !== "string") return null;
+  return { appId: row.appId, testingType, testingUrl: row.testingUrl };
+}

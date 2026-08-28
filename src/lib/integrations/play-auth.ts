@@ -2,6 +2,7 @@ import { google } from "googleapis";
 import { env } from "@/lib/env";
 import { ANDROID_PUBLISHER_SCOPE, PLAY_REPORTING_SCOPE } from "@/lib/integrations/play-scopes";
 import type { ServiceAccountJson } from "@/lib/integrations/play";
+import { withPlayRetry } from "@/lib/integrations/play-retry";
 
 export { ANDROID_PUBLISHER_SCOPE, PLAY_REPORTING_SCOPE };
 
@@ -95,6 +96,7 @@ export function publisherClient(creds: PlayCredentials) {
   return google.androidpublisher({
     version: "v3",
     auth: playAuth(creds, [ANDROID_PUBLISHER_SCOPE]) as never,
+    timeout: 15_000,
   });
 }
 
@@ -103,14 +105,24 @@ export async function playAccessToken(
   creds: PlayCredentials,
   scopes: string[],
 ): Promise<string | null> {
-  const auth = playAuth(creds, scopes);
-  if (creds.method === "OAUTH") {
-    const token = await (auth as PlayOAuthClient).getAccessToken();
-    return token.token ?? null;
+  try {
+    return await withPlayRetry(
+      async () => {
+        const auth = playAuth(creds, scopes);
+        if (creds.method === "OAUTH") {
+          const token = await (auth as PlayOAuthClient).getAccessToken();
+          return token.token ?? null;
+        }
+        const client = await (auth as PlayServiceAccountAuth).getClient();
+        const token = await client.getAccessToken();
+        return token.token ?? null;
+      },
+      { attempts: 2, timeoutMs: 12_000 },
+    );
+  } catch (error) {
+    console.error("[testloop][play] access token refresh failed", error);
+    return null;
   }
-  const client = await (auth as PlayServiceAccountAuth).getClient();
-  const token = await client.getAccessToken();
-  return token.token ?? null;
 }
 
 /**

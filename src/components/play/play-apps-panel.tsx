@@ -23,6 +23,7 @@ import {
 import { formatPlayTimestamp } from "@/components/play/play-connection-panel";
 import { SourceBadge } from "@/components/ui/source-badge";
 import { PLAY_TESTER_API_LIMITATION } from "@/lib/integrations/play-testers";
+import { fetchPlayJson } from "@/lib/integrations/play-client-fetch";
 
 export type PlayAppView = {
   id: string;
@@ -94,14 +95,13 @@ export function PlayAppsPanel({
     setPending("refresh");
     setError(null);
     try {
-      const response = await fetch("/api/google-play/apps", {
+      const { response, data } = await fetchPlayJson("/api/google-play/apps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "refresh" }),
       });
-      const data = await response.json();
       if (!response.ok) {
-        setError(data?.error || `Could not refresh Google Play (HTTP ${response.status}).`);
+        setError((typeof data.error === "string" && data.error) || `Could not refresh Google Play (HTTP ${response.status}).`);
         return;
       }
       router.refresh();
@@ -119,29 +119,28 @@ export function PlayAppsPanel({
     setPending(`sync:${app.packageName}`);
     try {
       if (!app.selected) {
-        const selectResponse = await fetch("/api/google-play/apps", {
+        const { response: selectResponse, data: selectData } = await fetchPlayJson("/api/google-play/apps", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "select", packageName: app.packageName }),
         });
-        const selectData = await selectResponse.json();
         if (!selectResponse.ok) {
-          setError(selectData?.error || "This app could not be selected.");
+          setError((typeof selectData.error === "string" && selectData.error) || "This app could not be selected.");
           return;
         }
       } else {
-        const syncResponse = await fetch("/api/google-play/apps", {
+        const { response: syncResponse, data: syncData } = await fetchPlayJson("/api/google-play/apps", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "sync", packageName: app.packageName }),
         });
-        const syncData = await syncResponse.json();
         if (!syncResponse.ok) {
-          setError(syncData?.error || "Could not read tracks for this app.");
+          setError((typeof syncData.error === "string" && syncData.error) || "Could not read tracks for this app.");
           return;
         }
-        if (Array.isArray(syncData?.discovery?.newTracks)) {
-          setNewTracks(syncData.discovery.newTracks);
+        const discovery = syncData.discovery as { newTracks?: unknown } | undefined;
+        if (Array.isArray(discovery?.newTracks)) {
+          setNewTracks(discovery.newTracks.filter((item): item is string => typeof item === "string"));
         }
       }
       router.refresh();
@@ -156,19 +155,24 @@ export function PlayAppsPanel({
     setPending(`manage:${packageName}:${track}`);
     setError(null);
     try {
-      const response = await fetch("/api/google-play/manage", {
+      const { response, data } = await fetchPlayJson("/api/google-play/manage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ packageName, track }),
       });
-      const data = await response.json();
       if (!response.ok) {
-        setError(data?.error || "Could not open that testing campaign.");
+        setError((typeof data.error === "string" && data.error) || "Could not open that testing campaign.");
         return;
       }
-      window.location.href = `/campaigns/${data.campaignId}`;
+      const campaignId = typeof data.campaignId === "string" ? data.campaignId : "";
+      if (!campaignId) {
+        setError("Could not open that testing campaign.");
+        return;
+      }
+      window.location.href = `/campaigns/${campaignId}`;
     } catch {
       setError("Google Play could not be reached. Your TestLoop data has not been changed.");
+    } finally {
       setPending(null);
     }
   }

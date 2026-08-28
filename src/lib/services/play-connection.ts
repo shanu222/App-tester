@@ -33,6 +33,7 @@ import {
 } from "@/lib/integrations/play-config";
 import { campaignTestingUrl } from "@/lib/integrations/play-testers";
 import { createCampaign, ensureCampaignPublicFields } from "@/lib/services/campaigns";
+import { withTimeout } from "@/lib/integrations/play-retry";
 import {
   PLAY_DISCONNECT_PARTIAL,
   PLAY_NOT_CONNECTED_FEATURE,
@@ -242,10 +243,15 @@ export async function connectOAuthCode(input: {
   let refreshToken: string | null = null;
   let email: string | null = null;
   try {
-    const { tokens } = await client.getToken(input.code);
+    const { tokens } = await withTimeout(() => client.getToken(input.code), 15_000);
     refreshToken = tokens.refresh_token ?? null;
     email = emailFromIdToken(tokens.id_token);
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.name === "PlayTimeoutError") {
+      throw new AppError(
+        "Google did not finish authorising in time. Start the Google Play connection again. No Google Play data was changed.",
+      );
+    }
     // The raw error can carry the authorization code, so it is not surfaced.
     throw new AppError(
       "Google rejected the authorisation response. Start the Google Play connection again.",
@@ -630,12 +636,17 @@ export async function listDiscoveredApps(userId: string): Promise<DiscoveredApp[
     if (row.status === "ADDING") current.pendingPlayAction += 1;
     byApp.set(row.appId, current);
   }
-  return rows.map((row) => {
-    const app = toDiscoveredApp(row);
-    app.testloop = row.appId
-      ? byApp.get(row.appId) || { testers: 0, pendingPlayAction: 0 }
-      : { testers: 0, pendingPlayAction: 0 };
-    return app;
+  return rows.flatMap((row) => {
+    try {
+      const app = toDiscoveredApp(row);
+      app.testloop = row.appId
+        ? byApp.get(row.appId) || { testers: 0, pendingPlayAction: 0 }
+        : { testers: 0, pendingPlayAction: 0 };
+      return [app];
+    } catch (error) {
+      console.error("[testloop][play] skipped a cached Play app that could not be read", error);
+      return [];
+    }
   });
 }
 

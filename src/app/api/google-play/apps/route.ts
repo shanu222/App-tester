@@ -8,6 +8,8 @@ import {
   syncPackageTracks,
 } from "@/lib/services/play-connection";
 
+export const maxDuration = 60;
+
 /** Cached list of applications Google reported for this developer. */
 export async function GET() {
   try {

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ServiceAccountWizard } from "@/components/play/service-account-wizard";
 import { PlayDiagnosticsPanel, type Diagnostics } from "@/components/play/play-diagnostics-panel";
 import { playConnectionStatusLabel } from "@/lib/play-disconnect";
+import { fetchPlayJson } from "@/lib/integrations/play-client-fetch";
 
 export type ConnectionView = {
   connected: boolean;
@@ -141,16 +142,15 @@ export function PlayConnectionPanel({
     setError(null);
     setVerification(null);
     try {
-      const response = await fetch("/api/google-play/apps", {
+      const { response, data } = await fetchPlayJson("/api/google-play/apps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "refresh" }),
       });
-      const data = await response.json();
       if (typeof data?.connected === "boolean") {
         setVerification(data as Diagnostics);
       } else if (!response.ok) {
-        setError(data?.error || `Request failed (HTTP ${response.status}).`);
+        setError((typeof data.error === "string" && data.error) || `Request failed (HTTP ${response.status}).`);
         return;
       }
       onRefresh?.();
@@ -166,20 +166,19 @@ export function PlayConnectionPanel({
     setPending("disconnect");
     setError(null);
     try {
-      const response = await fetch("/api/google-play/disconnect", {
+      const { response, data } = await fetchPlayJson("/api/google-play/disconnect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "{}",
       });
-      const data = await response.json();
       if (!response.ok) {
-        setError(data?.error || `Request failed (HTTP ${response.status}).`);
+        setError((typeof data.error === "string" && data.error) || `Request failed (HTTP ${response.status}).`);
         return;
       }
       if (data?.disconnected && data?.cleanupCompleted === false) {
         setCleanupFailed(true);
         setError(
-          data?.error ||
+          (typeof data.error === "string" && data.error) ||
             "Google Play was disconnected, but some TestLoop data could not be removed.",
         );
         onRefresh?.();

@@ -6,6 +6,7 @@ import {
   type GoogleApiError,
 } from "@/lib/integrations/google-api-error";
 import { ANDROID_PUBLISHER_SCOPE } from "@/lib/integrations/play-scopes";
+import { withPlayRetry } from "@/lib/integrations/play-retry";
 
 export { ANDROID_PUBLISHER_SCOPE };
 const API_BASE = "https://androidpublisher.googleapis.com/androidpublisher/v3";
@@ -176,11 +177,16 @@ async function requestAccessToken(sa: ServiceAccount) {
     scopes: [ANDROID_PUBLISHER_SCOPE],
     ...(sa.tokenUri ? { additionalClaims: {} } : {}),
   });
-  const credentials = await client.authorize();
-  if (!credentials.access_token) {
-    throw new Error("Google returned no access token for this service account.");
-  }
-  return credentials.access_token;
+  return await withPlayRetry(
+    async () => {
+      const credentials = await client.authorize();
+      if (!credentials.access_token) {
+        throw new Error("Google returned no access token for this service account.");
+      }
+      return credentials.access_token;
+    },
+    { attempts: 2, timeoutMs: 12_000 },
+  );
 }
 
 type ProbeOutcome =
@@ -195,34 +201,58 @@ type ProbeOutcome =
  */
 async function probeEdit(accessToken: string, packageName: string): Promise<ProbeOutcome> {
   const editsUrl = `${API_BASE}/applications/${encodeURIComponent(packageName)}/edits`;
-  let response: Response;
   try {
-    response = await fetch(editsUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
+    return await withPlayRetry(
+      async () => {
+        let response: Response;
+        try {
+          response = await fetch(editsUrl, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: "{}",
+            cache: "no-store",
+            signal: AbortSignal.timeout(15_000),
+          });
+        } catch (cause) {
+          throw cause;
+        }
+        if (response.status === 429 || response.status >= 500) {
+          throw Object.assign(new Error(`Play probe HTTP ${response.status}`), { status: response.status });
+        }
+        if (response.ok) {
+          const body = (await readJsonBody(response)) as { id?: unknown };
+          const editId = typeof body.id === "string" ? body.id : null;
+          if (editId) {
+            await fetch(`${editsUrl}/${encodeURIComponent(editId)}`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${accessToken}` },
+              cache: "no-store",
+            }).catch(() => undefined);
+          }
+          return { kind: "ok" as const };
+        }
+        return {
+          kind: "google" as const,
+          error: parseGoogleApiError(response.status, await readJsonBody(response)),
+        };
       },
-      body: "{}",
-      cache: "no-store",
-    });
+      { attempts: 3, timeoutMs: 18_000 },
+    );
   } catch (cause) {
+    const status = (cause as { status?: number }).status;
+    if (status === 429 || (typeof status === "number" && status >= 500)) {
+      const message = cause instanceof Error ? cause.message : `Play probe HTTP ${status}`;
+      return {
+        kind: "google",
+        error: parseGoogleApiError(status, { error: { code: status, message } }),
+      };
+    }
     const message = cause instanceof Error ? redactSecrets(cause.message) : "Request failed.";
     return { kind: "network", message: `Could not reach androidpublisher.googleapis.com: ${message}` };
   }
-  if (response.ok) {
-    const body = (await readJsonBody(response)) as { id?: unknown };
-    const editId = typeof body.id === "string" ? body.id : null;
-    if (editId) {
-      await fetch(`${editsUrl}/${encodeURIComponent(editId)}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${accessToken}` },
-        cache: "no-store",
-      }).catch(() => undefined);
-    }
-    return { kind: "ok" };
-  }
-  return { kind: "google", error: parseGoogleApiError(response.status, await readJsonBody(response)) };
 }
 
 function isServiceDisabled(error: GoogleApiError) {

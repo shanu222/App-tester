@@ -3,6 +3,8 @@ import { handleRouteError, json, parseJson } from "@/lib/http";
 import { requireUser } from "@/auth";
 import { managePlayTrack } from "@/lib/services/play-connection";
 
+export const maxDuration = 60;
+
 const schema = z.object({
   packageName: z.string().trim().min(1, "Package name is required."),
   track: z.string().trim().min(1, "Track is required."),

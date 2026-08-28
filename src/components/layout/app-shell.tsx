@@ -39,7 +39,12 @@ export async function AppShell({
 }) {
   const user = await requireUser();
   if (!user.profileCompleted) redirect("/profile/complete");
-  const unread = await unreadInboxCountForUser(user.id);
+  let unread = 0;
+  try {
+    unread = await unreadInboxCountForUser(user.id);
+  } catch (error) {
+    console.error("[testloop] inbox count failed", error);
+  }
   const items: NavItem[] =
     user.role === "ADMIN"
       ? [

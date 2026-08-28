@@ -15,6 +15,7 @@ import {
   PLAY_INTERNAL_TESTING_TESTER_NOTE,
   PLAY_TESTER_API_LIMITATION,
 } from "@/lib/integrations/play-testers";
+import { withPlayRetry } from "@/lib/integrations/play-retry";
 
 export type ServiceAccountJson = {
   client_email: string;
@@ -50,43 +51,53 @@ export async function searchPlayApps(
   creds: PlayCredentials,
 ): Promise<AdapterResult<PlayAppRecord[]>> {
   try {
-    const token = await playAccessToken(creds, [PLAY_REPORTING_SCOPE]);
-    if (!token) {
+    return await withPlayRetry(
+      async () => {
+      const token = await playAccessToken(creds, [PLAY_REPORTING_SCOPE]);
+      if (!token) {
+        return {
+          ok: false as const,
+          error: "Could not obtain a Play Developer Reporting access token for this connection.",
+          code: "PLAY_TOKEN",
+          manualFallback: "Add apps manually by package name.",
+        };
+      }
+      const response = await fetch(
+        "https://playdeveloperreporting.googleapis.com/v1beta1/apps:search?pageSize=100",
+        { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: AbortSignal.timeout(15_000) },
+      );
+      const body = await readJsonBody(response);
+      if (!response.ok) {
+        const parsed = parseGoogleApiError(response.status, body);
+        if (response.status === 429 || response.status >= 500) {
+          throw Object.assign(new Error(parsed.message || "Play app search unavailable"), {
+            status: response.status,
+          });
+        }
+        const notEnabled =
+          parsed.reason === "SERVICE_DISABLED" || /has not been used in project|is disabled/i.test(parsed.message);
+        return {
+          ok: false as const,
+          error: notEnabled
+            ? `The Google Play Developer Reporting API is not enabled for this connection's Google Cloud project, so apps cannot be listed automatically. ${parsed.message}`
+            : `${parsed.message}${parsed.status ? ` (${parsed.status})` : ""}`,
+          code: notEnabled ? "PLAY_REPORTING_NOT_ENABLED" : "PLAY_APPS_SEARCH",
+          manualFallback: "Add package names manually on My Apps. Android Publisher cannot list apps.",
+        };
+      }
+      const payload = body as { apps?: Array<{ packageName?: string; displayName?: string }> };
       return {
-        ok: false,
-        error: "Could not obtain a Play Developer Reporting access token for this connection.",
-        code: "PLAY_TOKEN",
-        manualFallback: "Add apps manually by package name.",
+        ok: true as const,
+        data: (payload.apps || [])
+          .filter((app) => app.packageName)
+          .map((app) => ({
+            packageName: app.packageName as string,
+            displayName: app.displayName || app.packageName || "Untitled app",
+          })),
       };
-    }
-    const response = await fetch(
-      "https://playdeveloperreporting.googleapis.com/v1beta1/apps:search?pageSize=100",
-      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
+    },
+      { attempts: 2, timeoutMs: 25_000 },
     );
-    const body = await readJsonBody(response);
-    if (!response.ok) {
-      const parsed = parseGoogleApiError(response.status, body);
-      const notEnabled =
-        parsed.reason === "SERVICE_DISABLED" || /has not been used in project|is disabled/i.test(parsed.message);
-      return {
-        ok: false,
-        error: notEnabled
-          ? `The Google Play Developer Reporting API is not enabled for this connection's Google Cloud project, so apps cannot be listed automatically. ${parsed.message}`
-          : `${parsed.message}${parsed.status ? ` (${parsed.status})` : ""}`,
-        code: notEnabled ? "PLAY_REPORTING_NOT_ENABLED" : "PLAY_APPS_SEARCH",
-        manualFallback: "Add package names manually on My Apps. Android Publisher cannot list apps.",
-      };
-    }
-    const payload = body as { apps?: Array<{ packageName?: string; displayName?: string }> };
-    return {
-      ok: true,
-      data: (payload.apps || [])
-        .filter((app) => app.packageName)
-        .map((app) => ({
-          packageName: app.packageName as string,
-          displayName: app.displayName || app.packageName || "Untitled app",
-        })),
-    };
   } catch (error) {
     const mapped = mapPlayFailure(error, describeGoogleError(error, "Play app search failed."));
     return {
@@ -103,51 +114,56 @@ export async function listPlayTracks(
   packageName: string,
 ): Promise<AdapterResult<PlayTrackRecord[]>> {
   try {
-    const publisher = publisherClient(creds);
-    const edit = await publisher.edits.insert({ packageName });
-    const editId = edit.data.id;
-    if (!editId) {
-      return { ok: false, error: "Could not open a Play Console edit.", code: "PLAY_EDIT" };
-    }
-    try {
-      const tracks = await publisher.edits.tracks.list({ packageName, editId });
-      const rows: PlayTrackRecord[] = [];
-      for (const track of tracks.data.tracks || []) {
-        const name = track.track || "unknown";
-        const typeGuess = classifyPlayTrack(name);
-        const releases = track.releases || [];
-        const current =
-          releases.find((release) => release.status === "completed") ||
-          releases.find((release) => release.status === "inProgress") ||
-          releases.at(-1);
-        const notes = current?.releaseNotes?.[0]?.text?.trim() || null;
-        let googleGroupCount: number | null = null;
-        let googleGroups: string[] | null = null;
-        try {
-          const testers = await publisher.edits.testers.get({ packageName, editId, track: name });
-          googleGroups = (testers.data.googleGroups || []).map((value) => value.trim()).filter(Boolean);
-          googleGroupCount = googleGroups.length;
-        } catch {
-          googleGroupCount = null;
-          googleGroups = null;
-        }
-        rows.push({
-          track: name,
-          typeGuess,
-          displayName: playTrackDisplayName(name, typeGuess),
-          releaseName: current?.name ?? null,
-          versionCodes: (current?.versionCodes || []).map(String),
-          releaseStatus: current?.status ?? null,
-          userFraction: typeof current?.userFraction === "number" ? current.userFraction : null,
-          releaseNotes: notes,
-          googleGroupCount,
-          googleGroups,
-        });
+    return await withPlayRetry(
+      async () => {
+      const publisher = publisherClient(creds);
+      const edit = await publisher.edits.insert({ packageName });
+      const editId = edit.data.id;
+      if (!editId) {
+        return { ok: false as const, error: "Could not open a Play Console edit.", code: "PLAY_EDIT" };
       }
-      return { ok: true, data: rows };
-    } finally {
-      await publisher.edits.delete({ packageName, editId }).catch(() => undefined);
-    }
+      try {
+        const tracks = await publisher.edits.tracks.list({ packageName, editId });
+        const rows: PlayTrackRecord[] = [];
+        for (const track of tracks.data.tracks || []) {
+          const name = track.track || "unknown";
+          const typeGuess = classifyPlayTrack(name);
+          const releases = track.releases || [];
+          const current =
+            releases.find((release) => release.status === "completed") ||
+            releases.find((release) => release.status === "inProgress") ||
+            releases.at(-1);
+          const notes = current?.releaseNotes?.[0]?.text?.trim() || null;
+          let googleGroupCount: number | null = null;
+          let googleGroups: string[] | null = null;
+          try {
+            const testers = await publisher.edits.testers.get({ packageName, editId, track: name });
+            googleGroups = (testers.data.googleGroups || []).map((value) => value.trim()).filter(Boolean);
+            googleGroupCount = googleGroups.length;
+          } catch {
+            googleGroupCount = null;
+            googleGroups = null;
+          }
+          rows.push({
+            track: name,
+            typeGuess,
+            displayName: playTrackDisplayName(name, typeGuess),
+            releaseName: current?.name ?? null,
+            versionCodes: (current?.versionCodes || []).map(String),
+            releaseStatus: current?.status ?? null,
+            userFraction: typeof current?.userFraction === "number" ? current.userFraction : null,
+            releaseNotes: notes,
+            googleGroupCount,
+            googleGroups,
+          });
+        }
+        return { ok: true as const, data: rows };
+      } finally {
+        await publisher.edits.delete({ packageName, editId }).catch(() => undefined);
+      }
+    },
+      { attempts: 2, timeoutMs: 28_000 },
+    );
   } catch (error) {
     const mapped = mapPlayFailure(error, describeGoogleError(error, "Could not list tracks."));
     return {

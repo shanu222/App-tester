@@ -5,6 +5,8 @@ import { env } from "@/lib/env";
 import { connectOAuthCode } from "@/lib/services/play-connection";
 import { PLAY_OAUTH_STATE_COOKIE } from "@/lib/integrations/play-auth";
 
+export const maxDuration = 60;
+
 /**
  * Google redirects here after the developer authorises Play access. The
  * authorisation code is exchanged server-side and the resulting refresh token

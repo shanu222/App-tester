@@ -66,6 +66,14 @@ export function mapPlayFailure(error: unknown, fallback: string): MappedPlayErro
   }
 
   if (
+    httpStatus === 429 ||
+    parsed?.status === "RESOURCE_EXHAUSTED" ||
+    /resource.?exhausted|quota|rate.?limit/i.test(blob)
+  ) {
+    return { message: PLAY_USER_ERRORS.API_UNAVAILABLE, code: "PLAY_UNAVAILABLE" };
+  }
+
+  if (
     httpStatus === 403 ||
     parsed?.status === "PERMISSION_DENIED" ||
     /permission_denied|insufficient|forbidden/i.test(blob)
@@ -84,7 +92,7 @@ export function mapPlayFailure(error: unknown, fallback: string): MappedPlayErro
   if (
     (httpStatus && httpStatus >= 500) ||
     parsed?.status === "UNAVAILABLE" ||
-    /econnreset|etimedout|enotfound|fetch failed|503|unavailable/i.test(blob)
+    /econnreset|etimedout|enotfound|fetch failed|503|unavailable|did not respond in time/i.test(blob)
   ) {
     return { message: PLAY_USER_ERRORS.API_UNAVAILABLE, code: "PLAY_UNAVAILABLE" };
   }

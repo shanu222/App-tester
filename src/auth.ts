@@ -27,6 +27,8 @@ async function bootstrapDeveloper(input: {
         emailVerified: existing.emailVerified ?? new Date(),
       },
     });
+    const { ensureDefaultNotificationEmail } = await import("@/lib/services/notifications");
+    await ensureDefaultNotificationEmail(updated.id);
     const { ensureCatalogApps } = await import("@/lib/services/apps");
     await ensureCatalogApps(updated.id, email);
     return updated;
@@ -38,7 +40,12 @@ async function bootstrapDeveloper(input: {
       image: input.image,
       emailVerified: new Date(),
       role: process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.toLowerCase() ? "ADMIN" : "USER",
-      settings: { create: {} },
+      settings: {
+        create: {
+          notificationEmail: email,
+          notificationEmailVerified: true,
+        },
+      },
       templates: {
         create: Object.entries(DEFAULT_TEMPLATES).map(([key, value]) => ({
           key,

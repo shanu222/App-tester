@@ -21,6 +21,76 @@ import {
 import { omitNotificationSecrets, publicNotificationSettings } from "../src/lib/services/notifications";
 import { smtpConfigured } from "../src/lib/env";
 import { sendSmtpEmail } from "../src/lib/smtp";
+import {
+  defaultNotificationEmailUpdate,
+  isAuthenticatedAccountEmail,
+  notificationEmailSeedFromAccount,
+  shouldSeedDefaultNotificationEmail,
+  shouldTrustAccountNotificationEmail,
+} from "../src/lib/notifications/account-email";
+
+describe("default notification email", () => {
+  it("seeds the login email as verified", () => {
+    expect(notificationEmailSeedFromAccount("  Shanu1998end@gmail.com ")).toEqual({
+      notificationEmail: "shanu1998end@gmail.com",
+      notificationEmailVerified: true,
+    });
+    expect(shouldSeedDefaultNotificationEmail(null)).toBe(true);
+    expect(shouldSeedDefaultNotificationEmail({ notificationEmail: null })).toBe(true);
+    expect(shouldSeedDefaultNotificationEmail({ notificationEmail: "alerts@example.com" })).toBe(false);
+  });
+
+  it("does not overwrite a customized notification email when the login email changes", () => {
+    expect(
+      defaultNotificationEmailUpdate("new-login@example.com", {
+        notificationEmail: "alerts@example.com",
+        notificationEmailVerified: true,
+      }),
+    ).toBeNull();
+    expect(
+      defaultNotificationEmailUpdate("new-login@example.com", {
+        notificationEmail: "old-login@example.com",
+        notificationEmailVerified: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("backfills a missing destination from the account email without activating a pending change", () => {
+    expect(
+      defaultNotificationEmailUpdate("login@example.com", {
+        notificationEmail: null,
+        notificationEmailVerified: false,
+        pendingNotificationEmail: "new@example.com",
+      }),
+    ).toEqual({
+      notificationEmail: "login@example.com",
+      notificationEmailVerified: true,
+    });
+  });
+
+  it("treats the authenticated account email as already verified", () => {
+    expect(isAuthenticatedAccountEmail("login@example.com", "Login@example.com")).toBe(true);
+    expect(
+      shouldTrustAccountNotificationEmail(
+        { notificationEmail: "login@example.com", notificationEmailVerified: false },
+        "login@example.com",
+      ),
+    ).toBe(true);
+    expect(
+      defaultNotificationEmailUpdate("login@example.com", {
+        notificationEmail: "login@example.com",
+        notificationEmailVerified: false,
+        pendingNotificationEmail: "login@example.com",
+      }),
+    ).toEqual({
+      notificationEmail: "login@example.com",
+      notificationEmailVerified: true,
+      pendingNotificationEmail: null,
+      notificationEmailVerificationTokenHash: null,
+      notificationEmailVerificationExpiresAt: null,
+    });
+  });
+});
 
 describe("notification preferences", () => {
   it("enables important alerts by default", () => {
@@ -245,6 +315,23 @@ describe("settings sanitization", () => {
     });
     expect(JSON.stringify(publicView)).not.toMatch(/token/i);
     expect(publicView).not.toHaveProperty("notificationEmailVerificationTokenHash");
+    expect(publicView.pendingEmail).toBeNull();
+    expect(publicView.verified).toBe(true);
+
+    const pendingView = publicNotificationSettings({
+      notificationEmail: "developer@example.com",
+      notificationEmailVerified: true,
+      pendingNotificationEmail: "new@example.com",
+      emailNotificationsEnabled: true,
+      notificationPreferences: null,
+      lastNotificationSentAt: null,
+      lastDailySummaryOn: null,
+      lastDailySummaryStatus: null,
+    });
+    expect(pendingView.verified).toBe(true);
+    expect(pendingView.notificationEmail).toBe("developer@example.com");
+    expect(pendingView.pendingEmail).toBe("new@example.com");
+    expect(JSON.stringify(pendingView)).not.toMatch(/token/i);
     expect(publicView.frequency).toBe("daily");
     expect(publicView.time).toBe("16:00");
     expect(publicView.timezone).toBe("Asia/Karachi");

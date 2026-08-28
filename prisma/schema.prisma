@@ -266,7 +266,9 @@ model UserSettings {
   notifyIntegrations     Boolean  @default(true)
   notifyFeedback         Boolean  @default(true)
   /**
-   * Verified address for TestLoop SMTP notifications. Independent of Play/login email.
+   * Verified destination for TestLoop SMTP alerts. Defaults to the account login
+   * email (already authenticated). After the user changes it, this stays independent
+   * of User.email and of Google Play tester email.
    */
   notificationEmail      String?
   notificationEmailVerified Boolean @default(false)

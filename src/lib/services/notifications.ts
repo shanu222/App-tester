@@ -8,6 +8,10 @@ import { notify } from "@/lib/audit";
 import { testingTypeLabel } from "@/lib/campaign-autofill";
 import { PLAY_CONSOLE_URL } from "@/lib/integrations/play-testers";
 import {
+  defaultNotificationEmailUpdate,
+  isAuthenticatedAccountEmail,
+} from "@/lib/notifications/account-email";
+import {
   karachiDayKey,
   parseNotificationPreferences,
   type NotificationPreferenceKey,
@@ -73,7 +77,36 @@ export function publicNotificationSettings(settings: {
   };
 }
 
+export async function ensureDefaultNotificationEmail(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      email: true,
+      settings: {
+        select: {
+          notificationEmail: true,
+          notificationEmailVerified: true,
+          pendingNotificationEmail: true,
+        },
+      },
+    },
+  });
+  if (!user) return null;
+  const patch = defaultNotificationEmailUpdate(user.email, user.settings);
+  if (!patch) return user.settings;
+  if (!user.settings) {
+    return prisma.userSettings.create({
+      data: { userId, ...patch },
+    });
+  }
+  return prisma.userSettings.update({
+    where: { userId },
+    data: patch,
+  });
+}
+
 export async function getNotificationSettings(userId: string) {
+  await ensureDefaultNotificationEmail(userId);
   const settings = await prisma.userSettings.upsert({
     where: { userId },
     update: {},
@@ -116,10 +149,36 @@ function isUniqueViolation(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2002";
 }
 
+const PENDING_EMAIL_CLEAR = {
+  pendingNotificationEmail: null,
+  notificationEmailVerificationTokenHash: null,
+  notificationEmailVerificationExpiresAt: null,
+};
+
+async function activateVerifiedNotificationEmail(userId: string, email: string) {
+  await prisma.userSettings.upsert({
+    where: { userId },
+    update: {
+      notificationEmail: email,
+      notificationEmailVerified: true,
+      ...PENDING_EMAIL_CLEAR,
+    },
+    create: {
+      userId,
+      notificationEmail: email,
+      notificationEmailVerified: true,
+    },
+  });
+  return { pendingEmail: null as string | null, alreadyVerified: true as const };
+}
+
 export async function requestNotificationEmail(userId: string, email: string) {
   const described = describeEmail(email);
   if (!described.valid) throw new AppError("Enter a valid email address.");
-  const current = await prisma.userSettings.findUnique({ where: { userId } });
+  const [current, user] = await Promise.all([
+    prisma.userSettings.findUnique({ where: { userId } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { email: true } }),
+  ]);
   if (
     current?.notificationEmailVerified &&
     current.notificationEmail === described.normalized
@@ -127,14 +186,13 @@ export async function requestNotificationEmail(userId: string, email: string) {
     if (current.pendingNotificationEmail) {
       await prisma.userSettings.update({
         where: { userId },
-        data: {
-          pendingNotificationEmail: null,
-          notificationEmailVerificationTokenHash: null,
-          notificationEmailVerificationExpiresAt: null,
-        },
+        data: PENDING_EMAIL_CLEAR,
       });
     }
     return { pendingEmail: null as string | null, alreadyVerified: true as const };
+  }
+  if (isAuthenticatedAccountEmail(user?.email, described.normalized)) {
+    return activateVerifiedNotificationEmail(userId, described.normalized);
   }
   if ((await recentEmailCount(userId, "verification", 1)) >= 5) {
     throw new RateLimitError("Too many verification emails. Try again later.");
@@ -185,6 +243,18 @@ export async function resendNotificationVerification(userId: string) {
   const pending = settings?.pendingNotificationEmail;
   if (!pending) throw new AppError("There is no notification email waiting to be verified.");
   return requestNotificationEmail(userId, pending);
+}
+
+export async function cancelPendingNotificationEmail(userId: string) {
+  const settings = await prisma.userSettings.findUnique({ where: { userId } });
+  if (!settings?.pendingNotificationEmail) {
+    return { pendingEmail: null as string | null };
+  }
+  await prisma.userSettings.update({
+    where: { userId },
+    data: PENDING_EMAIL_CLEAR,
+  });
+  return { pendingEmail: null as string | null };
 }
 
 export async function verifyNotificationEmailToken(token: string) {

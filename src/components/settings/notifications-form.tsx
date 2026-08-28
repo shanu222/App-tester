@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -102,7 +102,7 @@ export function NotificationsForm({ initial }: { initial: SettingsView }) {
   const router = useRouter();
   const verifiedJustNow = search.get("email") === "verified";
   const invalidLink = search.get("email") === "invalid";
-  const [email, setEmail] = useState(initial.pendingEmail || initial.notificationEmail || "");
+  const [changeOpen, setChangeOpen] = useState(false);
   const [enabled, setEnabled] = useState(initial.enabled);
   const [prefs, setPrefs] = useState(initial.preferences);
   const [frequency, setFrequency] = useState<NotificationFrequency>(initial.frequency ?? "daily");
@@ -115,7 +115,7 @@ export function NotificationsForm({ initial }: { initial: SettingsView }) {
   );
   const [error, setError] = useState<string | null>(null);
 
-  const verified = initial.verified && !initial.pendingEmail;
+  const verified = Boolean(initial.notificationEmail && initial.verified);
   const showSchedule = frequency === "daily" || frequency === "weekly";
   const timezoneOptions = useMemo(() => {
     if (NOTIFICATION_TIMEZONES.includes(timezone as (typeof NOTIFICATION_TIMEZONES)[number])) {
@@ -144,15 +144,17 @@ export function NotificationsForm({ initial }: { initial: SettingsView }) {
     return { ok: true as const, data };
   }
 
-  async function saveEmail() {
-    const result = await post("set-email", { email });
+  async function saveEmail(nextEmail: string) {
+    const result = await post("set-email", { email: nextEmail });
     if (result.ok) {
+      setChangeOpen(false);
       setMessage(
         result.data.alreadyVerified
           ? "✓ Email verified"
-          : "Verification email sent. Check that inbox and verify before notifications start.",
+          : "Verification email sent. Check your new inbox to confirm this address.",
       );
     }
+    return result.ok;
   }
 
   async function savePrefs() {
@@ -199,7 +201,7 @@ export function NotificationsForm({ initial }: { initial: SettingsView }) {
           {message}
         </p>
       ) : null}
-      {error ? (
+      {error && !changeOpen ? (
         <p role="alert" className="mt-4 rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-700">
           {error}
         </p>
@@ -207,48 +209,78 @@ export function NotificationsForm({ initial }: { initial: SettingsView }) {
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <div>
-          <FieldLabel
-            htmlFor="notification-email"
-            infoTitle="Notification email"
-            info="Mail is sent only to this verified address. It does not have to be your Google Play email."
-          >
-            Notification email
-          </FieldLabel>
-          <Input
-            id="notification-email"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="developer@example.com"
-          />
-          <p className="mt-2 text-sm text-slate-700">
-            {verified ? (
-              <span className="font-medium text-emerald-700">✓ Email verified</span>
-            ) : initial.pendingEmail ? (
-              <span>Verification pending for {initial.pendingEmail}</span>
-            ) : (
-              <span className="text-muted">Not verified</span>
-            )}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button type="button" onClick={() => void saveEmail()} disabled={pending !== null}>
-              {initial.notificationEmail ? "Change email" : "Add email"}
-            </Button>
-            {initial.pendingEmail ? (
+          <div className="mb-1.5 flex items-center gap-0.5">
+            <p className="text-sm font-medium text-slate-700">Notification email</p>
+            <InfoPopover title="Notification email" label="Notification email">
+              Alerts go to this verified address. Your sign-in email is used by default and is already
+              verified. Changing this does not change how you log in.
+            </InfoPopover>
+          </div>
+          {initial.notificationEmail ? (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+              <span className="font-medium text-slate-900">{initial.notificationEmail}</span>
+              {verified ? (
+                <span className="font-medium text-emerald-700">✓ Verified</span>
+              ) : (
+                <span className="text-muted">Not verified</span>
+              )}
+            </p>
+          ) : (
+            <p className="text-sm text-muted">No notification email yet.</p>
+          )}
+
+          {initial.pendingEmail ? (
+            <div className="mt-3 rounded-control border border-line bg-surface px-3 py-2.5">
+              <p className="text-sm font-medium text-slate-700">Pending change:</p>
+              <p className="mt-0.5 text-sm font-medium text-slate-900">{initial.pendingEmail}</p>
+              <p className="mt-1 text-sm text-muted">
+                Verification required before this address becomes active.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    void post("resend").then((result) => {
+                      if (result.ok) {
+                        setMessage(
+                          "Verification email sent. Check your new inbox to confirm this address.",
+                        );
+                      }
+                    })
+                  }
+                  disabled={pending !== null}
+                >
+                  {pending === "resend" ? "Sending…" : "Resend verification"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    void post("cancel-pending").then((result) => {
+                      if (result.ok) setMessage("Pending email change canceled.");
+                    })
+                  }
+                  disabled={pending !== null}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3">
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() =>
-                  void post("resend").then((result) => {
-                    if (result.ok) setMessage("Verification email sent.");
-                  })
-                }
+                onClick={() => setChangeOpen(true)}
                 disabled={pending !== null}
               >
-                Resend
+                Change email
               </Button>
-            ) : null}
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="grid content-start gap-3 sm:grid-cols-2">
@@ -531,6 +563,110 @@ export function NotificationsForm({ initial }: { initial: SettingsView }) {
           </ul>
         )}
       </div>
+
+      {changeOpen ? (
+        <ChangeNotificationEmailDialog
+          currentEmail={initial.notificationEmail}
+          busy={pending === "set-email"}
+          error={error}
+          onClose={() => {
+            if (pending === null) {
+              setChangeOpen(false);
+              setError(null);
+            }
+          }}
+          onSubmit={(nextEmail) => void saveEmail(nextEmail)}
+        />
+      ) : null}
     </Card>
+  );
+}
+
+function ChangeNotificationEmailDialog({
+  currentEmail,
+  busy,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  currentEmail: string | null;
+  busy: boolean;
+  error: string | null;
+  onClose: () => void;
+  onSubmit: (email: string) => void;
+}) {
+  const headingId = useId();
+  const inputId = useId();
+  const [nextEmail, setNextEmail] = useState("");
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape" && !busy) onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center"
+      role="presentation"
+      onClick={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        className="w-full max-w-md rounded-card border border-line bg-white p-5 shadow-overlay"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id={headingId} className="text-lg font-semibold text-slate-900">
+          Change notification email
+        </h2>
+        <form
+          className="mt-4 space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!busy) onSubmit(nextEmail);
+          }}
+        >
+          <div>
+            <p className="text-sm font-medium text-slate-700">Current email</p>
+            <p className="mt-1 text-sm text-slate-900">{currentEmail || "None"}</p>
+          </div>
+          <div>
+            <label htmlFor={inputId} className="text-sm font-medium text-slate-700">
+              New notification email
+            </label>
+            <Input
+              id={inputId}
+              className="mt-1.5"
+              type="email"
+              autoComplete="email"
+              autoFocus
+              value={nextEmail}
+              onChange={(event) => setNextEmail(event.target.value)}
+              placeholder="you@example.com"
+              required
+            />
+          </div>
+          {error ? (
+            <p role="alert" className="text-sm leading-6 text-red-700">
+              {error}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="secondary" disabled={busy} onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy || !nextEmail.trim()}>
+              {busy ? "Sending…" : "Send verification email"}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

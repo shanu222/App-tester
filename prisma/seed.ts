@@ -24,7 +24,12 @@ async function main() {
       onboardingStep: 10,
       demoMode: true,
       emailVerified: new Date(),
-      settings: { create: {} },
+      settings: {
+        create: {
+          notificationEmail: email,
+          notificationEmailVerified: true,
+        },
+      },
       templates: {
         create: Object.entries(DEFAULT_TEMPLATES).map(([key, value]) => ({
           key,

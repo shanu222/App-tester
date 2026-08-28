@@ -2,6 +2,7 @@ import { z } from "zod";
 import { json, handleRouteError, parseJson } from "@/lib/http";
 import { requireUser } from "@/auth";
 import {
+  cancelPendingNotificationEmail,
   getNotificationSettings,
   requestNotificationEmail,
   resendNotificationVerification,
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
     const body = await parseJson(
       request,
       z.object({
-        action: z.enum(["set-email", "resend", "test", "save"]),
+        action: z.enum(["set-email", "resend", "cancel-pending", "test", "save"]),
         email: z.string().optional(),
         enabled: z.boolean().optional(),
         preferences: prefsSchema.optional(),
@@ -57,6 +58,10 @@ export async function POST(request: Request) {
     }
     if (body.action === "resend") {
       const result = await resendNotificationVerification(user.id);
+      return json({ ok: true, ...result });
+    }
+    if (body.action === "cancel-pending") {
+      const result = await cancelPendingNotificationEmail(user.id);
       return json({ ok: true, ...result });
     }
     if (body.action === "test") {

@@ -4,6 +4,7 @@ import { NotFoundError, AppError } from "@/lib/errors";
 import { logActivity } from "@/lib/audit";
 import { isDemoMode } from "@/lib/env";
 import { campaignTestingUrl } from "@/lib/integrations/play-testers";
+import { campaignAccessFields, detectTrackAccess } from "@/lib/integrations/play-access";
 import { uniqueSlug } from "@/lib/slug";
 import { env } from "@/lib/env";
 import { PLAY_NOT_CONNECTED_FIRST } from "@/lib/play-disconnect";
@@ -167,7 +168,7 @@ async function resolvePlayTestingTrack(input: {
   const preferred = preferDetectedTrack(config);
   if (!preferred) {
     throw new AppError(
-      "No testing configuration was detected from Google Play Console. Configure testing in Play Console, then refresh TestLoop.",
+      "No active testing track found. Create your testing track in Google Play Console first. TestLoop will not create one automatically.",
       409,
       "PLAY_NO_TESTING",
     );
@@ -288,6 +289,7 @@ export async function createCampaign(
     packageName: app.packageName,
     configuredUrl: webOptInUrl,
   }).url;
+  const access = detectTrackAccess(testingType, requested);
   const campaign = await prisma.campaign.create({
     data: {
       userId,
@@ -299,6 +301,7 @@ export async function createCampaign(
       sourceId: input.sourceId,
       name: input.name,
       testingType,
+      ...campaignAccessFields(access),
       targetTesters: input.targetTesters ?? 12,
       requiredTesters: input.targetTesters ?? 12,
       durationDays: input.durationDays ?? 14,
@@ -376,6 +379,7 @@ export async function publishCampaign(userId: string, id: string) {
       playTrack: requested.track,
       testingType,
       testingUrl: testingUrl || campaign.testingUrl,
+      ...campaignAccessFields(detectTrackAccess(testingType, requested)),
     },
   });
   await logActivity({ userId, campaignId: id, action: "CAMPAIGN_PUBLISHED", result: updated.name });

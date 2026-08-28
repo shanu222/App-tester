@@ -13,6 +13,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  CircleHelp,
   Smartphone,
   UserRound,
   Users,
@@ -34,6 +35,7 @@ const ICONS = {
   profile: UserRound,
   integrations: Plug,
   settings: Settings,
+  help: CircleHelp,
   admin: ShieldCheck,
 } as const;
 

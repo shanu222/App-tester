@@ -2,11 +2,19 @@ import { prisma } from "@/lib/db";
 import { AppError, ForbiddenError, NotFoundError, RateLimitError } from "@/lib/errors";
 import { logActivity, notify } from "@/lib/audit";
 import { createOrGetTester, setTesterStatus } from "@/lib/services/testers";
-import { confirmTesterAdded, grantTesterAccess } from "@/lib/services/invitations";
+import { confirmTesterAdded, grantTesterAccess, notifyCampaignOwner } from "@/lib/services/invitations";
 import { describeEmail } from "@/lib/email-extract";
 import { parseTracksSnapshot, playTrackDisplayName } from "@/lib/integrations/play-config";
 import { campaignDependsOnPlayConnection, isPlayConnectionActive } from "@/lib/play-disconnect";
-import { campaignTestingUrl, PLAY_OPEN_TRACK_NOTE } from "@/lib/integrations/play-testers";
+import { campaignTestingUrl } from "@/lib/integrations/play-testers";
+import {
+  detectTrackAccess,
+  GROUP_JOIN_NEXT_STEP,
+  GROUP_MEMBERSHIP_UNVERIFIABLE,
+  type TrackAccessSnapshot,
+} from "@/lib/integrations/play-access";
+import { testingTypeLabel } from "@/lib/campaign-autofill";
+import { env } from "@/lib/env";
 
 const RECEIVED_STATUSES = [
   "GMAIL_CONFIRMED",
@@ -19,6 +27,38 @@ const RECEIVED_STATUSES = [
   "COMPLETED",
   "MANUAL_REQUIRED",
 ] as const;
+
+const READY_PARTICIPATION = [
+  "ADDED",
+  "INVITATION_READY",
+  "OPTED_IN",
+  "ACTIVITY_DETECTED",
+  "FEEDBACK_RECEIVED",
+  "COMPLETED",
+] as const;
+
+function playTrackFor(
+  campaign: { playTrack: string | null; testingType: "OPEN" | "CLOSED" | "INTERNAL" },
+  tracks: ReturnType<typeof parseTracksSnapshot>,
+) {
+  return (
+    tracks.find((track) => track.track === campaign.playTrack) ||
+    tracks.find((track) => track.typeGuess === campaign.testingType) ||
+    null
+  );
+}
+
+function campaignAccess(
+  campaign: {
+    testingType: "OPEN" | "CLOSED" | "INTERNAL";
+    testingAccessMethod?: string | null;
+    googleGroupConfigured?: boolean | null;
+    googleGroupEmail?: string | null;
+  },
+  track: ReturnType<typeof playTrackFor>,
+): TrackAccessSnapshot {
+  return detectTrackAccess(campaign.testingType, track, campaign);
+}
 
 export function publicDeveloper(user: {
   id: string;
@@ -251,10 +291,8 @@ export async function getPublicRequest(viewerId: string, campaignId: string) {
     select: { tracksSnapshot: true },
   });
   const playTracks = parseTracksSnapshot(playApp?.tracksSnapshot);
-  const playTrack =
-    playTracks.find((track) => track.track === campaign.playTrack) ||
-    playTracks.find((track) => track.typeGuess === campaign.testingType) ||
-    null;
+  const playTrack = playTrackFor(campaign, playTracks);
+  const access = campaignAccess(campaign, playTrack);
   const versionLabel =
     playTrack?.releaseName ||
     (playTrack?.versionCodes[0] ? `Version code ${playTrack.versionCodes[0]}` : null);
@@ -266,6 +304,14 @@ export async function getPublicRequest(viewerId: string, campaignId: string) {
   const trackLabel = playTrack
     ? playTrack.displayName
     : playTrackDisplayName(campaign.playTrack || campaign.testingType.toLowerCase());
+  const isOwner = campaign.userId === viewerId;
+  const participationReady = Boolean(
+    mine &&
+      (READY_PARTICIPATION.includes(mine.status as (typeof READY_PARTICIPATION)[number]) ||
+        mine.playEnrollmentStatus === "OPEN_OPT_IN"),
+  );
+  const groupGuided = Boolean(mine && mine.playEnrollmentStatus === "ENROLLED" && access.joinKind === "google_group");
+  const showTestingUrl = participationReady || groupGuided || (Boolean(mine) && campaign.testingType === "OPEN");
   return {
     id: campaign.id,
     name: campaign.name,
@@ -276,28 +322,27 @@ export async function getPublicRequest(viewerId: string, campaignId: string) {
     testingInstructions: campaign.testingInstructions,
     reciprocalOpen: campaign.reciprocalOpen,
     publishedAt: campaign.publishedAt,
-    webOptInUrl:
-      mine &&
-      ["ADDED", "INVITATION_READY", "OPTED_IN", "ACTIVITY_DETECTED", "FEEDBACK_RECEIVED", "COMPLETED"].includes(
-        mine.status,
-      )
-        ? campaign.webOptInUrl
-        : null,
+    webOptInUrl: showTestingUrl ? campaign.webOptInUrl : null,
     testersReceived,
     remaining: Math.max(0, campaign.targetTesters - testersReceived),
     automaticAccess: campaign.testingType === "OPEN",
     playConnected: play?.status === "CONNECTED",
-    playTrack: campaign.playTrack,
+    playTrack: isOwner ? campaign.playTrack : null,
     trackLabel,
     versionLabel,
     testingLinkStatus: testing.url ? "available" : testing.reason,
-    openTestingUrl: campaign.testingType === "OPEN" ? testing.url : null,
-    isOwner: campaign.userId === viewerId,
+    openTestingUrl: campaign.testingType === "OPEN" && showTestingUrl ? testing.url : null,
+    accessMethod: access.method,
+    joinKind: access.joinKind,
+    groupConfigured: access.groupConfigured,
+    publicAccessLabel: access.publicAccessLabel,
+    groupJoinUrl: mine && access.joinKind === "google_group" ? access.groupJoinUrl : null,
+    isOwner,
     owner: publicDeveloper(campaign.user),
     app: {
       id: campaign.app.id,
       name: campaign.app.name,
-      packageName: campaign.app.packageName,
+      packageName: isOwner ? campaign.app.packageName : null,
       iconUrl: campaign.app.iconUrl,
       playStoreUrl: campaign.app.playStoreUrl,
     },
@@ -347,7 +392,12 @@ export async function acceptTestingRequest(testerUserId: string, campaignId: str
   const existing = await prisma.testingParticipation.findUnique({
     where: { campaignId_testerUserId: { campaignId, testerUserId } },
   });
-  if (existing) return existing;
+  if (existing) {
+    if (existing.playEnrollmentStatus === "NOT_ATTEMPTED" && existing.status === "ACCEPTED") {
+      await finalizeAcceptedParticipation(existing.id, { notify: false });
+    }
+    return existing;
+  }
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
   const today = await prisma.testingParticipation.count({
@@ -368,15 +418,124 @@ export async function acceptTestingRequest(testerUserId: string, campaignId: str
     action: "TESTER_ACCEPTED",
     result: testerUserId,
   });
-  await notify({
-    userId: campaign.userId,
-    type: "tester",
-    title: "A developer accepted your testing request",
-    body: "They still need to confirm the Gmail they will use for Google Play testing.",
-    href: `/campaigns/${campaignId}`,
-    campaignId,
-  });
+  await finalizeAcceptedParticipation(participation.id, { notify: true });
   return participation;
+}
+
+async function loadParticipationAccess(participationId: string) {
+  const row = await prisma.testingParticipation.findUnique({
+    where: { id: participationId },
+    include: {
+      campaign: { include: { app: true } },
+      tester: { select: { name: true, developerName: true, email: true } },
+    },
+  });
+  if (!row) throw new NotFoundError("Participation not found.");
+  const playApp = await prisma.googlePlayApp.findFirst({
+    where: { userId: row.campaign.userId, packageName: row.campaign.app.packageName },
+    select: { tracksSnapshot: true },
+  });
+  const playTrack = playTrackFor(row.campaign, parseTracksSnapshot(playApp?.tracksSnapshot));
+  const access = campaignAccess(row.campaign, playTrack);
+  const testing = campaignTestingUrl({
+    testingType: row.campaign.testingType,
+    packageName: row.campaign.app.packageName,
+    configuredUrl: row.campaign.testingUrl || row.campaign.webOptInUrl,
+  });
+  return { row, access, testing, playTrack };
+}
+
+export async function finalizeAcceptedParticipation(
+  participationId: string,
+  options: { notify?: boolean } = {},
+) {
+  const { row, access } = await loadParticipationAccess(participationId);
+  const testerName = row.tester.developerName || row.tester.name || "A tester";
+  const reviewUrl = `${env.appUrl.replace(/\/$/, "")}/campaigns/${row.campaignId}`;
+  const sendNotify = options.notify !== false;
+  const alreadyReady =
+    row.playEnrollmentStatus === "OPEN_OPT_IN" ||
+    READY_PARTICIPATION.includes(row.status as (typeof READY_PARTICIPATION)[number]);
+  if (alreadyReady) return row;
+
+  if (access.joinKind === "open") {
+    const updated = await prisma.testingParticipation.update({
+      where: { id: row.id },
+      data: {
+        status: "OPTED_IN",
+        playEnrollmentStatus: "OPEN_OPT_IN",
+        lastError: null,
+      },
+    });
+    if (sendNotify) {
+      await notifyCampaignOwner({
+        ownerUserId: row.ownerUserId,
+        campaignId: row.campaignId,
+        title: "New tester joined your TestLoop testing request",
+        body: `${testerName} accepted your open testing request for ${row.campaign.app.name}. No Play Console tester-list action is required.`,
+        href: `/campaigns/${row.campaignId}`,
+        emailSubject: "New tester joined your TestLoop testing request",
+        emailText: [
+          "A new tester wants to test:",
+          row.campaign.app.name,
+          "",
+          "Testing type: Open Testing",
+          `Tester: ${testerName}`,
+          "",
+          "No Play Console tester-list action is required.",
+          "",
+          `Review tester: ${reviewUrl}`,
+        ].join("\n"),
+      });
+    }
+    return updated;
+  }
+
+  if (access.joinKind === "google_group") {
+    const updated = await prisma.testingParticipation.update({
+      where: { id: row.id },
+      data: {
+        status: "ACCEPTED",
+        playEnrollmentStatus: "PENDING",
+        lastError: GROUP_JOIN_NEXT_STEP,
+      },
+    });
+    if (sendNotify) {
+      await notifyCampaignOwner({
+        ownerUserId: row.ownerUserId,
+        campaignId: row.campaignId,
+        title: "New tester joined your TestLoop testing request",
+        body: `Tester accepted your testing request and is joining the configured Google Group. App: ${row.campaign.app.name}. Tester: ${testerName}.`,
+        href: `/campaigns/${row.campaignId}`,
+        emailSubject: "New tester joined your TestLoop testing request",
+        emailText: [
+          "A new tester wants to test:",
+          row.campaign.app.name,
+          "",
+          `Testing type: ${testingTypeLabel(row.campaign.testingType)}`,
+          `Tester: ${testerName}`,
+          "",
+          "Tester accepted your testing request and is joining the configured Google Group.",
+          "You do not need to add this Gmail to a Play tester list.",
+          "",
+          `Review tester: ${reviewUrl}`,
+        ].join("\n"),
+      });
+    }
+    return updated;
+  }
+
+  if (sendNotify) {
+    await notify({
+      userId: row.ownerUserId,
+      type: "tester",
+      title: "A developer accepted your testing request",
+      body: "They still need to enter the Gmail they use with Google Play so you can add them in Play Console.",
+      href: `/campaigns/${row.campaignId}`,
+      campaignId: row.campaignId,
+    });
+  }
+  return row;
 }
 
 export async function confirmTestingGmail(testerUserId: string, campaignId: string, gmail: string) {
@@ -430,32 +589,57 @@ export async function confirmTestingGmail(testerUserId: string, campaignId: stri
     where: { id: testerUserId },
     data: { testingGmail: described.normalized },
   });
-  await notify({
-    userId: participation.ownerUserId,
-    type: "tester",
-    title: "Tester Gmail confirmed",
-    body: "A developer consented to share their Google Play Gmail for this campaign.",
-    href: `/testers/${created.tester.id}`,
-    campaignId,
-  });
   return processTesterAccess(participation.id);
 }
 
 export async function describeJoinResult(participationId: string) {
-  const row = await prisma.testingParticipation.findUnique({
-    where: { id: participationId },
-    include: { campaign: { include: { app: true } } },
-  });
-  if (!row) throw new NotFoundError("Participation not found.");
-  const testing = campaignTestingUrl({
-    testingType: row.campaign.testingType,
-    packageName: row.campaign.app.packageName,
-    configuredUrl: row.campaign.testingUrl || row.campaign.webOptInUrl,
-  });
+  const { row, access, testing } = await loadParticipationAccess(participationId);
   const waiting = row.status === "MANUAL_REQUIRED";
-  const open = row.playEnrollmentStatus === "OPEN_OPT_IN";
+  const open = row.playEnrollmentStatus === "OPEN_OPT_IN" || row.campaign.testingType === "OPEN";
   const confirmed = row.status === "ADDED" || row.status === "INVITATION_READY" || row.status === "OPTED_IN";
   const failed = row.status === "FAILED";
+  const groupPending = access.joinKind === "google_group" && row.playEnrollmentStatus === "PENDING";
+  const groupGuided = access.joinKind === "google_group" && row.playEnrollmentStatus === "ENROLLED";
+  const next = failed
+    ? "result"
+    : open || confirmed
+      ? "ready"
+      : waiting
+        ? "result"
+        : groupGuided
+          ? "result"
+          : groupPending || (access.joinKind === "google_group" && !row.consentAt)
+            ? "group"
+            : row.consentAt
+              ? "result"
+              : "gmail";
+  const testingUrl =
+    failed || waiting || next === "gmail" || next === "group" ? null : testing.url || null;
+  const title = failed
+    ? "Tester request did not complete"
+    : waiting
+      ? "Tester request submitted"
+      : groupGuided
+        ? "After joining the group, open Google Play"
+        : groupPending
+          ? "Choose how you want to join this test"
+          : open || confirmed
+            ? "You're ready to test"
+            : "TestLoop registration complete";
+  const detail = failed
+    ? "TestLoop could not verify Google Play access."
+    : waiting
+      ? "Your Google Play account needs to be added to this closed test."
+      : groupGuided
+        ? GROUP_MEMBERSHIP_UNVERIFIABLE
+        : groupPending
+          ? GROUP_JOIN_NEXT_STEP
+          : row.lastError ||
+            (open
+              ? "Anyone can join this Google Play open test. Open the testing link to continue."
+              : confirmed
+                ? "The app owner confirmed Play Console access. Google Play did not verify this through the API."
+                : "Your TestLoop registration is recorded.");
   return {
     participation: {
       id: row.id,
@@ -464,36 +648,43 @@ export async function describeJoinResult(participationId: string) {
       consentAt: row.consentAt,
       playEnrollmentStatus: row.playEnrollmentStatus,
     },
+    next,
+    joinKind: access.joinKind,
+    accessMethod: access.method,
+    groupConfigured: access.groupConfigured,
+    publicAccessLabel: access.publicAccessLabel,
+    groupJoinUrl: access.joinKind === "google_group" ? access.groupJoinUrl : null,
     join: {
       ok: !failed,
       outcome: row.playEnrollmentStatus,
-      title: failed
-        ? "Tester request did not complete"
-        : waiting
-          ? "Waiting for developer"
-          : open || confirmed
-            ? "You're ready to test"
-            : "TestLoop registration complete",
-      detail:
-        row.lastError ||
-        (waiting
-          ? "Google Play requires individual closed-test email-list membership to be managed through Play Console."
-          : open
-            ? PLAY_OPEN_TRACK_NOTE
-            : confirmed
-              ? "The app owner confirmed Play Console access. Google Play did not verify this through the API."
-              : "Your TestLoop registration is recorded."),
+      title,
+      detail,
       email: row.gmail,
       appName: row.campaign.app.name,
-      trackLabel:
-        row.campaign.testingType === "OPEN"
-          ? "Open Testing"
-          : row.campaign.testingType === "INTERNAL"
-            ? "Internal Testing"
-            : "Closed Testing",
-      testingUrl: failed || waiting ? null : testing.url,
+      trackLabel: testingTypeLabel(row.campaign.testingType),
+      testingUrl,
+      testingUnavailable: !testing.url ? testing.reason || "Google Play testing link unavailable" : null,
     },
   };
+}
+
+export async function checkGroupAccess(testerUserId: string, campaignId: string) {
+  const participation = await prisma.testingParticipation.findUnique({
+    where: { campaignId_testerUserId: { campaignId, testerUserId } },
+  });
+  if (!participation) throw new NotFoundError("Accept the testing request first.");
+  const { access } = await loadParticipationAccess(participation.id);
+  if (access.joinKind !== "google_group") {
+    throw new AppError("This testing request is not configured for Google Group access.");
+  }
+  await prisma.testingParticipation.update({
+    where: { id: participation.id },
+    data: {
+      playEnrollmentStatus: "ENROLLED",
+      lastError: GROUP_MEMBERSHIP_UNVERIFIABLE,
+    },
+  });
+  return describeJoinResult(participation.id);
 }
 
 export async function processTesterAccess(participationId: string) {
@@ -517,6 +708,16 @@ export async function processTesterAccess(participationId: string) {
       testerCampaignId: participation.testerCampaignId,
     });
     const now = new Date();
+    if (result.outcome === "GROUP_SELF_JOIN") {
+      return prisma.testingParticipation.update({
+        where: { id: participation.id },
+        data: {
+          status: "ACCEPTED",
+          playEnrollmentStatus: "PENDING",
+          lastError: result.detail,
+        },
+      });
+    }
     if (result.playEnrollmentStatus === "UNSUPPORTED") {
       return prisma.testingParticipation.update({
         where: { id: participation.id },
@@ -557,8 +758,8 @@ export async function processTesterAccess(participationId: string) {
       campaignId: participation.campaignId,
     });
     return updated;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Google Play action failed.";
+    } catch {
+    const message = "TestLoop could not verify Google Play access.";
     return prisma.testingParticipation.update({
       where: { id: participation.id },
       data: { status: "FAILED", playEnrollmentStatus: "FAILED", lastError: message },

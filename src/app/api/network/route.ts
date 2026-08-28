@@ -10,6 +10,7 @@ import {
   markParticipationOptedIn,
   processTesterAccess,
   describeJoinResult,
+  checkGroupAccess,
   requestReciprocal,
   respondReciprocal,
   submitParticipationFeedback,
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
           "retry-access",
           "manual-added",
           "verify-tester",
+          "check-group-access",
           "opted-in",
           "feedback",
           "reciprocal-request",
@@ -64,13 +66,19 @@ export async function POST(request: Request) {
     if (body.action === "accept") {
       if (!body.campaignId) return json({ error: "campaignId required." }, 400);
       const participation = await acceptTestingRequest(user.id, body.campaignId);
-      return json({ participation });
+      const described = await describeJoinResult(participation.id);
+      return json(described);
     }
     if (body.action === "consent") {
       if (!body.campaignId || !body.gmail) return json({ error: "campaignId and gmail required." }, 400);
       const participation = await confirmTestingGmail(user.id, body.campaignId, body.gmail);
       const join = await describeJoinResult(participation.id);
       return json(join);
+    }
+    if (body.action === "check-group-access") {
+      if (!body.campaignId) return json({ error: "campaignId required." }, 400);
+      const described = await checkGroupAccess(user.id, body.campaignId);
+      return json(described);
     }
     if (body.action === "retry-access") {
       if (!body.participationId) return json({ error: "participationId required." }, 400);

@@ -50,4 +50,9 @@ export type PlayTrackRecord = {
    * not return tester configuration. Individual email lists are never present.
    */
   googleGroupCount: number | null;
+  /**
+   * Group addresses from the testers resource. Null when the API did not return
+   * tester configuration. Empty when Play reported none. Never invent addresses.
+   */
+  googleGroups: string[] | null;
 };

@@ -4,7 +4,8 @@ import { listPublishedRequests } from "@/lib/services/network";
 import { EmptyState } from "@/components/ui/widgets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatDate } from "@/lib/utils";
+import { TestingTypeBadge } from "@/components/ui/testing-type-badge";
+import { slotsLabel } from "@/lib/public-copy";
 import { requestFillStatus } from "@/lib/request-status";
 import { AppMark } from "@/components/brand/app-mark";
 import { SectionLabel } from "@/components/ui/card";
@@ -39,7 +40,6 @@ export default async function RequestsPage({
   return (
     <AppShell
       title="Testing Requests"
-      description="Match scores use reciprocal availability, country, testing type, and your current load."
     >
       <div className="mb-6 flex flex-wrap gap-2" role="group" aria-label="Filter requests">
         {FILTERS.map((item) => {
@@ -107,31 +107,25 @@ export default async function RequestsPage({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-semibold text-slate-900">{item.app.name}</h2>
+                      <TestingTypeBadge type={item.testingType} />
                       <Badge tone={fill.tone}>{fill.label}</Badge>
-                      {item.reciprocalOpen ? <Badge tone="accent">Reciprocal open</Badge> : null}
                     </div>
-                    <p className="mt-2 text-sm text-body">Looking for developers to test this app.</p>
-                    <p className="mt-1 text-sm text-muted">
-                      {item.owner.name}
-                      {item.country ? ` · ${item.country}` : ""} · {item.playTrack || `${item.testingType} testing`}
-                    </p>
-                    <p className="mt-2 text-sm text-body">
-                      <span className="font-medium text-slate-900 tabular-nums">
-                        {item.testersReceived} / {item.targetTesters}
-                      </span>{" "}
-                      testers · {item.durationDays} day duration
+                    <p className="mt-2 text-sm text-muted">
+                      by {item.owner.name}
+                      {item.country ? ` · ${item.country}` : ""}
                     </p>
                     {item.description ? (
-                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted">{item.description}</p>
+                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-body">{item.description}</p>
                     ) : null}
+                    <p className="mt-2 text-sm text-slate-700">
+                      {slotsLabel(item.remaining, item.targetTesters, item.testersReceived)}
+                      {item.durationDays ? ` · ${item.durationDays}-day testing period` : ""}
+                    </p>
                   </div>
                   <Link href={`/requests/${item.id}`} className="sm:self-center">
-                    <Button className="w-full sm:w-auto">View request</Button>
+                    <Button className="w-full sm:w-auto">Join Test</Button>
                   </Link>
                 </div>
-                <p className="mt-4 border-t border-line pt-3 text-xs text-muted">
-                  Posted {formatDate(item.publishedAt)} · {item.match.score}% match
-                </p>
               </article>
             );
           })}

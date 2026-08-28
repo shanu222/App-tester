@@ -4,10 +4,6 @@ import { AppError, NotFoundError, RateLimitError } from "@/lib/errors";
 import { describeEmail } from "@/lib/email-extract";
 import { env } from "@/lib/env";
 import {
-  PLAY_CLOSED_TESTING_TESTER_NOTE,
-  PLAY_INTERNAL_TESTING_TESTER_NOTE,
-  PLAY_OPEN_TESTER_READY,
-  PLAY_TESTER_API_LIMITATION,
   campaignTestingUrl,
   testerAccessMode,
 } from "@/lib/integrations/play-testers";
@@ -15,7 +11,10 @@ import { grantTesterAccess } from "@/lib/services/invitations";
 import { createOrGetTester, isBlocked, setTesterStatus } from "@/lib/services/testers";
 import type { PublicJoinResult, PublicTestingPage } from "@/lib/testing-page";
 import { parseTracksSnapshot } from "@/lib/integrations/play-config";
+import { detectTrackAccess, GROUP_JOIN_NEXT_STEP } from "@/lib/integrations/play-access";
 import { campaignDependsOnPlayConnection, isPlayConnectionActive } from "@/lib/play-disconnect";
+import { publicJoinDetail, publicVersionLabel } from "@/lib/public-copy";
+import { countReceivedTesters } from "@/lib/services/network";
 
 export type { PublicJoinResult, PublicTestingPage };
 
@@ -70,7 +69,7 @@ export async function getPublicTestingPage(slug: string): Promise<PublicTestingP
     where: { publicSlug: slug },
     include: {
       app: { select: { name: true, packageName: true, iconUrl: true, syncedFromPlay: true } },
-      user: { select: { developerName: true, name: true, company: true } },
+      user: { select: { developerName: true, name: true, company: true, country: true } },
       track: { select: { name: true } },
     },
   });
@@ -102,9 +101,12 @@ export async function getPublicTestingPage(slug: string): Promise<PublicTestingP
     playTracks.find((track) => track.track === campaign.playTrack) ||
     playTracks.find((track) => track.typeGuess === campaign.testingType) ||
     null;
-  const versionLabel =
-    playTrack?.releaseName ||
-    (playTrack?.versionCodes[0] ? `Version code ${playTrack.versionCodes[0]}` : null);
+  const access = detectTrackAccess(campaign.testingType, playTrack, campaign);
+  const testersReceived = await countReceivedTesters(campaign.id);
+  const remaining = Math.max(0, campaign.targetTesters - testersReceived);
+  const versionLabel = publicVersionLabel(
+    playTrack?.releaseName || null,
+  );
 
   return {
     slug: campaign.publicSlug!,
@@ -121,10 +123,18 @@ export async function getPublicTestingPage(slug: string): Promise<PublicTestingP
     }),
     developerName:
       campaign.user.developerName || campaign.user.company || campaign.user.name || "Developer",
+    country: campaign.user.country,
     instructions: campaign.testingInstructions,
     description: campaign.description,
     versionLabel,
     pageUrl: testloopTestingPageUrl(campaign.publicSlug!),
+    durationDays: campaign.durationDays,
+    targetTesters: campaign.targetTesters,
+    testersReceived,
+    remaining,
+    joinKind: access.joinKind,
+    publicAccessLabel: access.publicAccessLabel,
+    groupConfigured: access.groupConfigured,
   };
 }
 
@@ -210,7 +220,10 @@ export async function joinPublicTest(input: {
 
   const needsGrant =
     current.status === "ERROR" ||
-    (!current.accessAdded && !READY_STATUSES.includes(current.status) && current.status !== "ADDING");
+    (!current.accessAdded &&
+      !READY_STATUSES.includes(current.status) &&
+      current.status !== "ADDING" &&
+      current.status !== "GROUP_MEMBER");
 
   const granted = needsGrant
     ? await grantTesterAccess({
@@ -222,24 +235,29 @@ export async function joinPublicTest(input: {
   const after = await prisma.testerCampaign.findUniqueOrThrow({
     where: { id: testerCampaign.id },
   });
-  const state = publicJoinState(after.status, after.accessAdded);
-  const testerDetail =
-    campaign.testingType === "OPEN"
-      ? PLAY_OPEN_TESTER_READY
-      : campaign.testingType === "INTERNAL"
-        ? PLAY_INTERNAL_TESTING_TESTER_NOTE
-        : PLAY_CLOSED_TESTING_TESTER_NOTE;
+  const groupFlow = page.joinKind === "google_group";
+  const state = groupFlow
+    ? { outcome: "REGISTERED" as const, statusLabel: "Join the Google Group" }
+    : publicJoinState(after.status, after.accessAdded);
 
   return {
     ...state,
     statusLabel: state.statusLabel,
-    detail: state.outcome === "FAILED" ? granted?.detail || PLAY_TESTER_API_LIMITATION : testerDetail,
+    detail:
+      state.outcome === "FAILED"
+        ? publicJoinDetail(campaign.testingType, "FAILED")
+        : groupFlow
+          ? GROUP_JOIN_NEXT_STEP
+          : publicJoinDetail(campaign.testingType, state.outcome),
     email: described.normalized,
     appName: page.appName,
     packageName: page.packageName,
     trackLabel: page.trackLabel,
     developerName: page.developerName,
     optInUrl: campaign.testingType === "OPEN" ? granted?.optInUrl ?? testing.url : null,
+    groupJoinUrl: granted?.groupJoinUrl ?? null,
+    publicAccessLabel: page.publicAccessLabel,
+    joinKind: page.joinKind,
     steps: [],
     mode: granted?.mode ?? mode,
   };

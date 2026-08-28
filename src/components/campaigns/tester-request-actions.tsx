@@ -17,8 +17,7 @@ export function TesterRequestActions({
   return (
     <div className="mt-4 space-y-3 border-t border-line pt-3">
       <p className="text-sm leading-6 text-body">
-        Google Play requires individual closed-test email-list membership to be managed through Play
-        Console.
+        Google Play requires this tester to be added to the closed-test tester list manually.
       </p>
       {gmail ? (
         <p className="font-mono text-xs text-slate-600">{gmail}</p>

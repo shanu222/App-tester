@@ -2,6 +2,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
 import { getCampaign } from "@/lib/services/campaigns";
 import { Badge } from "@/components/ui/badge";
+import { TestingTypeBadge } from "@/components/ui/testing-type-badge";
+import { InfoPopover } from "@/components/ui/info-popover";
 import { EmptyState, StatCard } from "@/components/ui/widgets";
 import { JsonButton } from "@/components/ui/json-button";
 import { Card, CardHeader, SectionLabel } from "@/components/ui/card";
@@ -20,8 +22,9 @@ import { parseTracksSnapshot, PLAY_API_UNAVAILABLE, playTrackDisplayName, playTr
 import { PlayStatusMark } from "@/components/play/play-status";
 import { SourceBadge } from "@/components/ui/source-badge";
 import { canonicalPlayStoreUrl } from "@/lib/play-url";
-import { formatPlayTimestamp } from "@/components/play/play-connection-panel";
 import { getPlayConnection } from "@/lib/services/play-connection";
+import { detectTrackAccess } from "@/lib/integrations/play-access";
+import { participationStatusLabel } from "@/lib/tester-labels";
 import { testingTypeExplanation, testingTypeLabel } from "@/lib/campaign-autofill";
 import { PLAY_INSTALL_LIMITATION } from "@/lib/integrations/capabilities";
 import {
@@ -54,6 +57,7 @@ export default async function CampaignDetailPage({
   const trackLabel = playTrack
     ? playTrack.displayName
     : playTrackDisplayName(campaign.playTrack || campaign.testingType.toLowerCase());
+  const access = detectTrackAccess(campaign.testingType, playTrack, campaign);
   const trackStatus = playTrackUiStatus({
     exists: Boolean(playTrack || campaign.playTrack),
     releaseStatus: playTrack?.releaseStatus,
@@ -134,18 +138,14 @@ export default async function CampaignDetailPage({
           {playRemoved ? <Badge tone="bad">{PLAY_REMOVED_NOTE}</Badge> : null}
         </div>
         <h2 className="mt-3 text-xl font-semibold text-slate-900">{campaign.app.name}</h2>
-        <p className="font-mono text-xs text-muted">{campaign.app.packageName}</p>
+        <div className="mt-2">
+          <TestingTypeBadge type={campaign.testingType} />
+        </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <SourceBadge source="google-play" />
-          <span className="text-sm font-medium text-slate-700">
-            {playConnected ? "✓ Connected" : "Not connected"}
+          <span className="text-sm font-medium text-emerald-700">
+            {playConnected ? "● Google Play connected" : "Google Play not connected"}
           </span>
-          {formatPlayTimestamp(lastSyncAt?.toISOString()) ? (
-            <span className="text-xs text-muted">
-              Last synchronized: {formatPlayTimestamp(lastSyncAt?.toISOString())}
-            </span>
-          ) : null}
         </div>
 
         {playDependent && !playConnected ? (
@@ -180,6 +180,22 @@ export default async function CampaignDetailPage({
               </dd>
             </div>
             <div>
+              <dt className="text-xs font-medium text-muted">Testing access method</dt>
+              <dd className="mt-1 font-medium text-slate-900">
+                {access.developerAccessLabel}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-muted">Google Group</dt>
+              <dd className="mt-1 text-slate-900">
+                {access.groupConfigured === true
+                  ? "✓ Yes"
+                  : access.groupConfigured === false
+                    ? "No"
+                    : "Google Group status unavailable"}
+              </dd>
+            </div>
+            <div>
               <dt className="text-xs font-medium text-muted">Release</dt>
               <dd className="mt-1 text-slate-900">{versionName || PLAY_API_UNAVAILABLE}</dd>
             </div>
@@ -205,9 +221,9 @@ export default async function CampaignDetailPage({
               ) : null}
             </div>
           </dl>
-          <p className="mt-3 text-sm leading-6 text-slate-700">
-            <span className="font-medium">{typeExplainer.title}. </span>
-            {typeExplainer.body}
+          <p className="mt-3 flex items-start gap-1 text-sm leading-6 text-slate-700">
+            <span>{typeExplainer.body}</span>
+            <InfoPopover title={typeExplainer.title}>{typeExplainer.body}</InfoPopover>
           </p>
         </div>
 
@@ -234,14 +250,16 @@ export default async function CampaignDetailPage({
               <dd className="mt-1 text-slate-900">{googlePlayTesters}</dd>
             </div>
           </dl>
-          <p className="mt-3 text-xs leading-5 text-muted">
-            Individual tester email list is not available through the Google Play Developer API. Manage
-            individual testers in Google Play Console.
-          </p>
+          <div className="mt-3 flex items-center gap-1 text-xs text-muted">
+            Google Play tester list
+            <InfoPopover title="Google Play testers">
+              Google Play does not expose individual tester addresses through this API. Manage testers in Play Console.
+            </InfoPopover>
+          </div>
           <div className="mt-4">
             <div className="mb-1.5 flex justify-between text-xs">
               <span className="text-muted">
-                TestLoop campaign target: {registeredTesters} of {campaign.targetTesters}
+                {registeredTesters} of {campaign.targetTesters} testers joined
               </span>
               <span className="font-semibold text-slate-900 tabular-nums">
                 {percent(registeredTesters, campaign.targetTesters)}%
@@ -271,11 +289,34 @@ export default async function CampaignDetailPage({
               <dt className="text-xs text-muted">Request published</dt>
               <dd className="mt-1 text-slate-900">{formatDateTime(campaign.publishedAt)}</dd>
             </div>
-            <div>
-              <dt className="text-xs text-muted">Last synchronized</dt>
-              <dd className="mt-1 text-slate-900">{formatDateTime(lastSyncAt)}</dd>
-            </div>
           </dl>
+          <details className="mt-4 text-sm">
+            <summary className="cursor-pointer font-medium text-brand">View details</summary>
+            <dl className="mt-3 grid gap-3 rounded-control border border-line bg-surface p-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-xs text-muted">Package name</dt>
+                <dd className="mt-1 font-mono text-xs text-slate-700">{campaign.app.packageName}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted">Version code</dt>
+                <dd className="mt-1 text-slate-700">{versionCode || "Not available"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted">Group email</dt>
+                <dd className="mt-1 break-all text-xs text-slate-700">
+                  {access.groupEmail || "Not available through Google Play API"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted">Last synchronized</dt>
+                <dd className="mt-1 text-slate-700">{formatDateTime(lastSyncAt)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted">Track</dt>
+                <dd className="mt-1 font-mono text-xs text-slate-700">{campaign.playTrack || "—"}</dd>
+              </div>
+            </dl>
+          </details>
         </div>
       </section>
 
@@ -403,9 +444,11 @@ export default async function CampaignDetailPage({
                     Source: TestLoop Accepted Test ·{" "}
                     {row.status === "MANUAL_REQUIRED"
                       ? "Waiting for developer"
-                      : row.status === "ADDED" || row.status === "INVITATION_READY"
-                        ? "Developer confirmed"
-                        : row.status.replaceAll("_", " ")}
+                      : participationStatusLabel({
+                          status: row.status,
+                          playEnrollmentStatus: row.playEnrollmentStatus,
+                          joinKind: access.joinKind,
+                        })}
                   </div>
                 </div>
                 <div className="text-sm text-slate-700">

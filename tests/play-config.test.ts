@@ -24,6 +24,7 @@ function track(
     userFraction: null,
     releaseNotes: null,
     googleGroupCount: null,
+    googleGroups: null,
     ...overrides,
   };
 }

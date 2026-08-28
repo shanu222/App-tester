@@ -11,10 +11,18 @@ export type PublicTestingPage = {
   testingType: TestingType;
   trackLabel: string;
   developerName: string;
+  country: string | null;
   instructions: string | null;
   description: string | null;
   versionLabel: string | null;
   pageUrl: string;
+  durationDays: number;
+  targetTesters: number;
+  testersReceived: number;
+  remaining: number;
+  joinKind: "open" | "google_group" | "individual";
+  publicAccessLabel: string;
+  groupConfigured: true | false | "unknown";
 };
 
 export type PublicJoinResult = {
@@ -27,6 +35,9 @@ export type PublicJoinResult = {
   trackLabel: string;
   developerName: string;
   optInUrl: string | null;
+  groupJoinUrl?: string | null;
+  publicAccessLabel?: string;
+  joinKind?: "open" | "google_group" | "individual";
   steps: string[];
   mode: TesterAccessMode;
 };

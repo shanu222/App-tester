@@ -15,9 +15,11 @@ import {
   playTrackFingerprint,
   playTrackUiStatus,
   preferDetectedTrack,
+  selectableTestingTracks,
   summarizeConfiguration,
 } from "@/lib/integrations/play-config";
-import { campaignTestingUrl } from "@/lib/integrations/play-testers";
+import { campaignTestingUrl, PLAY_CONSOLE_URL } from "@/lib/integrations/play-testers";
+import { detectTrackAccess } from "@/lib/integrations/play-access";
 import {
   defaultDurationDays,
   defaultRequestDescription,
@@ -71,17 +73,32 @@ export function CreateCampaignForm({
   );
   const summary = useMemo(() => summarizeConfiguration(config), [config]);
   const preferred = useMemo(() => preferDetectedTrack(config), [config]);
-  const explanation = preferred ? testingTypeExplanation(preferred.testingType) : null;
-  const trackStatus = preferred
+  const testingTracks = useMemo(() => selectableTestingTracks(config), [config]);
+  const [selectedTrackName, setSelectedTrackName] = useState(preferred?.track.track || "");
+  const chosen = useMemo(() => {
+    const track = testingTracks.find((row) => row.track === selectedTrackName);
+    if (track && track.typeGuess !== "PRODUCTION") {
+      return {
+        track,
+        testingType: track.typeGuess,
+        reason: preferred?.reason || "",
+        ambiguous: testingTracks.length > 1,
+      };
+    }
+    return preferred;
+  }, [testingTracks, selectedTrackName, preferred]);
+  const explanation = chosen ? testingTypeExplanation(chosen.testingType) : null;
+  const trackStatus = chosen
     ? playTrackUiStatus({
         exists: true,
-        releaseStatus: preferred.track.releaseStatus,
+        releaseStatus: chosen.track.releaseStatus,
         detected: true,
       })
     : null;
-  const testingUrl = selected && preferred
+  const access = chosen ? detectTrackAccess(chosen.testingType, chosen.track) : null;
+  const testingUrl = selected && chosen
     ? campaignTestingUrl({
-        testingType: preferred.testingType,
+        testingType: chosen.testingType,
         packageName: selected.packageName,
         configuredUrl: selected.webOptInUrl,
       })
@@ -101,7 +118,11 @@ export function CreateCampaignForm({
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    if (!selected || !preferred) {
+    setSelectedTrackName(preferred?.track.track || "");
+  }, [selected?.packageName, preferred?.track.track]);
+
+  useEffect(() => {
+    if (!selected || !chosen) {
       setName("");
       setDescription("");
       setInstructions("");
@@ -109,13 +130,13 @@ export function CreateCampaignForm({
       return;
     }
     const resolved = campaignTestingUrl({
-      testingType: preferred.testingType,
+      testingType: chosen.testingType,
       packageName: selected.packageName,
       configuredUrl: selected.webOptInUrl,
     });
-    setName(defaultRequestName(selected.name, preferred.testingType));
-    setDescription(defaultRequestDescription(selected.name, preferred.track.releaseNotes));
-    setInstructions(defaultTestingInstructions(preferred.testingType));
+    setName(defaultRequestName(selected.name, chosen.testingType));
+    setDescription(defaultRequestDescription(selected.name, chosen.track.releaseNotes));
+    setInstructions(defaultTestingInstructions(chosen.testingType));
     setTargetTesters(defaultTargetTesters(selected.testerTarget));
     setDurationDays(defaultDurationDays());
     setOptInUrl(resolved.url || "");
@@ -127,9 +148,9 @@ export function CreateCampaignForm({
     selected?.name,
     selected?.webOptInUrl,
     selected?.testerTarget,
-    preferred?.track.track,
-    preferred?.testingType,
-    preferred?.track.releaseNotes,
+    chosen?.track.track,
+    chosen?.testingType,
+    chosen?.track.releaseNotes,
   ]);
 
   async function refreshFromPlay(nextPackage = selected?.packageName) {
@@ -170,13 +191,13 @@ export function CreateCampaignForm({
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selected || !preferred) return;
+    if (!selected || !chosen) return;
     setError(null);
     setConfigChanged(false);
     setExistingCampaignId(null);
     setPending(true);
     const form = new FormData(event.currentTarget);
-    const fingerprint = playTrackFingerprint(preferred.track);
+    const fingerprint = playTrackFingerprint(chosen.track);
     try {
       await refreshFromPlay(selected.packageName);
       const response = await fetch("/api/campaigns", {
@@ -186,12 +207,12 @@ export function CreateCampaignForm({
           name,
           appId: selected.id || undefined,
           packageName: selected.packageName,
-          trackId: selected.testingTracks.find((track) => track.playTrack === preferred.track.track)?.id,
-          playTrack: preferred.track.track,
+          trackId: selected.testingTracks.find((track) => track.playTrack === chosen.track.track)?.id,
+          playTrack: chosen.track.track,
           playFingerprint: fingerprint,
           sourceId: form.get("sourceId") || undefined,
           targetTesters,
-          testingType: preferred.testingType,
+          testingType: chosen.testingType,
           playStoreUrl: selected.playStoreUrl || undefined,
           webOptInUrl: optInUrl || undefined,
           durationDays,
@@ -255,7 +276,7 @@ export function CreateCampaignForm({
     <Card>
       <CardHeader
         title="New testing request"
-        description="Select an app discovered from Google Play Console. TestLoop fills the testing configuration from Play — it does not create tracks or upload bundles."
+        description="Select a Play app. Testing type comes from Google Play."
         action={
           <Button
             type="button"
@@ -315,21 +336,51 @@ export function CreateCampaignForm({
                 <li>{summary.open ? "✓ Open testing" : "○ Open testing not detected"}</li>
               </ul>
             </div>
-            {preferred && trackStatus ? (
+            {testingTracks.length > 1 ? (
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+                  Select an existing track
+                </div>
+                <ul className="mt-2 space-y-2">
+                  {testingTracks.map((track) => (
+                    <li key={track.track}>
+                      <label className="flex cursor-pointer items-start gap-2 rounded-control border border-line bg-white px-3 py-2 text-sm">
+                        <input
+                          type="radio"
+                          name="playTrackChoice"
+                          className="mt-1"
+                          checked={chosen?.track.track === track.track}
+                          onChange={() => setSelectedTrackName(track.track)}
+                        />
+                        <span>
+                          <span className="font-medium text-slate-900">
+                            {testingTypeLabel(track.typeGuess)} · {track.displayName}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-muted">
+                            Existing Google Play track. TestLoop will not create a new one.
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {chosen && trackStatus ? (
               <div className="rounded-control border border-line bg-white p-3">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-                  Current recommended configuration
+                  Current testing configuration
                 </div>
                 <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
                   <div>
                     <dt className="text-xs text-muted">Testing type</dt>
                     <dd className="mt-0.5 font-medium text-slate-900">
-                      {testingTypeLabel(preferred.testingType)}
+                      {testingTypeLabel(chosen.testingType)}
                     </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted">Track</dt>
-                    <dd className="mt-0.5 font-mono text-slate-900">{preferred.track.track}</dd>
+                    <dd className="mt-0.5 text-slate-900">{chosen.track.displayName}</dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted">Status</dt>
@@ -338,21 +389,30 @@ export function CreateCampaignForm({
                     </dd>
                   </div>
                 </dl>
+                {access ? (
+                  <p className="mt-3 text-sm text-slate-700">{access.publicAccessLabel}</p>
+                ) : null}
                 <p className="mt-3 text-xs leading-5 text-muted">Source: Google Play Console</p>
-                {preferred.ambiguous ? (
+                {chosen.ambiguous ? (
                   <p className="mt-2 text-sm leading-6 text-slate-700">
-                    Multiple active testing tracks detected. TestLoop selected{" "}
-                    <span className="font-medium">{preferred.track.track}</span> from Google Play data.
-                    {preferred.reason}
+                    Multiple active testing tracks detected. Select which existing track this TestLoop
+                    request should use.
                   </p>
                 ) : null}
               </div>
             ) : (
-              <p className="text-sm leading-6 text-amber-900">
-                No testing configuration was detected from Google Play Console. Configure Internal,
-                Closed, or Open testing in Play Console, then refresh. TestLoop will not create a
-                track.
-              </p>
+              <div className="space-y-3">
+                <p className="text-sm font-medium leading-6 text-amber-900">No active testing track found.</p>
+                <p className="text-sm leading-6 text-slate-700">
+                  Create your testing track in Google Play Console first. TestLoop will not create one
+                  automatically.
+                </p>
+                <a href={PLAY_CONSOLE_URL} target="_blank" rel="noreferrer">
+                  <Button type="button" variant="secondary">
+                    Open Google Play Console
+                  </Button>
+                </a>
+              </div>
             )}
             {explanation ? (
               <p className="text-sm leading-6 text-slate-700">
@@ -498,7 +558,7 @@ export function CreateCampaignForm({
         ) : null}
 
         <div className="md:col-span-2">
-          <Button type="submit" aria-busy={pending} disabled={pending || !preferred}>
+          <Button type="submit" aria-busy={pending} disabled={pending || !chosen}>
             {pending ? "Publishing…" : "Publish testing request"}
           </Button>
         </div>

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { countReceivedTesters } from "@/lib/services/network";
 import { safePlayConnection } from "@/lib/services/play-connection";
-import { detectTestingConfiguration, parseTracksSnapshot } from "@/lib/integrations/play-config";
+import { detectTestingConfiguration, parseTracksSnapshot, summarizeConfiguration } from "@/lib/integrations/play-config";
 
 const PLAY_ACTIVITY = [
   "TESTER_ACCESS_GRANTED",
@@ -80,7 +80,8 @@ export async function getDashboardStats(userId: string) {
     }),
     prisma.googlePlayApp.findMany({
       where: { userId },
-      select: { tracksSnapshot: true, lastSyncAt: true },
+      select: { tracksSnapshot: true, lastSyncAt: true, name: true, iconUrl: true, appId: true },
+      orderBy: { lastSyncAt: "desc" },
     }),
     prisma.testerCampaign.count({ where: { userId } }),
   ]);
@@ -120,6 +121,15 @@ export async function getDashboardStats(userId: string) {
     }
   }
 
+  const recentApps = playLive
+    ? playAppSnapshots.slice(0, 6).map((row) => ({
+        name: row.name,
+        iconUrl: row.iconUrl,
+        appId: row.appId,
+        configuration: summarizeConfiguration(detectTestingConfiguration(parseTracksSnapshot(row.tracksSnapshot))),
+      }))
+    : [];
+
   return {
     apps,
     activeCampaigns,
@@ -135,6 +145,7 @@ export async function getDashboardStats(userId: string) {
     pendingTesters,
     activeTesters,
     recentPlayActivity,
+    recentApps,
     testingConfigured,
     openApps,
     closedApps,

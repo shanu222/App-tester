@@ -28,7 +28,7 @@ export function EmptyState({
   icon?: ReactNode;
 }) {
   return (
-    <div className="rounded-card border border-dashed border-line-strong bg-white px-6 py-12 text-center">
+    <div className="rounded-card border border-dashed border-line-strong bg-white px-5 py-8 text-center">
       {icon ? (
         <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface text-muted">
           {icon}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, KeyRound, ShieldCheck } from "lucide-react";
+import { KeyRound, ShieldCheck } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,28 +88,9 @@ function DisconnectConfirmModal({
           Disconnect Google Play?
         </h2>
         <p className="mt-3 text-sm leading-6 text-slate-700">
-          Disconnecting Google Play will remove this developer&apos;s synchronized Google Play apps,
-          testing configuration, track information, and TestLoop testing posts associated with this
-          connection.
+          This removes TestLoop’s synchronized Play data and related testing posts. Google Play Console
+          is not changed.
         </p>
-        <p className="mt-3 text-sm leading-6 text-slate-700">
-          TestLoop can only automatically manage and verify Google Play testing information while
-          your Play Console connection is active. You will need to reconnect Google Play to create
-          new testing posts or synchronize Play Console information.
-        </p>
-        <p className="mt-3 text-sm leading-6 text-slate-700">
-          Existing TestLoop testing posts associated with the connection will be removed or disabled.
-          Google Play Console itself is not deleted or modified. Apps and testers are not deleted
-          from Google Play. Only TestLoop&apos;s synchronized data is removed. Reconnecting allows
-          synchronization again.
-        </p>
-        <div className="mt-4 flex gap-2.5 rounded-control border border-amber-200 bg-amber-50 p-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
-          <p className="text-sm leading-6 text-amber-900">
-            This action affects your TestLoop data only. Your actual Google Play Console data will
-            remain unchanged.
-          </p>
-        </div>
         {error ? (
           <p className="mt-4 rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-800">
             {error}
@@ -237,15 +218,13 @@ export function PlayConnectionPanel({
       <Card>
         <CardHeader
           title="Google Play"
-          description="Connect TestLoop to your Google Play Developer account to discover your existing apps, testing tracks and releases."
           action={<Badge tone={statusTone(connection.status, false)}>{statusLabel}</Badge>}
         />
-        <p className="mt-1 text-sm font-medium text-slate-800">Google Play not connected</p>
         <p className="mt-2 text-sm leading-6 text-body">
-          Connect your Google Play Developer account to use Play-connected TestLoop testing.
+          Connect your Play Console to discover existing apps and testing tracks.
         </p>
-        <p className="mt-4 flex items-start gap-2 text-sm leading-6 text-body">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
+        <p className="mt-3 flex items-center gap-2 text-sm text-body">
+          <ShieldCheck className="h-4 w-4 shrink-0 text-success" aria-hidden />
           TestLoop never asks for your Google Play password.
         </p>
 
@@ -261,7 +240,7 @@ export function PlayConnectionPanel({
         <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-5">
           <Button onClick={() => setShowWizard(true)}>
             <KeyRound className="mr-2 h-4 w-4" aria-hidden />
-            Connect Google Play with Service Account
+            Connect Google Play
           </Button>
           {leftoverRecord ? (
             <Button variant="danger" onClick={() => setConfirmDisconnect(true)}>
@@ -270,8 +249,7 @@ export function PlayConnectionPanel({
           ) : null}
         </div>
         <p className="mt-4 text-xs leading-5 text-muted">
-          TestLoop uses a Google Play service account with the permissions you grant in Google Play
-          Console. Your credentials are securely stored on the server.
+          Credentials stay encrypted on the server.
         </p>
         {error ? (
           <p className="mt-4 rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-800">
@@ -300,22 +278,11 @@ export function PlayConnectionPanel({
     <Card>
       <CardHeader
         title="Google Play"
-        description="TestLoop can now discover your existing Play Console apps, testing tracks and releases."
         action={<Badge tone="good">{statusLabel}</Badge>}
       />
-      <p className="mt-1 text-sm font-medium text-slate-800">Google Play connected</p>
+      <p className="mt-1 text-sm font-medium text-emerald-700">● Connected</p>
 
-      <dl className="mt-5 grid gap-4 border-t border-line pt-5 text-sm sm:grid-cols-2 lg:grid-cols-4">
-        <div className="min-w-0">
-          <dt className="text-xs font-medium text-muted">Developer account</dt>
-          <dd className="mt-1 truncate font-mono text-[13px] text-slate-700">
-            {connection.accountEmail || "—"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs font-medium text-muted">Status</dt>
-          <dd className="mt-1 text-slate-700">Connected</dd>
-        </div>
+      <dl className="mt-5 grid gap-4 border-t border-line pt-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <dt className="text-xs font-medium text-muted">Connection method</dt>
           <dd className="mt-1 text-slate-700">
@@ -329,6 +296,19 @@ export function PlayConnectionPanel({
           </dd>
         </div>
       </dl>
+      <details className="mt-4 text-sm">
+        <summary className="cursor-pointer font-medium text-brand">View connection details</summary>
+        <dl className="mt-3 grid gap-3 rounded-control border border-line bg-surface p-3 sm:grid-cols-2">
+          <div className="min-w-0">
+            <dt className="text-xs text-muted">Developer account</dt>
+            <dd className="mt-1 truncate text-slate-700">{connection.accountEmail || "Not available"}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted">Cloud project</dt>
+            <dd className="mt-1 text-slate-700">{connection.cloudProjectId || "Not available"}</dd>
+          </div>
+        </dl>
+      </details>
 
       {connection.lastError ? (
         <div className="mt-4 rounded-control border border-red-200 bg-red-50 px-3 py-2">
@@ -344,7 +324,7 @@ export function PlayConnectionPanel({
           {pending === "apps" ? "Refreshing…" : "Refresh from Google Play"}
         </Button>
         <Button variant="secondary" disabled={pending !== null} onClick={() => setShowWizard(true)}>
-          Replace service account
+          Replace connection
         </Button>
         <Button
           variant="danger"

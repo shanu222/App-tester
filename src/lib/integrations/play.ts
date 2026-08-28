@@ -122,11 +122,14 @@ export async function listPlayTracks(
           releases.at(-1);
         const notes = current?.releaseNotes?.[0]?.text?.trim() || null;
         let googleGroupCount: number | null = null;
+        let googleGroups: string[] | null = null;
         try {
           const testers = await publisher.edits.testers.get({ packageName, editId, track: name });
-          googleGroupCount = (testers.data.googleGroups || []).length;
+          googleGroups = (testers.data.googleGroups || []).map((value) => value.trim()).filter(Boolean);
+          googleGroupCount = googleGroups.length;
         } catch {
           googleGroupCount = null;
+          googleGroups = null;
         }
         rows.push({
           track: name,
@@ -138,6 +141,7 @@ export async function listPlayTracks(
           userFraction: typeof current?.userFraction === "number" ? current.userFraction : null,
           releaseNotes: notes,
           googleGroupCount,
+          googleGroups,
         });
       }
       return { ok: true, data: rows };
@@ -165,6 +169,7 @@ export type PlayEnrollmentOutcome =
   | "ENROLLED"
   | "ALREADY_ENROLLED"
   | "UNSUPPORTED"
+  | "GROUP_SELF_JOIN"
   | "TRACK_MISSING"
   | "LIMIT_REACHED"
   | "FAILED";
@@ -182,7 +187,8 @@ export type PlayEnrollmentResult = {
  * write a tester list.
  *
  * Closed/internal testing: the Play testers resource cannot add an individual
- * Gmail. TestLoop does not call edits.testers and does not use Google Groups.
+ * Gmail. TestLoop does not call edits.testers. If Play already has a Google
+ * Group on the track, testers self-join that group.
  */
 export async function enrollPlayTrackTester(input: {
   creds: PlayCredentials;

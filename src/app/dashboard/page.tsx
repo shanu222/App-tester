@@ -2,20 +2,28 @@ import { AppShell } from "@/components/layout/app-shell";
 import { StatCard, EmptyState } from "@/components/ui/widgets";
 import { requireUser } from "@/auth";
 import { getDashboardStats } from "@/lib/services/dashboard";
-import { developerBadges } from "@/lib/services/network";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { percent, timeAgo } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/ui/card";
+import { AppMark } from "@/components/brand/app-mark";
+import { InfoPopover } from "@/components/ui/info-popover";
 import { CheckCircle2, Circle } from "lucide-react";
+
+function ModeMark({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span className="text-xs text-slate-600">
+      {label}{" "}
+      <span className={ok ? "font-medium text-emerald-700" : "text-muted"}>{ok ? "✓" : "—"}</span>
+    </span>
+  );
+}
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [stats, badges, unread, testing] = await Promise.all([
+  const [stats, unread, testing] = await Promise.all([
     getDashboardStats(user.id),
-    developerBadges(user.id),
     prisma.notification.count({ where: { userId: user.id, readAt: null } }),
     prisma.testingParticipation.findMany({
       where: { testerUserId: user.id, status: { notIn: ["DECLINED"] } },
@@ -26,62 +34,29 @@ export default async function DashboardPage() {
   ]);
   const playConnected = stats.play.connected;
   const steps = [
-    { n: 1, label: "Account", done: true, href: "/profile" },
-    { n: 2, label: "Profile", done: user.profileCompleted, href: "/profile" },
-    { n: 3, label: "App", done: stats.apps > 0, href: "/apps" },
-    { n: 4, label: "Google Play", done: playConnected, href: "/play" },
-    { n: 5, label: "First campaign", done: stats.activeCampaigns > 0, href: "/campaigns" },
+    { n: 1, label: "Profile", done: user.profileCompleted, href: "/profile" },
+    { n: 2, label: "Google Play", done: playConnected, href: "/play" },
+    { n: 3, label: "First request", done: stats.activeCampaigns > 0, href: "/campaigns" },
   ];
-  const showOnboarding = !user.onboardingCompleted || stats.apps === 0;
+  const showOnboarding = !user.onboardingCompleted || !playConnected;
 
   return (
     <AppShell
-      title="Home"
+      title="Dashboard"
       actions={
         <Link href="/requests">
-          <Button variant="secondary">Find testing requests</Button>
+          <Button variant="secondary">Find tests</Button>
         </Link>
       }
     >
-      <section className="rounded-card border border-line bg-white p-5 shadow-card">
-        <div className="flex flex-wrap items-start justify-between gap-6">
-          <div className="flex min-w-0 items-start gap-4">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-soft text-base font-semibold text-brand">
-              {(user.developerName || user.name || "D").charAt(0).toUpperCase()}
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-lg font-semibold text-slate-900">
-                {user.developerName || user.name || "Developer"}
-              </h2>
-              <p className="mt-0.5 text-sm text-muted">
-                {user.company || user.developerType || "Developer account"}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {badges.badges.map((badge) => (
-                  <Badge key={badge.key} tone={badge.key === "verified" ? "good" : "neutral"}>
-                    {badge.label}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          </div>
+      <p className="text-sm text-muted">Welcome back, {user.developerName || user.name || "developer"}.</p>
 
-          <div className="min-w-48 rounded-control border border-line bg-surface p-4">
-            <div className="text-xs font-medium text-muted">Testing score</div>
-            <div className="mt-1 text-2xl font-semibold leading-none text-slate-900 tabular-nums">
-              {badges.score.score ?? "—"}
-              {badges.score.score ? <span className="text-base text-muted"> / 5</span> : null}
-            </div>
-            <p className="mt-2 max-w-xs text-xs leading-5 text-muted">{badges.score.label}</p>
-            <Link
-              href="/profile"
-              className="mt-2 inline-block text-xs font-medium text-brand hover:underline"
-            >
-              Developer profile
-            </Link>
-          </div>
-        </div>
-      </section>
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Connected apps" value={stats.playApps} />
+        <StatCard label="Active testing requests" value={stats.activeCampaigns} />
+        <StatCard label="Active testers" value={stats.activeTesters} />
+        <StatCard label="Pending actions" value={stats.pendingTesters + unread} />
+      </div>
 
       {showOnboarding ? (
         <div className="mt-6 rounded-card border border-line bg-white p-5 shadow-card">
@@ -97,11 +72,7 @@ export default async function DashboardPage() {
                     : "inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-white px-3 py-1 text-[13px] font-medium text-slate-600 transition-colors hover:border-brand hover:text-brand"
                 }
               >
-                {step.done ? (
-                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-                ) : (
-                  <Circle className="h-3.5 w-3.5" aria-hidden />
-                )}
+                {step.done ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : <Circle className="h-3.5 w-3.5" aria-hidden />}
                 {step.label}
               </Link>
             ))}
@@ -109,137 +80,92 @@ export default async function DashboardPage() {
         </div>
       ) : null}
 
-      <SectionLabel className="mb-3 mt-8">Google Play</SectionLabel>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard
-          label="Connection"
-          value={playConnected ? "Connected" : "Not connected"}
-          hint={stats.play.accountEmail || undefined}
-        />
-        <StatCard label="Play apps" value={stats.playApps} />
-        <StatCard label="Testing configured" value={stats.testingConfigured} />
-        <StatCard label="TestLoop testers" value={stats.totalTesters} />
-        <StatCard label="Pending Play Console" value={stats.pendingTesters} />
+      <div className="mt-8 flex items-center gap-1.5">
+        <SectionLabel className="mb-0">Recent apps</SectionLabel>
+        <InfoPopover title="Google Play apps">
+          These are apps discovered from your connected Play Console. TestLoop does not create Play apps.
+        </InfoPopover>
       </div>
-      <p className="mt-3 text-sm text-muted">
-        Open {stats.openApps} · Closed {stats.closedApps} · Internal {stats.internalApps} ·{" "}
-        <Link href="/play" className="font-medium text-brand hover:underline">
-          Open Google Play
-        </Link>
-      </p>
-
-      <SectionLabel className="mb-3 mt-10">TestLoop activity</SectionLabel>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Active campaigns" value={stats.activeCampaigns} />
-        <StatCard label="Testers needed" value={stats.testersNeeded} />
-        <StatCard label="Active testers" value={stats.activeTesters} />
-        <StatCard label="Unread alerts" value={unread} />
-      </div>
-
-      <div className="mt-10 grid gap-8 lg:grid-cols-2">
-        <section>
-          <SectionLabel className="mb-3">Recent apps</SectionLabel>
-          {stats.campaigns.length === 0 ? (
-            <EmptyState
-              title="No testing requests yet"
-              body="Publish your first testing request to start finding developers who can test your app."
-              action={
-                <Link href="/campaigns">
-                  <Button>Create testing request</Button>
-                </Link>
-              }
-            />
-          ) : (
-            <div className="space-y-3">
-              {stats.campaigns.map((campaign) => (
-                <Link
-                  key={campaign.id}
-                  href={`/campaigns/${campaign.id}`}
-                  className="block rounded-card border border-line bg-white p-4 shadow-card transition-colors hover:border-line-strong hover:bg-surface"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="truncate font-medium text-slate-900">{campaign.app.name}</div>
-                    <Badge tone={campaign.status === "ACTIVE" ? "good" : "warn"}>{campaign.status}</Badge>
+      <div className="mt-3">
+        {!playConnected ? (
+          <EmptyState
+            title="No apps connected"
+            body="Connect Google Play to discover your existing apps."
+            action={
+              <Link href="/play">
+                <Button>Connect Google Play</Button>
+              </Link>
+            }
+          />
+        ) : stats.recentApps.length === 0 ? (
+          <EmptyState
+            title="No apps discovered yet"
+            body="Refresh from Google Play to load your existing applications."
+            action={
+              <Link href="/play">
+                <Button variant="secondary">Open Google Play</Button>
+              </Link>
+            }
+          />
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2">
+            {stats.recentApps.map((app) => (
+              <div key={app.name} className="rounded-card border border-line bg-white p-4 shadow-card">
+                <div className="flex items-start gap-3">
+                  <AppMark name={app.name} src={app.iconUrl} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium text-slate-900">{app.name}</div>
+                    <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" aria-hidden />
+                      Google Play connected
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+                      <ModeMark ok={app.configuration.internal} label="Internal" />
+                      <ModeMark ok={app.configuration.closed} label="Closed" />
+                      <ModeMark ok={app.configuration.open} label="Open" />
+                    </div>
                   </div>
-                  <p className="mt-2 text-sm text-muted">
-                    {campaign.testersReceived} of {campaign.targetTesters} testers ·{" "}
-                    {percent(campaign.testersReceived, campaign.targetTesters)}%
-                  </p>
-                  <div
-                    className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-strong"
-                    role="progressbar"
-                    aria-valuenow={percent(campaign.testersReceived, campaign.targetTesters)}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                  >
-                    <span
-                      className="block h-full rounded-full bg-brand"
-                      style={{
-                        width: `${Math.min(100, percent(campaign.testersReceived, campaign.targetTesters))}%`,
-                      }}
-                    />
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
-        <section>
-          <SectionLabel className="mb-3">Recent tester activity</SectionLabel>
-          {testing.length === 0 ? (
-            <EmptyState
-              title="You are not testing any apps yet"
-              body="Accept a published testing request from another developer."
-              action={
-                <Link href="/requests">
-                  <Button variant="secondary">Find testing requests</Button>
-                </Link>
-              }
-            />
-          ) : (
-            <div className="space-y-3">
-              {testing.map((row) => (
-                <Link
-                  key={row.id}
-                  href="/testing"
-                  className="block rounded-card border border-line bg-white p-4 shadow-card transition-colors hover:border-line-strong hover:bg-surface"
-                >
-                  <div className="truncate font-medium text-slate-900">{row.campaign.app.name}</div>
-                  <p className="mt-1 text-sm capitalize text-muted">
-                    {row.status.replaceAll("_", " ").toLowerCase()}
-                  </p>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <Link href={app.appId ? `/apps/${app.appId}` : "/play"}>
+                    <Button size="sm">Manage testing</Button>
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <SectionLabel className="mb-3 mt-10">Testing activity</SectionLabel>
-      {stats.recentPlayActivity.length === 0 ? (
+      <SectionLabel className="mb-3 mt-10">My testing</SectionLabel>
+      {testing.length === 0 ? (
         <EmptyState
-          title="No Google Play testing activity yet"
-          body="When testers join a campaign, their status appears here."
+          title="You are not testing any apps yet"
+          body="Browse published requests from other developers."
+          action={
+            <Link href="/requests">
+              <Button variant="secondary">Find tests</Button>
+            </Link>
+          }
         />
       ) : (
-        <ul className="space-y-2">
-          {stats.recentPlayActivity.map((row) => (
-            <li
+        <div className="space-y-3">
+          {testing.map((row) => (
+            <Link
               key={row.id}
-              className="flex flex-wrap items-start justify-between gap-3 rounded-card border border-line bg-white px-4 py-3 shadow-card"
+              href="/testing"
+              className="flex items-center justify-between gap-3 rounded-card border border-line bg-white p-4 shadow-card transition-colors hover:border-line-strong"
             >
               <div className="min-w-0">
-                <div className="text-sm font-medium text-slate-900">
-                  {row.action.replaceAll("_", " ")}
-                </div>
-                {row.result ? (
-                  <p className="mt-0.5 truncate text-sm text-muted">{row.result}</p>
-                ) : null}
+                <div className="truncate font-medium text-slate-900">{row.campaign.app.name}</div>
+                <p className="mt-0.5 text-sm capitalize text-muted">
+                  {row.status.replaceAll("_", " ").toLowerCase()}
+                </p>
               </div>
-              <span className="shrink-0 text-xs text-muted">{timeAgo(row.createdAt)}</span>
-            </li>
+              <Badge tone="neutral">Open</Badge>
+            </Link>
           ))}
-        </ul>
+        </div>
       )}
     </AppShell>
   );

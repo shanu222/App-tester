@@ -8,7 +8,8 @@ import { normalizeEmail } from "@/lib/email-extract";
  *
  * TestLoop therefore never claims it added an individual Gmail to a closed or
  * internal tester list. Closed/internal joins become a developer-confirmation
- * request. Google Groups are not used as a TestLoop product feature.
+ * request unless Play already configured a Google Group on the track. TestLoop
+ * never writes googleGroups or email lists through the testers API.
  */
 export const PLAY_TESTER_API_LIMITATION =
   "Google Play API does not support adding individual Gmail addresses to a closed-test email list. The tester request has been saved and requires developer action in Play Console.";

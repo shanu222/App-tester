@@ -340,9 +340,25 @@ export function parseTracksSnapshot(value: unknown): PlayTrackRecord[] {
       releaseStatus: row.releaseStatus ?? null,
       userFraction: typeof row.userFraction === "number" ? row.userFraction : null,
       releaseNotes: row.releaseNotes ?? null,
-      googleGroupCount: typeof row.googleGroupCount === "number" ? row.googleGroupCount : null,
+      googleGroups: Array.isArray(row.googleGroups)
+        ? row.googleGroups.filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
+        : null,
+      googleGroupCount:
+        typeof row.googleGroupCount === "number"
+          ? row.googleGroupCount
+          : Array.isArray(row.googleGroups)
+            ? row.googleGroups.length
+            : null,
     };
   });
+}
+
+export function selectableTestingTracks(config: TestingConfiguration): PlayTrackRecord[] {
+  return [
+    ...config.internalTesting.tracks,
+    ...config.closedTesting.tracks,
+    ...config.openTesting.tracks,
+  ].sort(comparePlayTracks);
 }
 
 function maxVersionCode(track: PlayTrackRecord) {
@@ -437,5 +453,7 @@ export function playTrackFingerprint(track: PlayTrackRecord) {
     track.releaseStatus ?? "",
     track.releaseName ?? "",
     [...track.versionCodes].sort().join(","),
+    String(track.googleGroupCount ?? ""),
+    [...(track.googleGroups || [])].sort().join(","),
   ].join("|");
 }

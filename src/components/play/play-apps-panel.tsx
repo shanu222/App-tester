@@ -295,12 +295,14 @@ function PlayAppCard({
           <AppMark name={app.name} src={app.iconUrl} />
           <div className="min-w-0">
             <div className="truncate text-[15px] font-semibold text-slate-900">{app.name}</div>
-            <div className="mt-0.5 truncate font-mono text-xs text-muted">{app.packageName}</div>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <SourceBadge source="google-play" />
-              <Badge tone="good">Connected</Badge>
-              {app.selected ? <SourceBadge source="testloop" /> : null}
+              <Badge tone="good">Google Play connected</Badge>
             </div>
+            <details className="mt-2 text-xs text-muted">
+              <summary className="cursor-pointer text-brand">View details</summary>
+              <p className="mt-1 font-mono">{app.packageName}</p>
+              <p className="mt-1">Last synchronized: {formatPlayTimestamp(app.lastSyncAt) || "Not yet synchronized"}</p>
+            </details>
           </div>
         </div>
         <Button variant={selected ? "secondary" : "primary"} onClick={onSelect} disabled={pending !== null}>
@@ -343,9 +345,6 @@ function PlayAppCard({
           synced={synced}
         />
       </dl>
-      <p className="mt-3 text-xs text-muted">
-        Last synchronized: {formatPlayTimestamp(app.lastSyncAt) || "Not yet synchronized"}
-      </p>
     </div>
   );
 }
@@ -763,10 +762,10 @@ function TrackDetails({ track, production }: { track: PlayTrackRecord; productio
   });
   const testerConfig =
     track.googleGroupCount == null
-      ? "Individual tester email addresses are not available through the Google Play Developer API."
+      ? "Google Group status unavailable"
       : track.googleGroupCount > 0
-        ? "Configured in Play Console. Individual tester email addresses are not available through the Google Play Developer API."
-        : "Visible through TestLoop only after a tester submits Gmail here. Individual tester email addresses are not available through the Google Play Developer API.";
+        ? "Google Group testing available"
+        : "Individual tester access";
 
   return (
     <div>
@@ -790,6 +789,9 @@ function TrackDetails({ track, production }: { track: PlayTrackRecord; productio
         />
         <Field label="Release notes" value={track.releaseNotes} />
         <Field label="Tester configuration" value={testerConfig} />
+        {track.googleGroups?.length ? (
+          <Field label="Google Group email" value={track.googleGroups.join(", ")} />
+        ) : null}
         <Field
           label="Downloads"
           value="Individual tester download identity is not available through the current Google Play API."

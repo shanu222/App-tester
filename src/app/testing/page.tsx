@@ -12,6 +12,8 @@ import Link from "next/link";
 import { normalizeEmail } from "@/lib/email-extract";
 import { campaignTestingUrl } from "@/lib/integrations/play-testers";
 import { TESTER_STATUS_LABELS } from "@/lib/status";
+import { participationStatusLabel } from "@/lib/tester-labels";
+import { detectTrackAccess } from "@/lib/integrations/play-access";
 
 export default async function MyTestingPage() {
   const user = await requireUser();
@@ -40,7 +42,6 @@ export default async function MyTestingPage() {
   return (
     <AppShell
       title="My testing"
-      description="Status changes only after a real event — consent, a Google API result, your opt-in, or feedback."
     >
       {mine.length === 0 ? (
         <EmptyState
@@ -55,29 +56,28 @@ export default async function MyTestingPage() {
       ) : (
         <div className="space-y-4">
           {mine.map((row) => {
+            const access = detectTrackAccess(row.campaign.testingType, null, row.campaign);
             const ready = ["ADDED", "INVITATION_READY", "OPTED_IN", "ACTIVITY_DETECTED", "FEEDBACK_RECEIVED", "COMPLETED"].includes(
               row.status,
-            );
+            ) || row.playEnrollmentStatus === "OPEN_OPT_IN";
+            const groupGuided = row.playEnrollmentStatus === "ENROLLED" && access.joinKind === "google_group";
             const owner = publicDeveloper(row.owner);
+            const statusLabel = participationStatusLabel({
+              status: row.status,
+              playEnrollmentStatus: row.playEnrollmentStatus,
+              joinKind: access.joinKind,
+            });
             return (
               <div key={row.id} className="rounded-card border border-line bg-white p-5 shadow-card">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-semibold text-slate-900">{row.campaign.app.name}</div>
                     <div className="mt-0.5 text-sm text-muted">
-                      {owner.name} · {row.campaign.testingType} testing
+                      {owner.name} · {row.campaign.testingType === "OPEN" ? "Open" : row.campaign.testingType === "INTERNAL" ? "Internal" : "Closed"} testing
                     </div>
                   </div>
-                  <Badge tone={row.status === "FAILED" ? "bad" : row.status === "MANUAL_REQUIRED" ? "warn" : row.status === "INVITATION_READY" || row.status === "ADDED" || row.playEnrollmentStatus === "OPEN_OPT_IN" ? "good" : "neutral"}>
-                    {row.status === "MANUAL_REQUIRED"
-                      ? "Waiting for developer"
-                      : row.playEnrollmentStatus === "OPEN_OPT_IN"
-                        ? "Ready to test"
-                        : row.status === "ADDED" || row.status === "INVITATION_READY"
-                          ? "Developer confirmed"
-                          : row.status === "OPTED_IN"
-                            ? "Ready to test"
-                            : row.status.replaceAll("_", " ")}
+                  <Badge tone={row.status === "FAILED" ? "bad" : row.status === "MANUAL_REQUIRED" ? "warn" : ready || groupGuided ? "good" : "neutral"}>
+                    {statusLabel}
                   </Badge>
                 </div>
                 {row.lastError ? (
@@ -85,7 +85,12 @@ export default async function MyTestingPage() {
                     {row.lastError}
                   </p>
                 ) : null}
-                {ready && (row.campaign.testingUrl || row.campaign.webOptInUrl) ? (
+                {!ready && access.joinKind === "google_group" ? (
+                  <Link href={`/requests/${row.campaignId}`} className="mt-4 inline-block">
+                    <Button variant="secondary">Continue joining</Button>
+                  </Link>
+                ) : null}
+                {(ready || groupGuided) && (row.campaign.testingUrl || row.campaign.webOptInUrl) ? (
                   <div className="mt-4 rounded-control border border-emerald-200 bg-emerald-50 p-4">
                     <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
                       <CheckCircle2 className="h-4.5 w-4.5" aria-hidden />

@@ -2,13 +2,25 @@ import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
 import { SettingsForms } from "@/components/settings/settings-forms";
+import Link from "next/link";
 
 export default async function SettingsPage() {
   const user = await requireUser();
   const settings = await prisma.userSettings.findUnique({ where: { userId: user.id } });
   const templates = await prisma.messageTemplate.findMany({ where: { userId: user.id, campaignId: null } });
   return (
-    <AppShell title="Settings" description="Account details, rate limits, notifications, and data export.">
+    <AppShell title="Settings">
+      <div className="mb-6 flex flex-wrap gap-2 text-sm">
+        <Link href="/integrations" className="rounded-full border border-line px-3 py-1.5 text-slate-600 hover:border-line-strong">
+          Integrations
+        </Link>
+        <Link href="/analytics" className="rounded-full border border-line px-3 py-1.5 text-slate-600 hover:border-line-strong">
+          Analytics
+        </Link>
+        <Link href="/activity" className="rounded-full border border-line px-3 py-1.5 text-slate-600 hover:border-line-strong">
+          Alerts
+        </Link>
+      </div>
       <SettingsForms
         user={{
           name: user.name || "",

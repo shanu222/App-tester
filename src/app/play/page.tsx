@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
@@ -41,7 +40,7 @@ export default async function PlayPage({
   return (
     <AppShell
       title="Google Play"
-      description="Connect your Play Console with a service account, discover existing apps and tracks, then onboard testers in TestLoop. Google Play remains the source of truth."
+      description="Connect Play Console, then publish TestLoop testing requests for existing apps."
     >
       {notice ? (
         <div className="mb-6 flex gap-2.5 rounded-card border border-amber-200 bg-amber-50 p-4">
@@ -59,13 +58,6 @@ export default async function PlayPage({
             lastSyncAt={connection.lastSyncAt || connection.lastVerifiedAt}
           />
           <PlayTestingGuide />
-          <p className="text-sm leading-6 text-muted">
-            Publish a TestLoop testing request from an app already discovered from Google Play.{" "}
-            <Link href="/campaigns" className="font-medium text-brand hover:underline">
-              Open My Testing Requests
-            </Link>
-            .
-          </p>
         </div>
       ) : null}
     </AppShell>

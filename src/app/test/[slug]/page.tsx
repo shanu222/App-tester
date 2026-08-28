@@ -6,7 +6,10 @@ import { AppMark } from "@/components/brand/app-mark";
 import { getPublicTestingPage } from "@/lib/services/public-testing";
 import { NotFoundError } from "@/lib/errors";
 import { SITE_NAME } from "@/lib/site";
-import { testingTypeExplanation, testingTypeLabel } from "@/lib/campaign-autofill";
+import { TestingTypeBadge } from "@/components/ui/testing-type-badge";
+import { InfoPopover } from "@/components/ui/info-popover";
+import { slotsLabel } from "@/lib/public-copy";
+import { testingTypeExplanation } from "@/lib/campaign-autofill";
 
 export async function generateMetadata({
   params,
@@ -18,7 +21,7 @@ export async function generateMetadata({
     const page = await getPublicTestingPage(slug);
     return {
       title: `Test ${page.appName} | ${SITE_NAME}`,
-      description: `Join ${page.trackLabel} for ${page.appName} on ${SITE_NAME}.`,
+      description: `Join ${page.appName} testing on ${SITE_NAME}.`,
       robots: { index: false, follow: false },
     };
   } catch {
@@ -39,53 +42,61 @@ export default async function PublicTestPage({
     if (error instanceof NotFoundError) notFound();
     throw error;
   }
+  const explainer = testingTypeExplanation(page.testingType);
 
   return (
     <PublicChrome>
-      <main className="mx-auto max-w-xl px-4 py-12 sm:px-6 lg:py-16">
+      <main className="mx-auto max-w-lg px-4 py-10 sm:px-6 sm:py-14">
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
           Test this app
         </p>
         <div className="mt-4 flex items-start gap-3">
-          <AppMark name={page.appName} src={page.iconUrl} />
+          <AppMark name={page.appName} src={page.iconUrl} size={56} />
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-              {page.appName}
-            </h1>
-            <p className="mt-1 font-mono text-xs text-muted">{page.packageName}</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{page.appName}</h1>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <TestingTypeBadge type={page.testingType} />
+              <InfoPopover title={explainer.title}>{explainer.body}</InfoPopover>
+            </div>
+            <p className="mt-2 text-sm text-muted">
+              by {page.developerName}
+              {page.country ? ` · ${page.country}` : ""}
+            </p>
           </div>
         </div>
 
-        <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
-          <div className="rounded-control border border-line bg-surface px-3 py-2.5">
-            <dt className="text-xs font-medium text-muted">Developer</dt>
-            <dd className="mt-0.5 font-medium text-slate-900">{page.developerName}</dd>
-          </div>
-          <div className="rounded-control border border-line bg-surface px-3 py-2.5">
-            <dt className="text-xs font-medium text-muted">Testing</dt>
-            <dd className="mt-0.5 font-medium text-slate-900">{testingTypeLabel(page.testingType)}</dd>
-          </div>
-          {page.versionLabel ? (
-            <div className="rounded-control border border-line bg-surface px-3 py-2.5 sm:col-span-2">
-              <dt className="text-xs font-medium text-muted">Version</dt>
-              <dd className="mt-0.5 font-medium text-slate-900">{page.versionLabel}</dd>
-            </div>
-          ) : null}
-        </dl>
+        <p className="mt-5 text-sm text-slate-700">
+          {slotsLabel(page.remaining, page.targetTesters, page.testersReceived)}
+          {page.durationDays ? ` · ${page.durationDays}-day testing period` : ""}
+        </p>
+        {page.versionLabel ? (
+          <p className="mt-1 text-sm text-muted">Version {page.versionLabel}</p>
+        ) : null}
 
         {page.description ? (
-          <p className="mt-6 text-sm leading-6 text-body">{page.description}</p>
+          <section className="mt-8">
+            <h2 className="text-[15px] font-semibold text-slate-900">About this test</h2>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-body">{page.description}</p>
+          </section>
         ) : null}
         {page.instructions ? (
-          <p className="mt-3 text-sm leading-6 text-body">{page.instructions}</p>
+          <section className="mt-6">
+            <h2 className="text-[15px] font-semibold text-slate-900">Testing instructions</h2>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-body">{page.instructions}</p>
+          </section>
         ) : null}
 
         <section className="mt-8 border-t border-line pt-8">
-          <h2 className="text-base font-semibold text-slate-900">Join this test</h2>
-          <p className="mt-1 text-sm leading-6 text-muted">
-            {testingTypeExplanation(page.testingType).body}
-          </p>
-          <JoinTestForm slug={page.slug} testingType={page.testingType} />
+          <h2 className="text-base font-semibold text-slate-900">Join Test</h2>
+          {page.publicAccessLabel ? (
+            <p className="mt-1.5 text-sm text-muted">{page.publicAccessLabel}</p>
+          ) : null}
+          <JoinTestForm
+            slug={page.slug}
+            testingType={page.testingType}
+            joinKind={page.joinKind}
+            publicAccessLabel={page.publicAccessLabel}
+          />
         </section>
       </main>
     </PublicChrome>

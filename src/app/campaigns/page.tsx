@@ -30,8 +30,8 @@ export default async function CampaignsPage({
 
   return (
     <AppShell
-      title="My testing requests"
-      description="Publish a TestLoop request for an app already discovered from Google Play Console. Play remains the source of truth for tracks and releases."
+      title="Published requests"
+      description="Publish a TestLoop request for an app already in Google Play Console."
     >
       <CreateCampaignForm
         initialAppId={params.appId}
@@ -63,6 +63,7 @@ export default async function CampaignsPage({
           testingType: campaign.testingType,
           playTrack: campaign.playTrack,
           targetTesters: campaign.targetTesters,
+          durationDays: campaign.durationDays,
           testerCount: campaign._count.testerCampaigns,
           publicSlug: campaign.publicSlug,
           updatedAt: campaign.updatedAt.toISOString(),

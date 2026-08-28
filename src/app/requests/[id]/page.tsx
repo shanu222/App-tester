@@ -1,10 +1,12 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { requireUser } from "@/auth";
-import { getPublicRequest } from "@/lib/services/network";
+import { describeJoinResult, getPublicRequest } from "@/lib/services/network";
 import { AcceptTestForm } from "@/components/network/accept-test-form";
 import { JsonButton } from "@/components/ui/json-button";
 import { Badge } from "@/components/ui/badge";
 import { AppMark } from "@/components/brand/app-mark";
+import { TestingTypeBadge } from "@/components/ui/testing-type-badge";
+import { slotsLabel } from "@/lib/public-copy";
 import { requestFillStatus } from "@/lib/request-status";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -18,47 +20,37 @@ export default async function RequestDetailPage({
   const { id } = await params;
   const request = await getPublicRequest(user.id, id);
   const fill = requestFillStatus(request.testersReceived, request.targetTesters);
-  const pending = request.participation && !request.participation.consentAt;
+  const pending = request.participation && !request.participation.consentAt && request.joinKind !== "open";
+  const described = request.participation ? await describeJoinResult(request.participation.id) : null;
 
   return (
     <AppShell title={request.app.name}>
       <section className="rounded-card border border-line bg-white p-5 shadow-card sm:p-6">
-        <p className="mt-3 text-sm leading-6 text-body">Looking for developers to test this app.</p>
+        <p className="mt-3 text-sm leading-6 text-body">Help test this app.</p>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <AppMark src={request.app.iconUrl} name={request.app.name} size={56} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
+              <TestingTypeBadge type={request.testingType} />
               <Badge tone={fill.tone}>{fill.label}</Badge>
               {pending ? <Badge tone="warn">Pending</Badge> : null}
-              <Badge tone="accent">{request.trackLabel}</Badge>
-              {request.reciprocalOpen ? <Badge>Reciprocal testing</Badge> : null}
-              {request.playConnected ? <Badge tone="good">Google Play connected</Badge> : null}
+              {request.reciprocalOpen ? <Badge>Reciprocal</Badge> : null}
             </div>
             <p className="mt-3 text-sm text-muted">
-              Developer:{" "}
+              by{" "}
               <Link href={`/developers/${request.owner.id}`} className="font-medium text-brand hover:underline">
                 {request.owner.name}
               </Link>
               {request.owner.country ? ` · ${request.owner.country}` : ""}
             </p>
-            <p className="mt-1.5 font-mono text-xs text-muted">{request.app.packageName}</p>
             <p className="mt-1.5 text-sm text-body">
-              <span className="font-medium text-slate-900 tabular-nums">
-                {request.remaining}
-              </span>{" "}
-              testing slots available · {request.durationDays} day duration
+              {slotsLabel(request.remaining, request.targetTesters, request.testersReceived)}
+              {request.durationDays ? ` · ${request.durationDays}-day testing period` : ""}
             </p>
-            {request.versionLabel ? (
-              <p className="mt-1 text-sm text-muted">Version: {request.versionLabel}</p>
+            {request.versionLabel && !/^version code/i.test(request.versionLabel) ? (
+              <p className="mt-1 text-sm text-muted">Version {request.versionLabel}</p>
             ) : null}
-            <p className="mt-1 text-sm text-muted">
-              Google Play testing link:{" "}
-              {request.testingType === "OPEN" && request.openTestingUrl
-                ? "Available"
-                : request.testingLinkStatus === "available"
-                  ? "Provided after enrollment"
-                  : request.testingLinkStatus || "Not available through Google Play API"}
-            </p>
+            <p className="mt-2 text-sm text-slate-700">{request.publicAccessLabel}</p>
           </div>
         </div>
 
@@ -74,10 +66,6 @@ export default async function RequestDetailPage({
             <p className="mt-2 text-sm leading-6 text-body">{request.testingInstructions}</p>
           </div>
         ) : null}
-
-        <p className="mt-4 text-xs text-muted">
-          Google emails stay private until you confirm participation.
-        </p>
       </section>
 
       <div className="mt-6">
@@ -85,23 +73,6 @@ export default async function RequestDetailPage({
           <Link href={`/campaigns/${request.id}`}>
             <Button variant="secondary">Manage your campaign</Button>
           </Link>
-        ) : request.participation?.consentAt ? (
-          <div className="rounded-card border border-line bg-white p-5 shadow-card">
-            <div className="text-sm text-body">
-              Status:{" "}
-              <span className="font-medium text-slate-900">
-                {request.participation.status.replaceAll("_", " ")}
-              </span>
-            </div>
-            {request.participation.lastError ? (
-              <p className="mt-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-800">
-                {request.participation.lastError}
-              </p>
-            ) : null}
-            <Link href="/testing" className="mt-4 inline-block">
-              <Button variant="secondary">Open My Testing</Button>
-            </Link>
-          </div>
         ) : (
           <AcceptTestForm
             campaignId={request.id}
@@ -109,7 +80,21 @@ export default async function RequestDetailPage({
             ownerName={request.owner.name}
             durationDays={request.durationDays}
             defaultGmail={user.testingGmail || user.email || ""}
-            alreadyAccepted={Boolean(request.participation && !request.participation.consentAt)}
+            testingType={request.testingType}
+            joinKind={request.joinKind}
+            groupConfigured={request.groupConfigured}
+            publicAccessLabel={request.publicAccessLabel}
+            groupJoinUrl={request.groupJoinUrl}
+            alreadyAccepted={Boolean(request.participation)}
+            initialJoin={described?.join ?? null}
+            initialNext={
+              described?.next === "ready" ||
+              described?.next === "result" ||
+              described?.next === "group" ||
+              described?.next === "gmail"
+                ? described.next
+                : undefined
+            }
           />
         )}
       </div>

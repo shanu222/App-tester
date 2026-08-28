@@ -542,6 +542,20 @@ model Campaign {
    */
   testingUrl          String?
   testingType         TestingType            @default(CLOSED)
+  /**
+   * How testers join this request, derived from Play at publish time.
+   * google_group | individual | open | internal | unknown
+   */
+  testingAccessMethod String?
+  /**
+   * Whether Play reported a Google Group on the testers resource.
+   * null = Play did not return tester configuration.
+   */
+  googleGroupConfigured Boolean?
+  /**
+   * First Google Group address from Play. Developer-only. Never shown publicly.
+   */
+  googleGroupEmail    String?
   targetTesters       Int                    @default(12)
   playStoreUrl        String?
   webOptInUrl         String?

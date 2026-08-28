@@ -7,7 +7,7 @@ import { CONTACT_EMAIL, CONTACT_PHONE, PUBLIC_NAV, SITE_NAME, SITE_TAGLINE } fro
 
 export function SiteFooter({ homeHref = "/" }: { homeHref?: string }) {
   return (
-    <footer className="border-t border-line bg-surface">
+    <footer className="border-t border-line bg-white">
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.9fr)]">
         <div>
           <BrandLogo href={homeHref} size="md" />

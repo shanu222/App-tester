@@ -11,18 +11,17 @@ import { type NavItem } from "@/components/layout/sidebar-nav";
 import { SiteFooter } from "@/components/layout/public-chrome";
 
 const NAV: NavItem[] = [
-  { href: "/dashboard", label: "Home", section: "Workspace", icon: "home" },
+  { href: "/dashboard", label: "Dashboard", section: "Workspace", icon: "home" },
   { href: "/apps", label: "My Apps", section: "Workspace", icon: "apps" },
+  { href: "/play", label: "Google Play", section: "Workspace", icon: "play" },
   { href: "/requests", label: "Testing Requests", section: "Testing", icon: "requests" },
-  { href: "/campaigns", label: "My Testing Requests", section: "Testing", icon: "campaigns" },
+  { href: "/campaigns", label: "Published Requests", section: "Testing", icon: "campaigns" },
   { href: "/testing", label: "My Testing", section: "Testing", icon: "testing" },
   { href: "/testers", label: "Testers", section: "Testing", icon: "testers" },
   { href: "/messages", label: "Messages", section: "Account", icon: "messages" },
-  { href: "/play", label: "Google Play", section: "Account", icon: "play" },
-  { href: "/analytics", label: "Analytics", section: "Account", icon: "analytics" },
-  { href: "/profile", label: "Developer Profile", section: "Account", icon: "profile" },
-  { href: "/integrations", label: "Integrations", section: "Account", icon: "integrations" },
   { href: "/settings", label: "Settings", section: "Account", icon: "settings" },
+  { href: "/profile", label: "Profile", section: "Account", icon: "profile" },
+  { href: "/about", label: "Help", section: "Account", icon: "help" },
 ];
 
 export async function AppShell({
@@ -47,25 +46,23 @@ export async function AppShell({
       : NAV;
 
   return (
-    <div className="min-h-screen bg-surface lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
+    <div className="min-h-screen bg-white lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
       <AppSidebar items={items} />
 
       <div className="flex min-w-0 flex-col">
         <header className="sticky top-0 z-20 border-b border-line bg-white">
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6 lg:py-4">
-            <div className="min-w-0">
-              <h1 className="truncate text-lg font-semibold tracking-tight text-slate-900">{title}</h1>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
               {description ? (
-                <p className="mt-0.5 truncate text-sm text-muted">{description}</p>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">{description}</p>
               ) : null}
               {isDemoMode() ? (
-                <p className="mt-0.5 text-xs font-medium text-amber-700">
-                  Demo mode — no production APIs are called.
-                </p>
+                <p className="mt-0.5 text-xs font-medium text-amber-700">Demo mode</p>
               ) : null}
             </div>
 
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
               {actions}
               <Link
                 href="/activity"
@@ -103,7 +100,7 @@ export async function AppShell({
         </header>
 
         <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">
-          <div className="mx-auto max-w-6xl">{children}</div>
+          <div className="mx-auto w-full max-w-6xl">{children}</div>
         </main>
 
         <SiteFooter homeHref="/dashboard" />

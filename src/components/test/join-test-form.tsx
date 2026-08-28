@@ -3,15 +3,39 @@
 import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/fields";
-import { CopyButton } from "@/components/ui/copy-button";
-import type { PublicJoinResult } from "@/lib/testing-page";
+import { InfoPopover } from "@/components/ui/info-popover";
 import { CheckCircle2, ExternalLink } from "lucide-react";
 
-export function JoinTestForm({ slug, testingType }: { slug: string; testingType?: string }) {
+type JoinView = {
+  outcome: "READY" | "REGISTERED" | "FAILED";
+  statusLabel: string;
+  detail: string;
+  email: string;
+  appName: string;
+  testingTypeLabel?: string;
+  developerName: string;
+  optInUrl: string | null;
+  groupJoinUrl?: string | null;
+  joinKind?: string;
+};
+
+export function JoinTestForm({
+  slug,
+  testingType,
+  joinKind,
+  publicAccessLabel,
+}: {
+  slug: string;
+  testingType?: string;
+  joinKind?: string;
+  publicAccessLabel?: string;
+}) {
   const [email, setEmail] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<PublicJoinResult | null>(null);
+  const [result, setResult] = useState<JoinView | null>(null);
+  const openTesting = testingType === "OPEN";
+  const groupTesting = joinKind === "google_group";
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,11 +49,11 @@ export function JoinTestForm({ slug, testingType }: { slug: string; testingType?
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "TestLoop could not register this tester.");
+        throw new Error(data.error || "This test could not be joined right now.");
       }
-      setResult(data.result as PublicJoinResult);
+      setResult(data.result as JoinView);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "TestLoop could not register this tester.");
+      setError(err instanceof Error ? err.message : "This test could not be joined right now.");
     } finally {
       setPending(false);
     }
@@ -41,8 +65,18 @@ export function JoinTestForm({ slug, testingType }: { slug: string; testingType?
 
   return (
     <form onSubmit={onSubmit} className="mt-5 space-y-4">
+      {publicAccessLabel ? <p className="text-sm text-muted">{publicAccessLabel}</p> : null}
       <div>
-        <Label htmlFor="gmail">Gmail</Label>
+        <div className="flex items-center gap-1">
+          <Label htmlFor="gmail">{openTesting ? "Email" : "Gmail"}</Label>
+          <InfoPopover title="Why we ask">
+            {openTesting
+              ? "TestLoop records your email for this request. You join and install through Google Play."
+              : groupTesting
+                ? "TestLoop can record your Gmail. Join the Google Group with the same Google account you use on Google Play."
+                : "Use the Google account you use on Google Play. TestLoop registers your request; Google Play controls tester access."}
+          </InfoPopover>
+        </div>
         <Input
           id="gmail"
           type="email"
@@ -53,21 +87,14 @@ export function JoinTestForm({ slug, testingType }: { slug: string; testingType?
           onChange={(event) => setEmail(event.target.value)}
           placeholder="yourname@gmail.com"
         />
-        <p className="mt-1.5 text-xs leading-5 text-muted">
-          {testingType === "OPEN"
-            ? "TestLoop records your Gmail for this request. You join the test through the Google Play testing link — not a closed tester list."
-            : testingType === "INTERNAL"
-              ? "Use the Google account associated with your Google Play access. TestLoop records it and follows the existing internal testing configuration."
-              : "TestLoop records your Gmail and provides the next step for Play Console access. Google Play remains the source of tester membership."}
-        </p>
       </div>
       {error ? (
         <p role="alert" className="rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-700">
           {error}
         </p>
       ) : null}
-      <Button type="submit" disabled={pending} aria-busy={pending}>
-        {pending ? "Joining…" : "Join Test"}
+      <Button type="submit" disabled={pending} aria-busy={pending} className="w-full sm:w-auto">
+        {pending ? "Joining…" : groupTesting ? "Request test access" : "Join Test"}
       </Button>
     </form>
   );
@@ -77,13 +104,13 @@ function JoinResultCard({
   result,
   onReset,
 }: {
-  result: PublicJoinResult;
+  result: JoinView;
   onReset: () => void;
 }) {
   const success = result.outcome === "READY" || result.outcome === "REGISTERED";
 
   return (
-    <div className="mt-8">
+    <div className="mt-6">
       <div
         className={
           success
@@ -98,45 +125,33 @@ function JoinResultCard({
             <p className="mt-2 text-sm leading-6 text-body">{result.detail}</p>
           </div>
         </div>
-
-        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-xs font-medium text-muted">Application</dt>
-            <dd className="mt-0.5 font-medium text-slate-900">{result.appName}</dd>
+        {result.groupJoinUrl ? (
+          <div className="mt-5">
+            <a href={result.groupJoinUrl} target="_blank" rel="noreferrer">
+              <Button className="w-full sm:w-auto" variant="secondary">
+                Join Google Group
+                <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden />
+              </Button>
+            </a>
           </div>
-          <div>
-            <dt className="text-xs font-medium text-muted">Gmail</dt>
-            <dd className="mt-0.5 break-all text-slate-900">{result.email}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-muted">Track</dt>
-            <dd className="mt-0.5 text-slate-900">{result.trackLabel}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-muted">Developer</dt>
-            <dd className="mt-0.5 text-slate-900">{result.developerName}</dd>
-          </div>
-        </dl>
-
+        ) : null}
         {result.optInUrl ? (
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-5">
             <a href={result.optInUrl} target="_blank" rel="noreferrer">
-              <Button>
+              <Button className="w-full sm:w-auto">
                 Open Google Play
                 <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden />
               </Button>
             </a>
-            <CopyButton value={result.optInUrl} label="Copy Testing Link" />
           </div>
         ) : null}
       </div>
-
       <button
         type="button"
         onClick={onReset}
         className="mt-4 text-sm font-medium text-brand hover:underline"
       >
-        Join with a different email
+        Use a different email
       </button>
     </div>
   );

@@ -16,9 +16,9 @@ const MODES = [
     bestFor: "Controlled tester access.",
     points: [
       "Eligibility is managed in Play Console.",
-      "Email lists and Google Groups are Play Console features.",
+      "TestLoop collects tester Gmail and creates a waiting request.",
       "The Play Developer API cannot add individual emails to those lists.",
-      "Other developers provide Gmail when they accept this TestLoop request. TestLoop then enrolls that address through the owner’s Play connection when the API supports it.",
+      "The developer adds the Gmail in Play Console, then marks the request as added in TestLoop.",
     ],
   },
   {

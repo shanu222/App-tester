@@ -88,26 +88,20 @@ function DisconnectConfirmModal({
           Disconnect Google Play?
         </h2>
         <p className="mt-3 text-sm leading-6 text-slate-700">
-          Disconnecting will remove your synchronized Google Play data and active Play-dependent
-          testing posts from TestLoop.
+          Disconnecting Google Play will remove this developer&apos;s synchronized Google Play apps,
+          testing configuration, track information, and TestLoop testing posts associated with this
+          connection.
         </p>
         <p className="mt-3 text-sm leading-6 text-slate-700">
-          If you disconnect, TestLoop will remove the Google Play apps, testing tracks, releases,
-          testing configuration and Play-related testing data currently synchronized to this
-          TestLoop account.
+          TestLoop can only automatically manage and verify Google Play testing information while
+          your Play Console connection is active. You will need to reconnect Google Play to create
+          new testing posts or synchronize Play Console information.
         </p>
         <p className="mt-3 text-sm leading-6 text-slate-700">
-          Your actual apps, releases, tracks and testers in Google Play Console will not be deleted
-          or changed.
-        </p>
-        <p className="mt-3 text-sm leading-6 text-slate-700">
-          Your existing TestLoop testing posts that depend on this Google Play connection will also
-          be removed/unpublished from TestLoop.
-        </p>
-        <p className="mt-3 text-sm leading-6 text-slate-700">
-          You must connect Google Play again before creating new Play-connected testing posts or
-          using Play automation. TestLoop cannot create new Play-connected testing posts or
-          perform Google Play automation until you connect Google Play again.
+          Existing TestLoop testing posts associated with the connection will be removed or disabled.
+          Google Play Console itself is not deleted or modified. Apps and testers are not deleted
+          from Google Play. Only TestLoop&apos;s synchronized data is removed. Reconnecting allows
+          synchronization again.
         </p>
         <div className="mt-4 flex gap-2.5 rounded-control border border-amber-200 bg-amber-50 p-3">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
@@ -135,9 +129,9 @@ function DisconnectConfirmModal({
               ? cleanupFailed
                 ? "Retrying…"
                 : "Disconnecting…"
-              : cleanupFailed
-                ? "Retry cleanup"
-                : "Disconnect & Remove Play Data"}
+                : cleanupFailed
+                  ? "Retry cleanup"
+                  : "Disconnect & Remove TestLoop Data"}
           </Button>
         </div>
       </div>

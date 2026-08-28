@@ -18,6 +18,7 @@ import {
   playConsoleSetupUrl,
   playTrackUiStatus,
   recommendTestingMode,
+  trackHasDetectedConfiguration,
 } from "@/lib/integrations/play-config";
 import { formatPlayTimestamp } from "@/components/play/play-connection-panel";
 import { SourceBadge } from "@/components/ui/source-badge";
@@ -73,8 +74,10 @@ export function PlayAppsPanel({
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return apps.filter((app) => {
-      if (filter === "testing" && app.configuration.testingTrackCount === 0) return false;
-      if (filter === "none" && app.configuration.testingTrackCount > 0) return false;
+      if (filter === "testing" && (app.configuration.configuredTrackCount ?? app.configuration.testingTrackCount) === 0)
+        return false;
+      if (filter === "none" && (app.configuration.configuredTrackCount ?? app.configuration.testingTrackCount) > 0)
+        return false;
       if (filter === "open" && !app.configuration.open) return false;
       if (filter === "closed" && !app.configuration.closed) return false;
       if (filter === "internal" && !app.configuration.internal) return false;
@@ -310,16 +313,35 @@ function PlayAppCard({
       </div>
 
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
-        <ModeChip label="Internal" exists={config.internal} active={config.internalActive} synced={synced} />
+        <ModeChip
+          label="Internal"
+          exists={config.internal}
+          active={config.internalActive}
+          configured={config.internalConfigured}
+          synced={synced}
+        />
         <ModeChip
           label="Closed"
           exists={config.closed}
           active={config.closedActive}
+          configured={config.closedConfigured}
           synced={synced}
           extra={config.closedCount > 1 ? `${config.closedCount} tracks` : null}
         />
-        <ModeChip label="Open" exists={config.open} active={config.openActive} synced={synced} />
-        <ModeChip label="Production" exists={config.production} active={config.productionActive} synced={synced} />
+        <ModeChip
+          label="Open"
+          exists={config.open}
+          active={config.openActive}
+          configured={config.openConfigured}
+          synced={synced}
+        />
+        <ModeChip
+          label="Production"
+          exists={config.production}
+          active={config.productionActive}
+          configured={config.productionConfigured}
+          synced={synced}
+        />
       </dl>
       <p className="mt-3 text-xs text-muted">
         Last synchronized: {formatPlayTimestamp(app.lastSyncAt) || "Not yet synchronized"}
@@ -332,18 +354,21 @@ function ModeChip({
   label,
   exists,
   active,
+  configured,
   synced,
   extra,
 }: {
   label: string;
   exists: boolean;
   active: boolean;
+  configured?: boolean;
   synced: boolean;
   extra?: string | null;
 }) {
   const status = playTrackUiStatus({
     exists,
     releaseStatus: active ? "completed" : null,
+    detected: Boolean(configured),
     unsynced: !synced,
   });
   return (
@@ -454,6 +479,7 @@ function SelectedAppDetail({
                 status={playTrackUiStatus({
                   exists: config.production.exists,
                   releaseStatus: production?.releaseStatus,
+                  detected: production ? trackHasDetectedConfiguration(production) : false,
                   unsynced: !synced,
                 })}
               />
@@ -604,7 +630,8 @@ function DetectedMode({
 }) {
   const status = playTrackUiStatus({
     exists,
-    releaseStatus: active ? "completed" : exists ? null : null,
+    releaseStatus: active ? "completed" : null,
+    detected: tracks.some(trackHasDetectedConfiguration),
     unsynced: !synced,
   });
   return (
@@ -702,7 +729,11 @@ function TrackManageCard({
   packageName: string;
   onManage: (packageName: string, track: string) => void;
 }) {
-  const status = playTrackUiStatus({ exists: true, releaseStatus: track.releaseStatus });
+  const status = playTrackUiStatus({
+    exists: true,
+    releaseStatus: track.releaseStatus,
+    detected: trackHasDetectedConfiguration(track),
+  });
   return (
     <div className="rounded-control border border-line p-4">
       <div className="font-medium text-slate-900">{track.displayName}</div>
@@ -725,13 +756,17 @@ function TrackManageCard({
 }
 
 function TrackDetails({ track, production }: { track: PlayTrackRecord; production?: boolean }) {
-  const status = playTrackUiStatus({ exists: true, releaseStatus: track.releaseStatus });
+  const status = playTrackUiStatus({
+    exists: true,
+    releaseStatus: track.releaseStatus,
+    detected: trackHasDetectedConfiguration(track),
+  });
   const testerConfig =
     track.googleGroupCount == null
-      ? PLAY_API_UNAVAILABLE
+      ? "Individual tester email addresses are not available through the Google Play Developer API."
       : track.googleGroupCount > 0
-        ? `Configured in Google Play (${track.googleGroupCount} group destination${track.googleGroupCount === 1 ? "" : "s"}). Individual email lists are not returned by the API.`
-        : "Individual email lists are not returned by the Google Play API.";
+        ? "Configured in Play Console. Individual tester email addresses are not available through the Google Play Developer API."
+        : "Visible through TestLoop only after a tester submits Gmail here. Individual tester email addresses are not available through the Google Play Developer API.";
 
   return (
     <div>
@@ -755,6 +790,10 @@ function TrackDetails({ track, production }: { track: PlayTrackRecord; productio
         />
         <Field label="Release notes" value={track.releaseNotes} />
         <Field label="Tester configuration" value={testerConfig} />
+        <Field
+          label="Downloads"
+          value="Individual tester download identity is not available through the current Google Play API."
+        />
       </dl>
       {track.releaseStatus && !["completed", "inProgress"].includes(track.releaseStatus) ? (
         <p className="mt-3 text-sm text-muted">

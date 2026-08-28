@@ -18,7 +18,7 @@ export const FACEBOOK_GROUP_LIMITATION =
   "Automatic Facebook Group discovery, commenting, and inbox monitoring are unavailable. Meta deprecated the Groups API in Graph API v19 and removed it for all versions in April 2024. TestLoop will not scrape groups. Import a post manually, generate a reply, then paste the comment into Facebook yourself.";
 
 export const PLAY_EMAIL_LIST_LIMITATION =
-  "The Google Play Developer API testers resource supports Google Groups email addresses only. Individual email-list testers in Play Console are not available through the official API.";
+  "The Google Play Developer API cannot add individual Gmail addresses to a closed or internal tester list. TestLoop saves the request for the developer to complete in Play Console.";
 
 export const PLAY_INSTALL_LIMITATION =
   "Google Play APIs do not confirm that a specific Gmail downloaded the app. Per-tester install status stays unknown unless the tester's app sends TestLoop telemetry.";

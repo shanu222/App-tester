@@ -68,12 +68,16 @@ export default async function MyTestingPage() {
                       {owner.name} · {row.campaign.testingType} testing
                     </div>
                   </div>
-                  <Badge tone={row.status === "FAILED" || row.status === "MANUAL_REQUIRED" ? "warn" : row.status === "INVITATION_READY" || row.status === "ADDED" ? "good" : "neutral"}>
-                    {row.playEnrollmentStatus === "ENROLLED"
-                      ? "Google Play enrolled"
+                  <Badge tone={row.status === "FAILED" ? "bad" : row.status === "MANUAL_REQUIRED" ? "warn" : row.status === "INVITATION_READY" || row.status === "ADDED" || row.playEnrollmentStatus === "OPEN_OPT_IN" ? "good" : "neutral"}>
+                    {row.status === "MANUAL_REQUIRED"
+                      ? "Waiting for developer"
                       : row.playEnrollmentStatus === "OPEN_OPT_IN"
-                        ? "Open testing"
-                        : row.status.replaceAll("_", " ")}
+                        ? "Ready to test"
+                        : row.status === "ADDED" || row.status === "INVITATION_READY"
+                          ? "Developer confirmed"
+                          : row.status === "OPTED_IN"
+                            ? "Ready to test"
+                            : row.status.replaceAll("_", " ")}
                   </Badge>
                 </div>
                 {row.lastError ? (
@@ -111,7 +115,7 @@ export default async function MyTestingPage() {
                   </p>
                 ) : null}
                 <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-4">
-                  {row.status === "FAILED" || row.status === "MANUAL_REQUIRED" ? (
+                  {row.status === "FAILED" ? (
                     <JsonButton
                       url="/api/network"
                       body={{ action: "retry-access", participationId: row.id }}

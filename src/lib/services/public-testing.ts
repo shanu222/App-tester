@@ -56,10 +56,13 @@ function publicJoinState(
   if (status === "ERROR") {
     return { outcome: "FAILED", statusLabel: "Unable to register tester" };
   }
-  if (accessAdded || READY_STATUSES.includes(status)) {
-    return { outcome: "READY", statusLabel: "TestLoop registration complete" };
+  if (status === "ADDING") {
+    return { outcome: "REGISTERED", statusLabel: "Waiting for developer" };
   }
-  return { outcome: "REGISTERED", statusLabel: "TestLoop registration complete" };
+  if (accessAdded || READY_STATUSES.includes(status)) {
+    return { outcome: "READY", statusLabel: "You're ready to test" };
+  }
+  return { outcome: "REGISTERED", statusLabel: "Waiting for developer" };
 }
 
 export async function getPublicTestingPage(slug: string): Promise<PublicTestingPage> {
@@ -228,14 +231,14 @@ export async function joinPublicTest(input: {
 
   return {
     ...state,
-    statusLabel: state.outcome === "FAILED" ? state.statusLabel : "TestLoop registration complete",
+    statusLabel: state.statusLabel,
     detail: state.outcome === "FAILED" ? granted?.detail || PLAY_TESTER_API_LIMITATION : testerDetail,
     email: described.normalized,
     appName: page.appName,
     packageName: page.packageName,
     trackLabel: page.trackLabel,
     developerName: page.developerName,
-    optInUrl: granted?.optInUrl ?? testing.url,
+    optInUrl: campaign.testingType === "OPEN" ? granted?.optInUrl ?? testing.url : null,
     steps: [],
     mode: granted?.mode ?? mode,
   };

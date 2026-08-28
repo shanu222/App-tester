@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { json, handleRouteError, parseJson } from "@/lib/http";
 import { requireCompleteProfile, requireUser } from "@/auth";
-import { createCampaign, listCampaigns, publishCampaign, transitionCampaign } from "@/lib/services/campaigns";
+import { createCampaign, listCampaigns, publishCampaign, removeTestingPost, transitionCampaign } from "@/lib/services/campaigns";
 import type { CampaignStatus } from "@prisma/client";
 
 const createSchema = z.object({
@@ -52,8 +52,13 @@ export async function PATCH(request: Request) {
         id: z.string(),
         status: z.enum(["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"]).optional(),
         publish: z.boolean().optional(),
+        remove: z.boolean().optional(),
       }),
     );
+    if (body.remove) {
+      const campaign = await removeTestingPost(user.id, body.id);
+      return json({ campaign });
+    }
     if (body.publish) {
       const campaign = await publishCampaign(user.id, body.id);
       return json({ campaign });

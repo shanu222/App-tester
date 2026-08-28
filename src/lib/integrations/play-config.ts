@@ -38,6 +38,19 @@ export function isReleaseActive(status: string | null | undefined) {
   return value === "completed" || value === "inprogress";
 }
 
+/** A track is configured only when Play returned release or version evidence. */
+export function trackHasDetectedConfiguration(track: {
+  releaseStatus?: string | null;
+  releaseName?: string | null;
+  versionCodes?: string[];
+}) {
+  return Boolean(
+    track.releaseStatus ||
+      track.releaseName ||
+      (track.versionCodes && track.versionCodes.length > 0),
+  );
+}
+
 export type PlayUiStatusKind =
   | "active"
   | "draft"
@@ -63,6 +76,7 @@ export function playTrackUiStatus(input: {
   releaseStatus: string | null | undefined;
   error?: boolean;
   unsynced?: boolean;
+  detected?: boolean;
 }): PlayUiStatus {
   if (input.error) return { kind: "error", label: "Error", symbol: "✕" };
   if (input.unsynced) {
@@ -74,10 +88,14 @@ export function playTrackUiStatus(input: {
   if (status === "inprogress") return { kind: "inProgress", label: "In progress", symbol: "◐" };
   if (status === "draft") return { kind: "draft", label: "Draft", symbol: "●" };
   if (status === "halted") return { kind: "halted", label: "Action required", symbol: "⚠" };
-  if (!input.releaseStatus) {
+  if (input.detected || input.releaseStatus) {
     return { kind: "configured", label: "Configured", symbol: "✓" };
   }
-  return { kind: "configured", label: "Configured", symbol: "✓" };
+  return {
+    kind: "unknown",
+    label: "Not available through Google Play API",
+    symbol: "?",
+  };
 }
 
 export type TestingModeState = {
@@ -221,7 +239,8 @@ export function recommendTestingMode(config: TestingConfiguration): TestingRecom
     return {
       primary: "CLOSED",
       title: "Closed testing",
-      reason: "Your app already has a restricted testing track configured.",
+      reason:
+        "This app has an active closed testing track. TestLoop can collect tester Gmail addresses and manage tester requests, but individual closed-track email-list membership must be completed through Google Play Console.",
       cta: "Manage Closed Testing",
       track: track?.track,
       alternatives: [],
@@ -276,14 +295,22 @@ export function summarizeConfiguration(config: TestingConfiguration) {
   return {
     internal: config.internalTesting.exists,
     internalActive: config.internalTesting.active,
+    internalConfigured: config.internalTesting.tracks.some(trackHasDetectedConfiguration),
     open: config.openTesting.exists,
     openActive: config.openTesting.active,
+    openConfigured: config.openTesting.tracks.some(trackHasDetectedConfiguration),
     closed: config.closedTesting.exists,
     closedActive: config.closedTesting.active,
+    closedConfigured: config.closedTesting.tracks.some(trackHasDetectedConfiguration),
     closedCount: config.closedTesting.tracks.length,
     production: config.production.exists,
     productionActive: config.production.active,
+    productionConfigured: config.production.tracks.some(trackHasDetectedConfiguration),
     testingTrackCount: config.testingTrackCount,
+    configuredTrackCount:
+      config.internalTesting.tracks.filter(trackHasDetectedConfiguration).length +
+      config.openTesting.tracks.filter(trackHasDetectedConfiguration).length +
+      config.closedTesting.tracks.filter(trackHasDetectedConfiguration).length,
   };
 }
 

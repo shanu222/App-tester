@@ -6,26 +6,30 @@ import { normalizeEmail } from "@/lib/email-extract";
  * `{ googleGroups: [string] }`. Google documents that email lists in Play
  * Console are not supported by this resource.
  *
- * Individual Gmail addresses therefore cannot be written to a closed/internal
- * email list through the connected API. A Google Group address can be attached
- * to the track without replacing groups already returned by GET.
+ * TestLoop therefore never claims it added an individual Gmail to a closed or
+ * internal tester list. Closed/internal joins become a developer-confirmation
+ * request. Google Groups are not used as a TestLoop product feature.
  */
 export const PLAY_TESTER_API_LIMITATION =
-  "TestLoop could not add your Google account to this Google Play test. The Play Developer API only supports Google Groups on a testing track, not individual Gmail addresses. Existing Play testers were not changed.";
+  "Google Play API does not support adding individual Gmail addresses to a closed-test email list. The tester request has been saved and requires developer action in Play Console.";
 
 export const PLAY_INTERNAL_TESTER_LIMIT_NOTE = "Internal Testing tester limit reached.";
 
 export const PLAY_CLOSED_TESTING_TESTER_NOTE = PLAY_TESTER_API_LIMITATION;
 
-export const PLAY_INTERNAL_TESTING_TESTER_NOTE = PLAY_TESTER_API_LIMITATION;
+export const PLAY_INTERNAL_TESTING_TESTER_NOTE =
+  "Google Play API does not support adding individual Gmail addresses to an internal-test email list. The tester request has been saved and requires developer action in Play Console.";
+
+export const PLAY_VERIFY_UNAVAILABLE =
+  "Google Play API does not expose individual closed-test email-list membership. TestLoop cannot independently verify this tester through the API.";
 
 export const PLAY_OPEN_TRACK_NOTE =
-  "Anyone can join this Google Play open test. TestLoop recorded your Gmail for reciprocal testing and did not add it to a Play tester list.";
+  "Anyone can join this Google Play open test. TestLoop recorded your Gmail for TestLoop records and did not add it to a Play tester list.";
 
 export const PLAY_OPEN_TESTER_READY = PLAY_OPEN_TRACK_NOTE;
 
 export const PLAY_ENROLLMENT_FAILED =
-  "TestLoop could not add your Google account to this Google Play test.";
+  "TestLoop could not complete this Google Play tester request.";
 
 export type TesterAccessMode = "OPEN_OPT_IN" | "PLAY_TRACK_TESTERS";
 

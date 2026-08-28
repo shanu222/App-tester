@@ -237,6 +237,25 @@ export async function publishCampaign(userId: string, id: string) {
   return updated;
 }
 
+export async function removeTestingPost(userId: string, id: string) {
+  const campaign = await prisma.campaign.findFirst({ where: { id, userId } });
+  if (!campaign) throw new NotFoundError("Campaign not found.");
+  const updated = await prisma.campaign.update({
+    where: { id },
+    data: {
+      published: false,
+      status: campaign.status === "COMPLETED" ? "COMPLETED" : "ARCHIVED",
+    },
+  });
+  await logActivity({
+    userId,
+    campaignId: id,
+    action: "CAMPAIGN_REMOVED",
+    result: updated.name,
+  });
+  return updated;
+}
+
 export async function transitionCampaign(
   userId: string,
   id: string,

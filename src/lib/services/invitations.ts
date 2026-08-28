@@ -6,18 +6,18 @@ import { renderTemplate, DEFAULT_TEMPLATES } from "@/lib/templates";
 import { readCredentials } from "@/lib/integrations/store";
 import { sendGmail } from "@/lib/integrations/gmail";
 import {
-  PLAY_ENROLLMENT_FAILED,
+  PLAY_INTERNAL_TESTING_TESTER_NOTE,
   PLAY_OPEN_TRACK_NOTE,
   PLAY_TESTER_API_LIMITATION,
+  PLAY_VERIFY_UNAVAILABLE,
   campaignTestingUrl,
   playConsoleTesterSteps,
   testerAccessMode,
   type TesterAccessMode,
 } from "@/lib/integrations/play-testers";
-import { enrollPlayTrackTester, type PlayEnrollmentOutcome } from "@/lib/integrations/play";
-import { resolvePlayCredentials } from "@/lib/services/play-connection";
 import { setTesterStatus } from "@/lib/services/testers";
 import type { PlayEnrollmentStatus } from "@prisma/client";
+import type { PlayEnrollmentOutcome } from "@/lib/integrations/play";
 
 export type TesterAccessResult = {
   ok: boolean;
@@ -29,24 +29,19 @@ export type TesterAccessResult = {
   playEnrollmentStatus: PlayEnrollmentStatus;
 };
 
-function enrollmentStatus(outcome: PlayEnrollmentOutcome): PlayEnrollmentStatus {
-  if (outcome === "OPEN_OPT_IN") return "OPEN_OPT_IN";
-  if (outcome === "ENROLLED" || outcome === "ALREADY_ENROLLED") return "ENROLLED";
-  if (outcome === "UNSUPPORTED") return "UNSUPPORTED";
-  return "FAILED";
-}
-
-function defaultTrackName(testingType: "OPEN" | "CLOSED" | "INTERNAL", playTrack: string | null | undefined) {
-  if (playTrack?.trim()) return playTrack.trim();
-  if (testingType === "OPEN") return "beta";
-  if (testingType === "INTERNAL") return "internal";
-  return null;
+function waitNote(testingType: "OPEN" | "CLOSED" | "INTERNAL") {
+  return testingType === "INTERNAL" ? PLAY_INTERNAL_TESTING_TESTER_NOTE : PLAY_TESTER_API_LIMITATION;
 }
 
 /**
- * After a tester consents to their Gmail, enroll them using the app owner's
- * Play connection. Success is recorded only when Google Play confirms it, or
- * when the track is open testing (no list write).
+ * Record a tester after Gmail consent.
+ *
+ * Open testing: TestLoop stores the Gmail and returns Google's testing link.
+ * It does not write a Play tester list.
+ *
+ * Closed/internal: TestLoop creates a waiting request. The developer adds the
+ * Gmail in Play Console, then confirms in TestLoop. The Play testers API is
+ * not called.
  */
 export async function grantTesterAccess(input: {
   userId: string;
@@ -71,59 +66,8 @@ export async function grantTesterAccess(input: {
     configuredUrl: row.campaign.testingUrl || row.campaign.webOptInUrl,
   });
   const optInUrl = testing.url;
-  const track =
-    defaultTrackName(testingType, row.campaign.playTrack || row.campaign.track?.trackId || row.campaign.track?.name) ||
-    "";
 
-  if (!track) {
-    await setTesterStatus({
-      userId: input.userId,
-      testerCampaignId: row.id,
-      to: "ERROR",
-      note: "No Play Console track is stored on this campaign.",
-    });
-    return {
-      ok: false,
-      mode,
-      outcome: "TRACK_MISSING",
-      detail: "The selected testing track is not available in Google Play for this app.",
-      optInUrl,
-      steps: playConsoleTesterSteps(testingType),
-      playEnrollmentStatus: "FAILED",
-    };
-  }
-
-  let creds;
-  try {
-    creds = await resolvePlayCredentials(input.userId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Google Play is not connected.";
-    await setTesterStatus({
-      userId: input.userId,
-      testerCampaignId: row.id,
-      to: "ERROR",
-      note: message,
-    });
-    return {
-      ok: false,
-      mode,
-      outcome: "FAILED",
-      detail: message,
-      optInUrl,
-      steps: playConsoleTesterSteps(testingType),
-      playEnrollmentStatus: "FAILED",
-    };
-  }
-
-  const enrollment = await enrollPlayTrackTester({
-    creds,
-    packageName: row.campaign.app.packageName,
-    track,
-    email: row.tester.emailNormalized,
-    testingType,
-  });
-
-  if (enrollment.outcome === "OPEN_OPT_IN") {
+  if (testingType === "OPEN") {
     await setTesterStatus({
       userId: input.userId,
       testerCampaignId: row.id,
@@ -140,7 +84,7 @@ export async function grantTesterAccess(input: {
     return {
       ok: true,
       mode,
-      outcome: enrollment.outcome,
+      outcome: "OPEN_OPT_IN",
       detail: PLAY_OPEN_TRACK_NOTE,
       optInUrl,
       steps: [],
@@ -148,70 +92,43 @@ export async function grantTesterAccess(input: {
     };
   }
 
-  if (enrollment.ok && (enrollment.outcome === "ENROLLED" || enrollment.outcome === "ALREADY_ENROLLED")) {
-    await setTesterStatus({
-      userId: input.userId,
-      testerCampaignId: row.id,
-      to: "ADDED",
-      note:
-        enrollment.outcome === "ALREADY_ENROLLED"
-          ? "Google Play already listed this address on the track tester configuration."
-          : "Google Play confirmed this address on the track tester configuration.",
-    });
-    await logActivity({
-      userId: input.userId,
-      campaignId: row.campaignId,
-      testerId: row.testerId,
-      action: "TESTER_ADDED",
-      result: `${row.tester.emailNormalized} · ${testingType.toLowerCase()} · Play confirmed · ${row.campaign.app.packageName}`,
-    });
-    return {
-      ok: true,
-      mode,
-      outcome: enrollment.outcome,
-      detail:
-        enrollment.outcome === "ALREADY_ENROLLED"
-          ? "This Google account was already on the Play tester configuration."
-          : "Google Play confirmed the tester was added.",
-      optInUrl,
-      steps: [],
-      playEnrollmentStatus: "ENROLLED",
-    };
-  }
-
+  const detail = waitNote(testingType);
   await setTesterStatus({
     userId: input.userId,
     testerCampaignId: row.id,
-    to: "ERROR",
-    note: enrollment.error || PLAY_ENROLLMENT_FAILED,
-  });
-  await prisma.testerCampaign.update({
-    where: { id: row.id },
-    data: { lastError: enrollment.error || PLAY_ENROLLMENT_FAILED },
+    to: "ADDING",
+    note: detail,
   });
   await logActivity({
     userId: input.userId,
     campaignId: row.campaignId,
     testerId: row.testerId,
-    action: "TESTER_PLAY_ENROLLMENT_FAILED",
-    result: `${row.tester.emailNormalized} · ${enrollment.outcome} · ${row.campaign.app.packageName}`,
+    action: "TESTER_PENDING_PLAY_CONSOLE",
+    result: `${row.tester.emailNormalized} · ${testingType.toLowerCase()} · ${row.campaign.app.packageName}`,
   });
   await notify({
     userId: input.userId,
     type: "tester",
-    title: "Play enrollment did not complete",
-    body: enrollment.error || PLAY_TESTER_API_LIMITATION,
+    title: testingType === "INTERNAL" ? "New internal tester" : "New tester request",
+    body: `${row.campaign.app.name} · ${testingType === "INTERNAL" ? "Internal testing" : "Closed testing"} · ${row.tester.emailNormalized}. ${detail}`,
     href: `/campaigns/${row.campaignId}`,
     campaignId: row.campaignId,
   });
   return {
-    ok: false,
+    ok: true,
     mode,
-    outcome: enrollment.outcome,
-    detail: enrollment.error || PLAY_ENROLLMENT_FAILED,
-    optInUrl,
+    outcome: "UNSUPPORTED",
+    detail,
+    optInUrl: null,
     steps: playConsoleTesterSteps(testingType),
-    playEnrollmentStatus: enrollmentStatus(enrollment.outcome),
+    playEnrollmentStatus: "UNSUPPORTED",
+  };
+}
+
+export function playMembershipUnverifiable() {
+  return {
+    verified: false,
+    message: PLAY_VERIFY_UNAVAILABLE,
   };
 }
 

@@ -6,7 +6,7 @@ import { confirmTesterAdded, grantTesterAccess } from "@/lib/services/invitation
 import { describeEmail } from "@/lib/email-extract";
 import { parseTracksSnapshot, playTrackDisplayName } from "@/lib/integrations/play-config";
 import { campaignDependsOnPlayConnection, isPlayConnectionActive } from "@/lib/play-disconnect";
-import { campaignTestingUrl } from "@/lib/integrations/play-testers";
+import { campaignTestingUrl, PLAY_OPEN_TRACK_NOTE } from "@/lib/integrations/play-testers";
 
 const RECEIVED_STATUSES = [
   "GMAIL_CONFIRMED",
@@ -452,9 +452,10 @@ export async function describeJoinResult(participationId: string) {
     packageName: row.campaign.app.packageName,
     configuredUrl: row.campaign.testingUrl || row.campaign.webOptInUrl,
   });
-  const enrolled = row.playEnrollmentStatus === "ENROLLED" || row.playEnrollmentStatus === "VERIFIED";
+  const waiting = row.status === "MANUAL_REQUIRED";
   const open = row.playEnrollmentStatus === "OPEN_OPT_IN";
-  const failed = row.status === "FAILED" || row.status === "MANUAL_REQUIRED";
+  const confirmed = row.status === "ADDED" || row.status === "INVITATION_READY" || row.status === "OPTED_IN";
+  const failed = row.status === "FAILED";
   return {
     participation: {
       id: row.id,
@@ -467,17 +468,30 @@ export async function describeJoinResult(participationId: string) {
       ok: !failed,
       outcome: row.playEnrollmentStatus,
       title: failed
-        ? "Play enrollment did not complete"
-        : enrolled
-          ? "Tester added"
-          : open
-            ? "Open testing"
+        ? "Tester request did not complete"
+        : waiting
+          ? "Waiting for developer"
+          : open || confirmed
+            ? "You're ready to test"
             : "TestLoop registration complete",
-      detail: row.lastError || (open ? "Anyone can join this Google Play test." : enrolled ? "Google Play confirmed this Google account on the tester configuration." : "Your TestLoop registration is recorded."),
+      detail:
+        row.lastError ||
+        (waiting
+          ? "Google Play requires individual closed-test email-list membership to be managed through Play Console."
+          : open
+            ? PLAY_OPEN_TRACK_NOTE
+            : confirmed
+              ? "The app owner confirmed Play Console access. Google Play did not verify this through the API."
+              : "Your TestLoop registration is recorded."),
       email: row.gmail,
       appName: row.campaign.app.name,
-      trackLabel: row.campaign.testingType === "OPEN" ? "Open Testing" : row.campaign.testingType === "INTERNAL" ? "Internal Testing" : "Closed Testing",
-      testingUrl: failed ? null : testing.url,
+      trackLabel:
+        row.campaign.testingType === "OPEN"
+          ? "Open Testing"
+          : row.campaign.testingType === "INTERNAL"
+            ? "Internal Testing"
+            : "Closed Testing",
+      testingUrl: failed || waiting ? null : testing.url,
     },
   };
 }
@@ -490,7 +504,7 @@ export async function processTesterAccess(participationId: string) {
   if (!participation?.gmail || !participation.testerCampaignId) {
     throw new AppError("Gmail consent is required before tester access can be processed.");
   }
-  if (["ADDED", "INVITATION_READY", "OPTED_IN", "ACTIVITY_DETECTED", "FEEDBACK_RECEIVED", "COMPLETED"].includes(participation.status)) {
+  if (["ADDED", "INVITATION_READY", "OPTED_IN", "ACTIVITY_DETECTED", "FEEDBACK_RECEIVED", "COMPLETED", "MANUAL_REQUIRED"].includes(participation.status)) {
     return participation;
   }
   await prisma.testingParticipation.update({
@@ -503,11 +517,21 @@ export async function processTesterAccess(participationId: string) {
       testerCampaignId: participation.testerCampaignId,
     });
     const now = new Date();
+    if (result.playEnrollmentStatus === "UNSUPPORTED") {
+      return prisma.testingParticipation.update({
+        where: { id: participation.id },
+        data: {
+          status: "MANUAL_REQUIRED",
+          playEnrollmentStatus: "UNSUPPORTED",
+          lastError: result.detail,
+        },
+      });
+    }
     if (!result.ok) {
       return prisma.testingParticipation.update({
         where: { id: participation.id },
         data: {
-          status: result.playEnrollmentStatus === "UNSUPPORTED" ? "MANUAL_REQUIRED" : "FAILED",
+          status: "FAILED",
           playEnrollmentStatus: result.playEnrollmentStatus,
           lastError: result.detail,
         },
@@ -515,21 +539,19 @@ export async function processTesterAccess(participationId: string) {
     }
 
     const optInUrl = participation.campaign.webOptInUrl || result.optInUrl;
-    const enrolled = result.playEnrollmentStatus === "ENROLLED";
     const updated = await prisma.testingParticipation.update({
       where: { id: participation.id },
       data: {
         status: optInUrl ? "INVITATION_READY" : "ADDED",
         playEnrollmentStatus: result.playEnrollmentStatus,
-        playEnrolledAt: enrolled ? now : null,
-        playVerifiedAt: enrolled ? now : null,
+        playEnrolledAt: result.playEnrollmentStatus === "OPEN_OPT_IN" ? now : null,
         lastError: null,
       },
     });
     await notify({
       userId: participation.testerUserId,
       type: "tester",
-      title: enrolled ? "You're enrolled in this Google Play test" : "TestLoop registration complete",
+      title: "You're ready to test",
       body: result.detail,
       href: "/testing",
       campaignId: participation.campaignId,
@@ -554,7 +576,11 @@ export async function markParticipationManuallyAdded(ownerUserId: string, partic
   const next = participation.campaign.webOptInUrl ? "INVITATION_READY" : "ADDED";
   const updated = await prisma.testingParticipation.update({
     where: { id: participation.id },
-    data: { status: next, lastError: null },
+    data: {
+      status: next,
+      playEnrollmentStatus: "UNSUPPORTED",
+      lastError: null,
+    },
   });
   await notify({
     userId: participation.testerUserId,

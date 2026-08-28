@@ -82,7 +82,11 @@ export function AcceptTestForm({
     return (
       <div className="rounded-card border border-line bg-white p-5 shadow-card sm:p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-          {join.ok ? "Join complete" : "Action required"}
+          {join.title === "Waiting for developer"
+            ? "Waiting"
+            : join.ok
+              ? "Join complete"
+              : "Action required"}
         </p>
         <h2 className="mt-2 text-[15px] font-semibold text-slate-900">{join.title}</h2>
         <p className="mt-2 text-sm leading-6 text-body">{join.detail}</p>
@@ -125,13 +129,14 @@ export function AcceptTestForm({
   if (step === "confirm") {
     return (
       <form onSubmit={confirm} className="rounded-card border border-line bg-white p-5 shadow-card sm:p-6">
-        <h2 className="text-[15px] font-semibold text-slate-900">Join this test</h2>
+        <h2 className="text-[15px] font-semibold text-slate-900">Join Test</h2>
         <p className="mt-1.5 max-w-xl text-sm leading-6 text-muted">
-          You are accepting this testing request for <strong className="font-medium text-slate-900">{appName}</strong>{" "}
-          by {ownerName} ({durationDays} days).
+          Application: <strong className="font-medium text-slate-900">{appName}</strong>
+          <br />
+          Developer: {ownerName} ({durationDays} days)
         </p>
         <div className="mt-5 max-w-sm">
-          <Label htmlFor="accept-gmail">Google Play account that will be used for testing</Label>
+          <Label htmlFor="accept-gmail">Enter the Gmail account you use on Google Play</Label>
           <Input
             id="accept-gmail"
             name="gmail"
@@ -142,8 +147,9 @@ export function AcceptTestForm({
           />
         </div>
         <p className="mt-3 max-w-xl text-xs leading-5 text-muted">
-          Your Gmail address will only be shared with the app owner and the Google Play connection as required
-          to enroll you as a tester for this test.
+          Your Gmail is shared only with the app owner so they can complete Play Console tester
+          access where Google Play requires it. TestLoop does not add individual Gmail addresses to
+          a Play tester list.
         </p>
         {error ? (
           <p
@@ -155,7 +161,7 @@ export function AcceptTestForm({
         ) : null}
         <div className="mt-5">
           <Button type="submit" aria-busy={pending} disabled={pending}>
-            {pending ? "Adding your account to Google Play…" : "Confirm & Join Test"}
+            {pending ? "Saving…" : "Join Test"}
           </Button>
         </div>
       </form>

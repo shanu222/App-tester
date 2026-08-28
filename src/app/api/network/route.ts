@@ -14,6 +14,7 @@ import {
   respondReciprocal,
   submitParticipationFeedback,
 } from "@/lib/services/network";
+import { playMembershipUnverifiable } from "@/lib/services/invitations";
 
 export async function GET(request: Request) {
   try {
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
           "consent",
           "retry-access",
           "manual-added",
+          "verify-tester",
           "opted-in",
           "feedback",
           "reciprocal-request",
@@ -87,6 +89,15 @@ export async function POST(request: Request) {
       if (!body.participationId) return json({ error: "participationId required." }, 400);
       const participation = await markParticipationManuallyAdded(user.id, body.participationId);
       return json({ participation: { id: participation.id, status: participation.status } });
+    }
+    if (body.action === "verify-tester") {
+      if (!body.participationId) return json({ error: "participationId required." }, 400);
+      const existing = await prisma.testingParticipation.findFirst({
+        where: { id: body.participationId, ownerUserId: user.id },
+        select: { id: true },
+      });
+      if (!existing) return json({ error: "Not found." }, 404);
+      return json(playMembershipUnverifiable());
     }
     if (body.action === "opted-in") {
       if (!body.participationId) return json({ error: "participationId required." }, 400);

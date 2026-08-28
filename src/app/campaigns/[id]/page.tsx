@@ -13,6 +13,8 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { campaignShareUrl } from "@/lib/services/campaigns";
 import { PLAY_TESTER_API_LIMITATION } from "@/lib/integrations/play-testers";
 import { CampaignTestersTable } from "@/components/campaigns/campaign-testers-table";
+import { TesterRequestActions } from "@/components/campaigns/tester-request-actions";
+import { RemoveTestingPostButton } from "@/components/campaigns/remove-testing-post";
 import { prisma } from "@/lib/db";
 import { parseTracksSnapshot, PLAY_API_UNAVAILABLE, playTrackDisplayName, playTrackUiStatus } from "@/lib/integrations/play-config";
 import { PlayStatusMark } from "@/components/play/play-status";
@@ -60,11 +62,7 @@ export default async function CampaignDetailPage({
   const completedTesters = campaign.participations.filter((row) =>
     ["FEEDBACK_RECEIVED", "COMPLETED"].includes(row.status),
   ).length;
-  const playEnrolled = campaign.participations.filter(
-    (row) => row.playEnrollmentStatus === "ENROLLED" || row.playEnrollmentStatus === "VERIFIED",
-  ).length;
-  const googlePlayTesters =
-    playTrack?.googleGroupCount == null ? PLAY_API_UNAVAILABLE : playTrack.googleGroupCount;
+  const googlePlayTesters = PLAY_API_UNAVAILABLE;
   const playConnection = await getPlayConnection(user.id);
   const playConnected = playConnection?.status === "CONNECTED";
   const playDependent = campaignDependsOnPlayConnection(campaign);
@@ -91,6 +89,9 @@ export default async function CampaignDetailPage({
           ) : null}
           {campaign.status === "ACTIVE" || campaign.status === "PAUSED" ? (
             <JsonButton url="/api/campaigns" method="PATCH" body={{ id, status: "COMPLETED" }} label="Complete" variant="ghost" />
+          ) : null}
+          {campaign.published || campaign.status === "ACTIVE" || campaign.status === "PAUSED" ? (
+            <RemoveTestingPostButton campaignId={id} />
           ) : null}
         </div>
       }
@@ -185,9 +186,9 @@ export default async function CampaignDetailPage({
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="TestLoop testers" value={registeredTesters} />
         <StatCard
-          label="Play tester groups"
+          label="Play Console testers"
           value={googlePlayTesters}
-          hint={playEnrolled ? `${playEnrolled} TestLoop testers confirmed on Play groups` : "Individual email lists are not returned by the Play API"}
+          hint="Individual tester email addresses are not available through the Google Play Developer API."
         />
         <StatCard label="Pending" value={pendingTesters} />
         <StatCard label="Completed" value={completedTesters} />
@@ -273,9 +274,9 @@ export default async function CampaignDetailPage({
             description="You do not enter tester Gmail addresses. Other developers accept this request and confirm the Google account they will use."
           />
           <p className="mt-4 text-sm leading-6 text-body">
-            Publish this request, then wait for developers on TestLoop. TestLoop uses your connected
-            Google Play account to enroll each confirmed Gmail when the Play API supports that
-            operation.
+            Publish this request, then wait for developers on TestLoop. Open testing testers receive
+            the Google Play testing link. Closed and internal testers submit a Gmail request that you
+            complete in Play Console, then confirm here as Developer confirmed.
           </p>
         </Card>
       </div>
@@ -310,10 +311,12 @@ export default async function CampaignDetailPage({
                     {row.tester.developerName || row.tester.name}
                   </Link>
                   <div className="mt-0.5 text-sm text-muted">
-                    Source: TestLoop Accepted Test · {row.status.replaceAll("_", " ")}
-                    {row.playEnrollmentStatus && row.playEnrollmentStatus !== "NOT_ATTEMPTED"
-                      ? ` · Play ${row.playEnrollmentStatus.replaceAll("_", " ").toLowerCase()}`
-                      : ""}
+                    Source: TestLoop Accepted Test ·{" "}
+                    {row.status === "MANUAL_REQUIRED"
+                      ? "Waiting for developer"
+                      : row.status === "ADDED" || row.status === "INVITATION_READY"
+                        ? "Developer confirmed"
+                        : row.status.replaceAll("_", " ")}
                   </div>
                 </div>
                 <div className="text-sm text-slate-700">
@@ -325,20 +328,8 @@ export default async function CampaignDetailPage({
                   {row.lastError}
                 </p>
               ) : null}
-              {row.status === "MANUAL_REQUIRED" || row.status === "FAILED" ? (
-                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-                  {row.gmail ? (
-                    <span className="rounded-control border border-line bg-surface px-3 py-1.5 font-mono text-xs text-slate-600">
-                      {row.gmail}
-                    </span>
-                  ) : null}
-                  <JsonButton
-                    url="/api/network"
-                    body={{ action: "retry-access", participationId: row.id }}
-                    label="Retry"
-                    variant="secondary"
-                  />
-                </div>
+              {row.status === "MANUAL_REQUIRED" ? (
+                <TesterRequestActions participationId={row.id} gmail={row.consentAt ? row.gmail : null} />
               ) : null}
             </div>
           ))
@@ -352,7 +343,7 @@ export default async function CampaignDetailPage({
         <StatCard
           label="Google Play testers"
           value={googlePlayTesters}
-          hint="Individual email lists are not returned by the Play Developer API"
+          hint="Individual tester email addresses are not available through the Google Play Developer API."
         />
       </div>
       <div className="mb-4 rounded-card border border-line bg-surface p-4 text-sm leading-6 text-body">

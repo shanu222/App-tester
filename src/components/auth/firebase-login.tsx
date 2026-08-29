@@ -17,6 +17,12 @@ import { firebaseAuth, googleProvider } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/fields";
 import { GoogleGlyph } from "@/components/brand/google-glyph";
+import { PasswordField } from "@/components/auth/password-field";
+import {
+  VERIFY_BEFORE_SIGN_IN,
+  emailActionSettings,
+  readableAuthError,
+} from "@/lib/auth/firebase-auth-messages";
 
 /** Popup failures that are environmental rather than user error; retry via redirect. */
 const POPUP_FALLBACK = new Set([
@@ -26,39 +32,14 @@ const POPUP_FALLBACK = new Set([
   "auth/operation-not-supported-in-this-environment",
 ]);
 
-function readableError(error: unknown) {
-  if (error instanceof FirebaseError) {
-    switch (error.code) {
-      case "auth/invalid-credential":
-      case "auth/wrong-password":
-      case "auth/user-not-found":
-        return "That email and password combination is not correct.";
-      case "auth/email-already-in-use":
-        return "An account already exists for this email. Sign in instead.";
-      case "auth/weak-password":
-        return "Choose a password with at least 6 characters.";
-      case "auth/invalid-email":
-        return "Enter a valid email address.";
-      case "auth/too-many-requests":
-        return "Too many attempts. Wait a moment and try again.";
-      case "auth/unauthorized-domain":
-        return "This hostname is not in the Firebase authorized domains list.";
-      case "auth/account-exists-with-different-credential":
-        return "This email already uses a different sign-in method. Use Google instead.";
-      default:
-        return error.message.replace("Firebase: ", "");
-    }
-  }
-  return error instanceof Error ? error.message : "Sign-in failed.";
-}
-
 export function FirebaseLogin() {
-  const [mode, setMode] = useState<"signin" | "create">("signin");
+  const [mode, setMode] = useState<"signin" | "create" | "reset">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [pending, setPending] = useState<"google" | "email" | "reset" | null>(null);
+  const [pending, setPending] = useState<"google" | "email" | "reset" | "verify" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
 
   const exchangeForSession = useCallback(async (user: User) => {
     const idToken = await user.getIdToken(true);
@@ -82,7 +63,7 @@ export function FirebaseLogin() {
         }
       })
       .catch((cause) => {
-        if (active) setError(readableError(cause));
+        if (active) setError(readableAuthError(cause));
       });
     return () => {
       active = false;
@@ -107,13 +88,22 @@ export function FirebaseLogin() {
           await signInWithRedirect(auth, googleProvider());
           return;
         } catch (redirectCause) {
-          setError(readableError(redirectCause));
+          setError(readableAuthError(redirectCause));
         }
       } else {
-        setError(readableError(cause));
+        setError(readableAuthError(cause));
       }
       setPending(null);
     }
+  }
+
+  async function requireVerifiedPasswordUser(user: User) {
+    if (user.emailVerified) return true;
+    await firebaseAuth().signOut();
+    setNeedsVerification(true);
+    setInfo(VERIFY_BEFORE_SIGN_IN);
+    setPending(null);
+    return false;
   }
 
   async function withEmail(event: React.FormEvent) {
@@ -127,43 +117,74 @@ export function FirebaseLogin() {
           ? await createUserWithEmailAndPassword(auth, email.trim(), password)
           : await signInWithEmailAndPassword(auth, email.trim(), password);
 
-      // Password accounts must prove the address before they get a session.
       if (!credential.user.emailVerified) {
-        await sendEmailVerification(credential.user);
-        await auth.signOut();
-        setInfo(`Verification email sent to ${email.trim()}. Confirm it, then sign in.`);
-        setPending(null);
+        if (mode === "create") {
+          await sendEmailVerification(credential.user, emailActionSettings("/verify-email"));
+        }
+        await requireVerifiedPasswordUser(credential.user);
         return;
       }
+      setNeedsVerification(false);
       await exchangeForSession(credential.user);
     } catch (cause) {
-      setError(readableError(cause));
+      await auth.signOut().catch(() => undefined);
+      setError(readableAuthError(cause));
       setPending(null);
     }
   }
 
-  async function withPasswordReset() {
+  async function resendVerification() {
+    reset();
+    if (!email.trim() || !password) {
+      setError("Enter the email and password for this account, then resend the verification email.");
+      return;
+    }
+    setPending("verify");
+    const auth = firebaseAuth();
+    try {
+      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      if (credential.user.emailVerified) {
+        setNeedsVerification(false);
+        await exchangeForSession(credential.user);
+        return;
+      }
+      await sendEmailVerification(credential.user, emailActionSettings("/verify-email"));
+      await auth.signOut();
+      setNeedsVerification(true);
+      setInfo(VERIFY_BEFORE_SIGN_IN);
+    } catch (cause) {
+      setError(readableAuthError(cause));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function withPasswordReset(event: React.FormEvent) {
+    event.preventDefault();
     reset();
     if (!email.trim()) {
-      setError("Enter your email address first, then request a reset link.");
+      setError("Enter a valid email address.");
       return;
     }
     setPending("reset");
     try {
-      await sendPasswordResetEmail(firebaseAuth(), email.trim());
-      setInfo(`Password reset link sent to ${email.trim()}.`);
+      await sendPasswordResetEmail(firebaseAuth(), email.trim(), emailActionSettings("/reset-password"));
+      setInfo(`Password reset link sent to ${email.trim()}. Check your inbox for a secure link to choose a new password.`);
     } catch (cause) {
-      setError(readableError(cause));
+      setError(readableAuthError(cause, "reset"));
     }
     setPending(null);
   }
 
   const busy = pending !== null;
-  const heading = mode === "create" ? "Create your TestLoop account" : "Welcome back";
+  const heading =
+    mode === "create" ? "Create your TestLoop account" : mode === "reset" ? "Forgot password" : "Welcome back";
   const subheading =
     mode === "create"
       ? "Join TestLoop to discover and manage software testing opportunities."
-      : "Sign in to your TestLoop account.";
+      : mode === "reset"
+        ? "Enter your registered email address and we will send a password reset link."
+        : "Sign in to your TestLoop account.";
 
   return (
     <div className="space-y-5">
@@ -172,87 +193,157 @@ export function FirebaseLogin() {
         <p className="mt-1 text-sm leading-6 text-muted">{subheading}</p>
       </div>
 
-      <Button
-        type="button"
-        variant="secondary"
-        className="w-full"
-        aria-busy={pending === "google"}
-        disabled={busy}
-        onClick={withGoogle}
-      >
-        <GoogleGlyph />
-        {pending === "google" ? "Opening Google…" : mode === "create" ? "Continue with Google" : "Google Sign In"}
-      </Button>
+      {mode !== "reset" ? (
+        <>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            aria-busy={pending === "google"}
+            disabled={busy}
+            onClick={withGoogle}
+          >
+            <GoogleGlyph />
+            {pending === "google" ? "Opening Google…" : mode === "create" ? "Continue with Google" : "Google Sign In"}
+          </Button>
 
-      <div className="flex items-center gap-3" aria-hidden>
-        <span className="h-px flex-1 bg-line" />
-        <span className="text-xs font-medium uppercase tracking-[0.06em] text-muted">or</span>
-        <span className="h-px flex-1 bg-line" />
-      </div>
-
-      <form className="space-y-4" onSubmit={withEmail}>
-        <div>
-          <Label htmlFor="firebase-email">Email</Label>
-          <Input
-            id="firebase-email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@example.com"
-          />
-        </div>
-
-        <div>
-          <div className="flex items-baseline justify-between gap-3">
-            <Label htmlFor="firebase-password">Password</Label>
-            {mode === "signin" ? (
-              <button
-                type="button"
-                className="mb-1.5 text-xs font-medium text-brand hover:underline disabled:opacity-60"
-                disabled={busy}
-                onClick={withPasswordReset}
-              >
-                {pending === "reset" ? "Sending…" : "Forgot password?"}
-              </button>
-            ) : null}
+          <div className="flex items-center gap-3" aria-hidden>
+            <span className="h-px flex-1 bg-line" />
+            <span className="text-xs font-medium uppercase tracking-[0.06em] text-muted">or</span>
+            <span className="h-px flex-1 bg-line" />
           </div>
-          <Input
-            id="firebase-password"
-            name="password"
-            type="password"
-            autoComplete={mode === "create" ? "new-password" : "current-password"}
-            required
-            minLength={6}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="At least 6 characters"
-          />
-        </div>
+        </>
+      ) : null}
 
-        <Button type="submit" className="w-full" aria-busy={pending === "email"} disabled={busy}>
-          {pending === "email"
-            ? "Working…"
-            : mode === "create"
-              ? "Create account"
-              : "Sign in"}
+      {mode === "reset" ? (
+        <form className="space-y-4" onSubmit={withPasswordReset}>
+          <div>
+            <Label htmlFor="firebase-email">Email</Label>
+            <Input
+              id="firebase-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+            />
+          </div>
+          <Button type="submit" className="w-full" aria-busy={pending === "reset"} disabled={busy}>
+            {pending === "reset" ? "Sending…" : "Send reset link"}
+          </Button>
+        </form>
+      ) : (
+        <form className="space-y-4" onSubmit={withEmail}>
+          <div>
+            <Label htmlFor="firebase-email">Email</Label>
+            <Input
+              id="firebase-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <div>
+            <div className="flex items-baseline justify-between gap-3">
+              <Label htmlFor="firebase-password">Password</Label>
+              {mode === "signin" ? (
+                <button
+                  type="button"
+                  className="mb-1.5 text-xs font-medium text-brand hover:underline disabled:opacity-60"
+                  disabled={busy}
+                  onClick={() => {
+                    reset();
+                    setMode("reset");
+                  }}
+                >
+                  Forgot password?
+                </button>
+              ) : null}
+            </div>
+            <PasswordField
+              id="firebase-password"
+              name="password"
+              autoComplete={mode === "create" ? "new-password" : "current-password"}
+              required
+              minLength={6}
+              value={password}
+              onChange={setPassword}
+              placeholder="At least 6 characters"
+              disabled={busy}
+            />
+          </div>
+
+          <Button type="submit" className="w-full" aria-busy={pending === "email"} disabled={busy}>
+            {pending === "email" ? "Working…" : mode === "create" ? "Create account" : "Sign in"}
+          </Button>
+        </form>
+      )}
+
+      {needsVerification && mode !== "reset" ? (
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full"
+          aria-busy={pending === "verify"}
+          disabled={busy}
+          onClick={() => void resendVerification()}
+        >
+          {pending === "verify" ? "Sending…" : "Resend verification email"}
         </Button>
-      </form>
+      ) : null}
 
       <p className="text-sm text-muted">
-        {mode === "create" ? "Already have an account?" : "New to TestLoop?"}{" "}
-        <button
-          type="button"
-          className="font-medium text-brand hover:underline"
-          onClick={() => {
-            setMode(mode === "create" ? "signin" : "create");
-            reset();
-          }}
-        >
-          {mode === "create" ? "Sign in" : "Create an account"}
-        </button>
+        {mode === "create" ? (
+          <>
+            Already have an account?{" "}
+            <button
+              type="button"
+              className="font-medium text-brand hover:underline"
+              onClick={() => {
+                setMode("signin");
+                reset();
+              }}
+            >
+              Sign in
+            </button>
+          </>
+        ) : mode === "reset" ? (
+          <>
+            Remembered your password?{" "}
+            <button
+              type="button"
+              className="font-medium text-brand hover:underline"
+              onClick={() => {
+                setMode("signin");
+                reset();
+              }}
+            >
+              Sign in
+            </button>
+          </>
+        ) : (
+          <>
+            New to TestLoop?{" "}
+            <button
+              type="button"
+              className="font-medium text-brand hover:underline"
+              onClick={() => {
+                setMode("create");
+                reset();
+                setNeedsVerification(false);
+              }}
+            >
+              Create an account
+            </button>
+          </>
+        )}
       </p>
 
       {error ? (

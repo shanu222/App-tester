@@ -1,0 +1,67 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { FirebaseError } from "firebase/app";
+import {
+  EMAIL_VERIFIED,
+  PASSWORD_CHANGED,
+  RESET_LINK_INVALID,
+  VERIFY_BEFORE_SIGN_IN,
+  VERIFY_LINK_INVALID,
+  readableAuthError,
+} from "../src/lib/auth/firebase-auth-messages";
+
+function source(file: string) {
+  return readFileSync(resolve(file), "utf8");
+}
+
+describe("sign-in password visibility and email verification", () => {
+  it("adds a show/hide control on password fields without changing Google Sign In", () => {
+    const login = source("src/components/auth/firebase-login.tsx");
+    const field = source("src/components/auth/password-field.tsx");
+    expect(field).toContain('aria-label={label}');
+    expect(field).toContain("Show password");
+    expect(field).toContain("Hide password");
+    expect(field).toContain("<Eye");
+    expect(login).toContain("<PasswordField");
+    expect(login).toContain("signInWithPopup(auth, googleProvider())");
+    expect(login).toContain("signInWithRedirect(auth, googleProvider())");
+    expect(login).toContain("Google Sign In");
+  });
+
+  it("requires email/password accounts to verify before they can use TestLoop", () => {
+    const login = source("src/components/auth/firebase-login.tsx");
+    const authConfig = source("src/auth.config.ts");
+    expect(login).toContain("VERIFY_BEFORE_SIGN_IN");
+    expect(login).toContain("Resend verification email");
+    expect(login).toContain("sendEmailVerification");
+    expect(authConfig).toContain('identity.provider === "password" && !identity.emailVerified');
+    expect(VERIFY_BEFORE_SIGN_IN).toBe("Please verify your email address before signing in.");
+  });
+
+  it("sends a reset email and handles reset/verify action links", () => {
+    const login = source("src/components/auth/firebase-login.tsx");
+    const action = source("src/components/auth/firebase-email-action.tsx");
+    expect(login).toContain("Forgot password?");
+    expect(login).toContain("sendPasswordResetEmail");
+    expect(login).toContain('emailActionSettings("/reset-password")');
+    expect(action).toContain("confirmPasswordReset");
+    expect(action).toContain("verifyPasswordResetCode");
+    expect(action).toContain("applyActionCode");
+    expect(action).toContain("PASSWORD_CHANGED");
+    expect(action).toContain("EMAIL_VERIFIED");
+    expect(PASSWORD_CHANGED).toContain("You can now sign in with your new password");
+    expect(EMAIL_VERIFIED).toContain("You can now sign in");
+    expect(RESET_LINK_INVALID).toContain("invalid or has expired");
+    expect(VERIFY_LINK_INVALID).toContain("invalid or has expired");
+  });
+
+  it("maps invalid email and expired links to clear messages", () => {
+    expect(readableAuthError(new FirebaseError("auth/invalid-email", "x"))).toBe("Enter a valid email address.");
+    expect(readableAuthError(new FirebaseError("auth/user-not-found", "x"), "reset")).toBe(
+      "No account was found for that email address.",
+    );
+    expect(readableAuthError(new FirebaseError("auth/expired-action-code", "x"), "reset")).toBe(RESET_LINK_INVALID);
+    expect(readableAuthError(new FirebaseError("auth/invalid-action-code", "x"), "verify")).toBe(VERIFY_LINK_INVALID);
+  });
+});

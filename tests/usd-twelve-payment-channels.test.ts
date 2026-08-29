@@ -120,6 +120,7 @@ describe("usd_12_14 payment channels", () => {
 
   it("shows Paddle and wallets on the purchase page for the same included package", () => {
     const form = source("src/components/managed-testing/usd-twelve-checkout-form.tsx");
+    expect(form).toContain("const OFFER_PADDLE_CHECKOUT = false");
     expect(form).toContain("Paddle");
     expect(form).toContain("EasyPaisa");
     expect(form).toContain("JazzCash");

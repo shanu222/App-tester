@@ -9,6 +9,9 @@ import { walletPurchaseMethods, type UsdTwelvePaymentChoice } from "@/lib/manage
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
+/** Flip to true to offer Paddle on this page again. Backend, webhooks, and config stay in place. */
+const OFFER_PADDLE_CHECKOUT = false;
+
 type AppOption = {
   id: string;
   name: string;
@@ -35,7 +38,7 @@ export function UsdTwelveCheckoutForm({
   );
   const [testingUrl, setTestingUrl] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<UsdTwelvePaymentChoice | "">(
-    paddleReady ? "PADDLE" : "EASYPAISA",
+    OFFER_PADDLE_CHECKOUT && paddleReady ? "PADDLE" : "EASYPAISA",
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -158,28 +161,32 @@ export function UsdTwelveCheckoutForm({
       <div>
         <p className="text-sm font-medium text-slate-800">Choose payment method</p>
         <p className="mt-1 text-sm text-muted">Same $10 TestLoop package. The amount cannot be changed.</p>
-        <div className="mt-3 grid gap-3">
-          <button
-            type="button"
-            disabled={!paddleReady}
-            onClick={() => setPaymentMethod("PADDLE")}
-            className={cn(
-              "rounded-card border p-4 text-left transition-colors",
-              paymentMethod === "PADDLE" ? "border-brand bg-brand-soft ring-1 ring-brand/20" : "border-line bg-white hover:border-line-strong",
-              !paddleReady ? "opacity-70" : "",
-            )}
-          >
-            <span className="font-medium text-slate-900">Paddle</span>
-            <span className="mt-1 block text-sm text-slate-700">$10 USD · Secure online checkout</span>
-            <span className="mt-1 block text-xs text-muted">
-              {paddleReady
-                ? "Sandbox payment available for testing. TestLoop activates access after Paddle verifies the transaction."
-                : "Paddle sandbox is not configured on this server yet."}
-            </span>
-          </button>
-        </div>
-        <p className="mt-4 text-sm font-medium text-slate-800">OR manual payment</p>
-        <p className="mt-1 text-sm text-muted">
+        {OFFER_PADDLE_CHECKOUT ? (
+          <>
+            <div className="mt-3 grid gap-3">
+              <button
+                type="button"
+                disabled={!paddleReady}
+                onClick={() => setPaymentMethod("PADDLE")}
+                className={cn(
+                  "rounded-card border p-4 text-left transition-colors",
+                  paymentMethod === "PADDLE" ? "border-brand bg-brand-soft ring-1 ring-brand/20" : "border-line bg-white hover:border-line-strong",
+                  !paddleReady ? "opacity-70" : "",
+                )}
+              >
+                <span className="font-medium text-slate-900">Paddle</span>
+                <span className="mt-1 block text-sm text-slate-700">$10 USD · Secure online checkout</span>
+                <span className="mt-1 block text-xs text-muted">
+                  {paddleReady
+                    ? "Sandbox payment available for testing. TestLoop activates access after Paddle verifies the transaction."
+                    : "Paddle sandbox is not configured on this server yet."}
+                </span>
+              </button>
+            </div>
+            <p className="mt-4 text-sm font-medium text-slate-800">OR manual payment</p>
+          </>
+        ) : null}
+        <p className="mt-3 text-sm text-muted">
           EasyPaisa, JazzCash, SadaPay, NayaPay, or Binance. Upload proof after you pay. An administrator must confirm
           before testers are invited.
         </p>

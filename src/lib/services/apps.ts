@@ -148,6 +148,8 @@ export async function createApp(
     include: { tracks: true },
   });
   await logActivity({ userId, action: "APP_CREATED", result: app.name });
+  const { ensureMarketplaceCampaignForApp } = await import("@/lib/services/marketplace-campaigns");
+  await ensureMarketplaceCampaignForApp(app.id).catch(() => undefined);
   return app;
 }
 

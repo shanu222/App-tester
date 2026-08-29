@@ -696,6 +696,9 @@ export async function selectPlayApp(input: { userId: string; packageName: string
     result: discovered.packageName,
   });
 
+  const { ensureMarketplaceCampaignForApp } = await import("@/lib/services/marketplace-campaigns");
+  await ensureMarketplaceCampaignForApp(app.id).catch(() => undefined);
+
   return { app, packageName: discovered.packageName };
 }
 

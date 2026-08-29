@@ -11,7 +11,8 @@ export type NotificationPreferenceKey =
   | "requestArchived"
   | "requestCompleted"
   | "dailySummary"
-  | "managedTesting";
+  | "managedTesting"
+  | "testingMarketplace";
 
 export type NotificationPreferences = Record<NotificationPreferenceKey, boolean>;
 
@@ -30,6 +31,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   requestCompleted: false,
   dailySummary: true,
   managedTesting: true,
+  testingMarketplace: true,
 };
 
 export function parseNotificationPreferences(value: unknown): NotificationPreferences {

@@ -29,7 +29,7 @@ export type TestingRequestCardData = {
 };
 
 function requestState(row: TestingRequestCardData) {
-  if (row.status === "ARCHIVED" || row.status === "COMPLETED") return "archived" as const;
+  if (row.status === "ARCHIVED" || row.status === "COMPLETED" || row.status === "EXPIRED") return "archived" as const;
   if (row.status === "PAUSED" || (row.status === "ACTIVE" && !row.published)) return "stopped" as const;
   if (row.published && row.status === "ACTIVE") return "active" as const;
   return "draft" as const;

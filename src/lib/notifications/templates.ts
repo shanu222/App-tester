@@ -607,6 +607,99 @@ export function usdTwelveDeveloperActivatedEmail(input: {
   return { subject: `Payment confirmed · ${input.packageName}`, html, text };
 }
 
+export function marketplaceTestingInviteEmail(input: {
+  appName: string;
+  developerName: string;
+  description?: string | null;
+  iconUrl?: string | null;
+  testingTypeLabel: string;
+  testingPeriodLabel: string;
+  playUrlLabel: string;
+  acceptUrl: string;
+  detailsUrl?: string | null;
+  reminder?: boolean;
+}) {
+  const icon = input.iconUrl?.startsWith("https://")
+    ? `<p style="margin:0 0 16px"><img src="${escapeHtml(input.iconUrl)}" alt="" width="64" height="64" style="border-radius:12px;border:1px solid #e2e8f0" /></p>`
+    : "";
+  const description = input.description?.trim()
+    ? `<p style="color:#334155">${escapeHtml(input.description.trim().slice(0, 280))}</p>`
+    : "";
+  const details = input.detailsUrl
+    ? `<p style="font-size:13px"><a href="${escapeHtml(input.detailsUrl)}" style="color:${BRAND}">View details on TestLoop</a></p>`
+    : "";
+  const lead = input.reminder
+    ? `<p>This TestLoop testing campaign is still open. If you have not joined yet, you can accept from this email.</p>`
+    : `<p>A developer just posted an app for testing on TestLoop.</p>`;
+  const html = wrapEmail(
+    `${icon}<h1 style="margin:0 0 8px;font-size:22px;line-height:1.3">${escapeHtml(input.appName)}</h1>
+    <p style="margin:0 0 16px;color:#64748b">${escapeHtml(input.developerName)} · ${escapeHtml(input.testingTypeLabel)}</p>
+    ${lead}
+    ${description}
+    <p><strong>14 Days of Testing</strong><br>${escapeHtml(input.testingPeriodLabel)}</p>
+    <p>What to do: tap Accept &amp; Download, then continue in Google Play. Google may ask you to sign in with an account that has access to this test. TestLoop cannot bypass Google Play authentication or verify the install from this email click.</p>
+    <p style="color:#64748b;font-size:13px">${escapeHtml(input.playUrlLabel)}</p>
+    ${emailButton(input.acceptUrl, "ACCEPT & DOWNLOAD")}
+    ${details}
+    <p style="font-size:12px;color:#64748b">If you already accepted, you can ignore this email. Turn off testing invites in TestLoop notification settings.</p>`,
+  );
+  const text = [
+    input.reminder ? "This TestLoop testing campaign is still open." : "A developer just posted an app for testing on TestLoop.",
+    "",
+    input.appName,
+    input.developerName,
+    "14 Days of Testing",
+    input.testingPeriodLabel,
+    input.description?.trim() || "",
+    "",
+    "ACCEPT & DOWNLOAD:",
+    input.acceptUrl,
+    "",
+    "Google Play may require you to sign in. TestLoop cannot verify installation from an email click.",
+    input.detailsUrl ? `View details: ${input.detailsUrl}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return {
+    subject: input.reminder
+      ? `${input.appName} is still available for testing on TestLoop`
+      : "🚀 New App Available for Testing on TestLoop",
+    html,
+    text,
+  };
+}
+
+export function developerMarketplaceAcceptedEmail(input: {
+  testerLabel: string;
+  appName: string;
+  campaignUrl: string;
+}) {
+  const html = wrapEmail(
+    `<p>Tester ${escapeHtml(input.testerLabel)} accepted the testing invitation for ${escapeHtml(input.appName)}.</p>
+    ${emailButton(input.campaignUrl, "View campaign")}`,
+  );
+  const text = `Tester ${input.testerLabel} accepted the testing invitation for ${input.appName}.\n\n${input.campaignUrl}\n`;
+  return { subject: "Tester accepted your TestLoop invitation", html, text };
+}
+
+export function developerMarketplaceDownloadOpenedEmail(input: {
+  testerLabel: string;
+  appName: string;
+  campaignUrl: string;
+}) {
+  const html = wrapEmail(
+    `<p>Tester ${escapeHtml(input.testerLabel)} opened the Google Play testing/download link for ${escapeHtml(input.appName)}.</p>
+    <p style="color:#64748b;font-size:13px">This means the download link was opened. It does not confirm that Google Play installed the app.</p>
+    ${emailButton(input.campaignUrl, "View campaign")}`,
+  );
+  const text = [
+    `Tester ${input.testerLabel} opened the Google Play testing/download link for ${input.appName}.`,
+    "This does not confirm that the app was installed.",
+    input.campaignUrl,
+  ].join("\n");
+  return { subject: "Tester opened the download link", html, text };
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")

@@ -10,6 +10,7 @@ import { uniqueSlug } from "@/lib/slug";
 import { env } from "@/lib/env";
 import { PLAY_NOT_CONNECTED_FIRST, campaignDependsOnPlayConnection } from "@/lib/play-disconnect";
 import { optionalHttpUrl, parseManualGroupInput } from "@/lib/manual-app";
+import { marketplaceEndsAt, MARKETPLACE_DURATION_DAYS } from "@/lib/testing/marketplace-rules";
 import {
   detectTestingConfiguration,
   parseTracksSnapshot,
@@ -45,10 +46,11 @@ async function requirePlayConnectionForPost(userId: string) {
 
 const ALLOWED_CAMPAIGN: Record<CampaignStatus, CampaignStatus[]> = {
   DRAFT: ["ACTIVE", "ARCHIVED"],
-  ACTIVE: ["PAUSED", "COMPLETED"],
+  ACTIVE: ["PAUSED", "COMPLETED", "EXPIRED"],
   PAUSED: ["ACTIVE", "COMPLETED", "ARCHIVED"],
   COMPLETED: ["ARCHIVED"],
   ARCHIVED: [],
+  EXPIRED: ["ARCHIVED"],
 };
 
 export async function listCampaigns(userId: string) {
@@ -296,6 +298,8 @@ export async function createCampaign(
     }
   }
 
+  const durationDays = input.durationDays ?? MARKETPLACE_DURATION_DAYS;
+  const publishedAt = input.published ? new Date() : null;
   const publicSlug = await allocateCampaignSlug(app.name || input.name);
   const testingUrl = campaignTestingUrl({
     testingType,
@@ -317,15 +321,16 @@ export async function createCampaign(
       ...campaignAccessFields(access),
       targetTesters: input.targetTesters ?? 12,
       requiredTesters: input.targetTesters ?? 12,
-      durationDays: input.durationDays ?? 14,
-      requiredActiveDays: input.durationDays ?? 14,
+      durationDays,
+      requiredActiveDays: durationDays,
       description: input.description,
       testingInstructions: input.testingInstructions,
       reciprocalOpen: input.reciprocalOpen ?? true,
       published: Boolean(input.published),
-      publishedAt: input.published ? new Date() : null,
+      publishedAt,
       status: input.published ? "ACTIVE" : "DRAFT",
-      startedAt: input.published ? new Date() : null,
+      startedAt: publishedAt,
+      endsAt: publishedAt ? marketplaceEndsAt(publishedAt, durationDays) : null,
       playStoreUrl: input.playStoreUrl || app.playStoreUrl,
       webOptInUrl,
       androidOptInUrl: input.androidOptInUrl || app.androidOptInUrl,
@@ -338,6 +343,10 @@ export async function createCampaign(
     action: "CAMPAIGN_CREATED",
     result: campaign.name,
   });
+  if (campaign.published) {
+    const { onCampaignPublished } = await import("@/lib/services/marketplace-campaigns");
+    await onCampaignPublished(campaign.id).catch(() => undefined);
+  }
   return campaign;
 }
 
@@ -412,6 +421,8 @@ async function createManualCampaign(
     }
   }
 
+  const durationDays = input.durationDays ?? MARKETPLACE_DURATION_DAYS;
+  const publishedAt = input.published ? new Date() : null;
   const publicSlug = await allocateCampaignSlug(app.name || input.name);
   const testingUrl = campaignTestingUrl({
     testingType,
@@ -437,15 +448,16 @@ async function createManualCampaign(
       ...campaignAccessFields(access),
       targetTesters: input.targetTesters ?? 12,
       requiredTesters: input.targetTesters ?? 12,
-      durationDays: input.durationDays ?? 14,
-      requiredActiveDays: input.durationDays ?? 14,
+      durationDays,
+      requiredActiveDays: durationDays,
       description: input.description,
       testingInstructions: input.testingInstructions,
       reciprocalOpen: input.reciprocalOpen ?? true,
       published: Boolean(input.published),
-      publishedAt: input.published ? new Date() : null,
+      publishedAt,
       status: input.published ? "ACTIVE" : "DRAFT",
-      startedAt: input.published ? new Date() : null,
+      startedAt: publishedAt,
+      endsAt: publishedAt ? marketplaceEndsAt(publishedAt, durationDays) : null,
       webOptInUrl: link.url || app.webOptInUrl,
       isDemo: isDemoMode(),
     },
@@ -456,6 +468,10 @@ async function createManualCampaign(
     action: "CAMPAIGN_CREATED",
     result: campaign.name,
   });
+  if (campaign.published) {
+    const { onCampaignPublished } = await import("@/lib/services/marketplace-campaigns");
+    await onCampaignPublished(campaign.id).catch(() => undefined);
+  }
   return campaign;
 }
 
@@ -465,20 +481,24 @@ export async function publishCampaign(userId: string, id: string) {
     include: { app: true },
   });
   if (!campaign) throw new NotFoundError("Campaign not found.");
-  if (campaign.status === "ARCHIVED" || campaign.status === "COMPLETED") {
+  if (campaign.status === "ARCHIVED" || campaign.status === "COMPLETED" || campaign.status === "EXPIRED") {
     throw new AppError("This campaign cannot be published.");
   }
   if (!campaignDependsOnPlayConnection(campaign)) {
+    const startedAt = campaign.startedAt ?? new Date();
     const updated = await prisma.campaign.update({
       where: { id },
       data: {
         published: true,
-        publishedAt: campaign.publishedAt ?? new Date(),
+        publishedAt: campaign.publishedAt ?? startedAt,
         status: campaign.status === "DRAFT" || campaign.status === "PAUSED" ? "ACTIVE" : campaign.status,
-        startedAt: campaign.startedAt ?? new Date(),
+        startedAt,
+        endsAt: campaign.endsAt ?? marketplaceEndsAt(startedAt, campaign.durationDays || MARKETPLACE_DURATION_DAYS),
       },
     });
     await logActivity({ userId, campaignId: id, action: "CAMPAIGN_PUBLISHED", result: updated.name });
+    const { onCampaignPublished } = await import("@/lib/services/marketplace-campaigns");
+    await onCampaignPublished(updated.id).catch(() => undefined);
     return updated;
   }
   await requirePlayConnectionForPost(userId);
@@ -515,13 +535,15 @@ export async function publishCampaign(userId: string, id: string) {
     packageName: campaign.app.packageName,
     configuredUrl: campaign.webOptInUrl,
   }).url;
+  const startedAt = campaign.startedAt ?? new Date();
   const updated = await prisma.campaign.update({
     where: { id },
     data: {
       published: true,
-      publishedAt: campaign.publishedAt ?? new Date(),
+      publishedAt: campaign.publishedAt ?? startedAt,
       status: campaign.status === "DRAFT" || campaign.status === "PAUSED" ? "ACTIVE" : campaign.status,
-      startedAt: campaign.startedAt ?? new Date(),
+      startedAt,
+      endsAt: campaign.endsAt ?? marketplaceEndsAt(startedAt, campaign.durationDays || MARKETPLACE_DURATION_DAYS),
       playTrack: requested.track,
       testingType,
       testingUrl: testingUrl || campaign.testingUrl,
@@ -529,6 +551,8 @@ export async function publishCampaign(userId: string, id: string) {
     },
   });
   await logActivity({ userId, campaignId: id, action: "CAMPAIGN_PUBLISHED", result: updated.name });
+  const { onCampaignPublished } = await import("@/lib/services/marketplace-campaigns");
+  await onCampaignPublished(updated.id).catch(() => undefined);
   return updated;
 }
 

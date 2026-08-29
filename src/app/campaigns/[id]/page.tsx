@@ -33,6 +33,8 @@ import {
   PLAY_REMOVED_NOTE,
   campaignDependsOnPlayConnection,
 } from "@/lib/play-disconnect";
+import { getMarketplaceCampaignStats } from "@/lib/services/marketplace-campaigns";
+import { daysRemaining, marketplaceEndsAt, MARKETPLACE_DURATION_DAYS } from "@/lib/testing/marketplace-rules";
 
 export default async function CampaignDetailPage({
   params,
@@ -78,10 +80,14 @@ export default async function CampaignDetailPage({
   const googlePlayTesters = PLAY_API_UNAVAILABLE;
   const playConnection = await getPlayConnection(user.id);
   const playConnected = playConnection?.status === "CONNECTED";
+  const marketplace = await getMarketplaceCampaignStats(campaign.id, campaign.appId, user.id);
+  const windowEnd = campaign.endsAt ?? (campaign.startedAt ? marketplaceEndsAt(campaign.startedAt, campaign.durationDays || MARKETPLACE_DURATION_DAYS) : null);
   const lastSyncAt = playApp?.lastSyncAt || playConnection?.lastSyncAt || null;
   const typeExplainer = testingTypeExplanation(campaign.testingType);
   const requestStatus =
-    campaign.status === "ARCHIVED" || campaign.status === "COMPLETED"
+    campaign.status === "EXPIRED"
+      ? "EXPIRED"
+      : campaign.status === "ARCHIVED" || campaign.status === "COMPLETED"
       ? "ARCHIVED"
       : campaign.status === "PAUSED" || !campaign.published
         ? campaign.status === "DRAFT"
@@ -104,7 +110,7 @@ export default async function CampaignDetailPage({
       title={campaign.name}
       actions={
         <div className="flex gap-2">
-          {!campaign.published && !(playDependent && !playConnected) && campaign.status !== "ARCHIVED" && campaign.status !== "COMPLETED" ? (
+          {!campaign.published && !(playDependent && !playConnected) && campaign.status !== "ARCHIVED" && campaign.status !== "COMPLETED" && campaign.status !== "EXPIRED" ? (
             <JsonButton url="/api/campaigns" method="PATCH" body={{ id, publish: true }} label="Publish request" />
           ) : null}
           {playConnected && campaign.app.packageName ? (
@@ -341,6 +347,26 @@ export default async function CampaignDetailPage({
         <StatCard label="Pending" value={pendingTesters} />
         <StatCard label="Completed" value={completedTesters} />
       </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Invitations sent" value={marketplace.invitationsSent} hint="Public TestLoop tester pool" />
+        <StatCard label="Invitations accepted" value={marketplace.invitationsAccepted} />
+        <StatCard label="Download links opened" value={marketplace.downloadLinksClicked} hint="Opened link, not a verified install" />
+        <StatCard
+          label="Days remaining"
+          value={campaign.status === "EXPIRED" ? 0 : windowEnd ? daysRemaining(windowEnd) : campaign.durationDays}
+          hint={
+            campaign.startedAt && windowEnd
+              ? `${formatDateTime(campaign.startedAt)} – ${formatDateTime(windowEnd)}`
+              : "14-day public testing window"
+          }
+        />
+      </div>
+      {marketplace.paidTesterTarget > 0 ? (
+        <p className="mt-3 text-sm text-muted">
+          Paid TestLoop package testers: {marketplace.paidTestersAssigned} of {marketplace.paidTesterTarget} assigned.
+          Those testers are excluded from public invitation emails.
+        </p>
+      ) : null}
 
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
         <Card>

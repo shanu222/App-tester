@@ -49,6 +49,7 @@ enum CampaignStatus {
   PAUSED
   COMPLETED
   ARCHIVED
+  EXPIRED
 }
 
 enum TestingType {
@@ -178,6 +179,8 @@ model User {
   outreachUsages          OutreachUsage[]
   participationsAsOwner   TestingParticipation[]   @relation("ParticipationOwner")
   participationsAsTester  TestingParticipation[]   @relation("ParticipationTester")
+  campaignEmailActions    CampaignEmailAction[]
+  campaignNotificationDeliveries CampaignNotificationDelivery[]
   reciprocalAsRequester   ReciprocalTest[]         @relation("ReciprocalRequester")
   reciprocalAsTarget      ReciprocalTest[]         @relation("ReciprocalTarget")
   reportsFiled            DeveloperReport[]        @relation("ReportAuthor")
@@ -598,6 +601,10 @@ model Campaign {
   startedAt           DateTime?
   pausedAt            DateTime?
   completedAt         DateTime?
+  /**
+   * Public marketplace window. When set, daily invites stop after this instant.
+   */
+  endsAt              DateTime?
   isDemo              Boolean                @default(false)
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt
@@ -617,12 +624,15 @@ model Campaign {
   telemetryEvents     TelemetryEvent[]
   templates           MessageTemplate[]
   participations      TestingParticipation[]
+  emailActions        CampaignEmailAction[]
+  notificationDeliveries CampaignNotificationDelivery[]
 
   @@index([userId])
   @@index([appId])
   @@index([status])
   @@index([createdAt])
   @@index([published, status])
+  @@index([endsAt, status])
 }
 
 model Tester {
@@ -1003,6 +1013,9 @@ model TestingParticipation {
   rejectedAt       DateTime?
   rejectedByUserId String?
   lastError        String?
+  source           String?
+  acceptedAt       DateTime?
+  downloadLinkClickedAt DateTime?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
   campaign         Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
@@ -1013,6 +1026,41 @@ model TestingParticipation {
   @@index([ownerUserId])
   @@index([testerUserId])
   @@index([status])
+}
+
+model CampaignEmailAction {
+  id              String    @id @default(cuid())
+  tokenHash       String    @unique
+  campaignId      String
+  recipientUserId String
+  kind            String
+  playUrl         String?
+  expiresAt       DateTime
+  usedAt          DateTime?
+  createdAt       DateTime  @default(now())
+  campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  recipient       User      @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, recipientUserId])
+  @@index([expiresAt])
+}
+
+model CampaignNotificationDelivery {
+  id              String    @id @default(cuid())
+  campaignId      String
+  recipientUserId String
+  type            String
+  dayKey          String
+  status          String    @default("queued")
+  error           String?
+  sentAt          DateTime?
+  createdAt       DateTime  @default(now())
+  campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  recipient       User      @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, recipientUserId, type, dayKey])
+  @@index([campaignId, type, status])
+  @@index([status, createdAt])
 }
 
 model ReciprocalTest {

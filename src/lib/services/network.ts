@@ -192,6 +192,7 @@ export async function listPublishedRequests(
       published: true,
       status: "ACTIVE",
       userId: { not: viewerId, notIn: hidden },
+      OR: [{ endsAt: null }, { endsAt: { gt: new Date() } }],
       ...(filters?.testingType
         ? { testingType: filters.testingType as "CLOSED" | "INTERNAL" | "OPEN" }
         : {}),
@@ -263,6 +264,9 @@ export async function getPublicRequest(viewerId: string, campaignId: string) {
     include: { app: true, user: true, track: true },
   });
   if (!campaign) throw new NotFoundError("Testing request not found.");
+  if (campaign.endsAt && campaign.endsAt.getTime() <= Date.now()) {
+    throw new NotFoundError("Testing request not found.");
+  }
   const play = await prisma.googlePlayConnection.findUnique({
     where: { userId: campaign.userId },
   });
@@ -372,6 +376,9 @@ export async function acceptTestingRequest(testerUserId: string, campaignId: str
     include: { app: { select: { syncedFromPlay: true } } },
   });
   if (!campaign) throw new NotFoundError("Testing request not found.");
+  if (campaign.endsAt && campaign.endsAt.getTime() <= Date.now()) {
+    throw new AppError("This testing campaign has ended.", 410, "CAMPAIGN_EXPIRED");
+  }
   if (campaign.userId === testerUserId) throw new AppError("You cannot accept your own request.");
   if (campaignDependsOnPlayConnection(campaign)) {
     const play = await prisma.googlePlayConnection.findUnique({

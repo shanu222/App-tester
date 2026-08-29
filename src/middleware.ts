@@ -27,6 +27,8 @@ const PUBLIC_PREFIXES = [
   "/admin/managed-testing/confirm-payment",
   "/api/admin/managed-testing/confirm-payment",
   "/api/webhooks/paddle",
+  "/api/testing/email-action",
+  "/testing/email-action",
   "/test",
   "/api/test",
 ];

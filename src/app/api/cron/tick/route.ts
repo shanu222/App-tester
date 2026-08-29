@@ -3,6 +3,7 @@ import { json, handleRouteError } from "@/lib/http";
 import { verifyCron } from "@/lib/cron-auth";
 import { prisma } from "@/lib/db";
 import { processDueJobs, scheduleRecurringJobs } from "@/lib/jobs/queue";
+import { processMarketplaceNotificationJobs } from "@/lib/services/marketplace-campaigns";
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,7 +16,8 @@ export async function GET(request: NextRequest) {
       await scheduleRecurringJobs(user.id);
     }
     const processed = await processDueJobs(10);
-    return json({ ok: true, processed });
+    const marketplace = await processMarketplaceNotificationJobs();
+    return json({ ok: true, processed, marketplace });
   } catch (error) {
     return handleRouteError(error);
   }

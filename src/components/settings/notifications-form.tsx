@@ -489,6 +489,12 @@ export function NotificationsForm({ initial }: { initial: SettingsView }) {
               onChange={(event) => setPrefs((current) => ({ ...current, managedTesting: event.target.checked }))}
               label="Managed beta testing alerts"
             />
+            <Checkbox
+              className="py-2"
+              checked={prefs.testingMarketplace}
+              onChange={(event) => setPrefs((current) => ({ ...current, testingMarketplace: event.target.checked }))}
+              label="Public testing invitations"
+            />
           </div>
         </div>
       </div>
@@ -512,6 +518,7 @@ export function NotificationsForm({ initial }: { initial: SettingsView }) {
               requestCompleted: true,
               dailySummary: true,
               managedTesting: true,
+              testingMarketplace: true,
             })
           }
         >
@@ -535,6 +542,7 @@ export function NotificationsForm({ initial }: { initial: SettingsView }) {
               requestCompleted: false,
               dailySummary: false,
               managedTesting: false,
+              testingMarketplace: false,
             })
           }
         >

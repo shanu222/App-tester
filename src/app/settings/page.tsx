@@ -3,6 +3,7 @@ import { requireUser } from "@/auth";
 import { prisma } from "@/lib/db";
 import { SettingsForms } from "@/components/settings/settings-forms";
 import { NotificationsForm } from "@/components/settings/notifications-form";
+import { DeleteAccountCard } from "@/components/settings/delete-account";
 import { getNotificationSettings } from "@/lib/services/notifications";
 import { listDeveloperPayments } from "@/lib/services/managed-testing";
 import { PaymentsPackagesPanel } from "@/components/managed-testing/payments-packages-panel";
@@ -67,6 +68,7 @@ export default async function SettingsPage() {
           }}
           templates={templates.map((item) => ({ key: item.key, name: item.name, body: item.body }))}
         />
+        <DeleteAccountCard />
         <CompanyAboutBlurb />
       </div>
     </AppShell>

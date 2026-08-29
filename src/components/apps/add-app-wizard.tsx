@@ -155,6 +155,63 @@ export function AddAppWizard({
   );
 }
 
+function AlreadyPublishedNotice({
+  campaignId,
+  onRemoved,
+}: {
+  campaignId: string;
+  onRemoved: () => void;
+}) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function removePrevious() {
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/campaigns", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: campaignId, remove: true }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.error || "The previous publishing could not be removed.");
+        return;
+      }
+      onRemoved();
+    } catch {
+      setError("The previous publishing could not be removed. Try again.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div
+      role="status"
+      className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 md:col-span-2"
+    >
+      <p>This app is already published.</p>
+      <p className="mt-1 text-amber-800">
+        Remove the previous publishing to publish this app again. This does not remove the app or change Google Play
+        Console.
+      </p>
+      {error ? <p className="mt-2 text-red-700">{error}</p> : null}
+      <Button
+        type="button"
+        variant="danger"
+        size="sm"
+        className="mt-3"
+        disabled={pending}
+        onClick={() => void removePrevious()}
+      >
+        {pending ? "Removing…" : "Remove"}
+      </Button>
+    </div>
+  );
+}
+
 function PlayRequestForm({
   apps,
   sources,
@@ -517,12 +574,13 @@ function PlayRequestForm({
         ) : null}
 
         {existingCampaignId ? (
-          <p role="status" className="rounded-control border border-blue-200 bg-brand-soft px-3 py-2 text-sm text-blue-900 md:col-span-2">
-            An active testing request already exists.{" "}
-            <Link href={`/campaigns/${existingCampaignId}`} className="font-medium text-brand hover:underline">
-              Open existing request
-            </Link>
-          </p>
+          <AlreadyPublishedNotice
+            campaignId={existingCampaignId}
+            onRemoved={() => {
+              setExistingCampaignId(null);
+              setError(null);
+            }}
+          />
         ) : null}
 
         <div className="md:col-span-2">
@@ -861,12 +919,13 @@ function ManualRequestForm({
           <Checkbox name="reciprocalOpen" defaultChecked label="Reciprocal testing welcome" />
         </div>
         {existingCampaignId ? (
-          <p role="status" className="rounded-control border border-blue-200 bg-brand-soft px-3 py-2 text-sm text-blue-900 md:col-span-2">
-            An active testing request already exists.{" "}
-            <Link href={`/campaigns/${existingCampaignId}`} className="font-medium text-brand hover:underline">
-              Open existing request
-            </Link>
-          </p>
+          <AlreadyPublishedNotice
+            campaignId={existingCampaignId}
+            onRemoved={() => {
+              setExistingCampaignId(null);
+              setError(null);
+            }}
+          />
         ) : null}
         {error && !existingCampaignId ? (
           <p role="alert" className="rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 md:col-span-2">

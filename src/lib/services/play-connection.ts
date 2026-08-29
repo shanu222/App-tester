@@ -38,7 +38,7 @@ import {
   type TestingRecommendation,
 } from "@/lib/integrations/play-config";
 import { campaignTestingUrl } from "@/lib/integrations/play-testers";
-import { createCampaign, ensureCampaignPublicFields } from "@/lib/services/campaigns";
+import { createCampaign, ensureCampaignPublicFields, assertAppNotAlreadyPublished } from "@/lib/services/campaigns";
 import { withTimeout } from "@/lib/integrations/play-retry";
 import {
   PLAY_NOT_CONNECTED_FEATURE,
@@ -988,6 +988,7 @@ export async function managePlayTrack(input: {
   });
   if (existing) {
     if (existing.status === "ARCHIVED" || !existing.published) {
+      await assertAppNotAlreadyPublished(input.userId, app.id, existing.id);
       const restored = await prisma.campaign.update({
         where: { id: existing.id },
         data: {

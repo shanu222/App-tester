@@ -53,6 +53,34 @@ const ALLOWED_CAMPAIGN: Record<CampaignStatus, CampaignStatus[]> = {
   EXPIRED: ["ARCHIVED"],
 };
 
+export const APP_ALREADY_PUBLISHED_MESSAGE = "This app is already published.";
+
+export async function findActivePublishedCampaignForApp(
+  userId: string,
+  appId: string,
+  exceptId?: string,
+) {
+  return prisma.campaign.findFirst({
+    where: {
+      userId,
+      appId,
+      published: true,
+      status: "ACTIVE",
+      ...(exceptId ? { id: { not: exceptId } } : {}),
+    },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true },
+  });
+}
+
+export async function assertAppNotAlreadyPublished(userId: string, appId: string, exceptId?: string) {
+  const existing = await findActivePublishedCampaignForApp(userId, appId, exceptId);
+  if (!existing) return;
+  throw new AppError(APP_ALREADY_PUBLISHED_MESSAGE, 409, "CAMPAIGN_DUPLICATE", {
+    existingCampaignId: existing.id,
+  });
+}
+
 export async function listCampaigns(userId: string) {
   return prisma.campaign.findMany({
     where: { userId },
@@ -278,24 +306,7 @@ export async function createCampaign(
 
   const webOptInUrl = input.webOptInUrl || app.webOptInUrl || undefined;
   if (input.published) {
-    const duplicate = await prisma.campaign.findFirst({
-      where: {
-        userId,
-        appId: app.id,
-        published: true,
-        status: "ACTIVE",
-        playTrack: requested.track,
-        testingType,
-      },
-    });
-    if (duplicate) {
-      throw new AppError(
-        "An active testing request already exists for this application and testing track.",
-        409,
-        "CAMPAIGN_DUPLICATE",
-        { existingCampaignId: duplicate.id },
-      );
-    }
+    await assertAppNotAlreadyPublished(userId, app.id);
   }
 
   const durationDays = input.durationDays ?? MARKETPLACE_DURATION_DAYS;
@@ -401,24 +412,7 @@ async function createManualCampaign(
   }
 
   if (input.published) {
-    const duplicate = await prisma.campaign.findFirst({
-      where: {
-        userId,
-        appId: app.id,
-        published: true,
-        status: "ACTIVE",
-        testingType,
-        playTrack: null,
-      },
-    });
-    if (duplicate) {
-      throw new AppError(
-        "An active testing request already exists for this app and testing type.",
-        409,
-        "CAMPAIGN_DUPLICATE",
-        { existingCampaignId: duplicate.id },
-      );
-    }
+    await assertAppNotAlreadyPublished(userId, app.id);
   }
 
   const durationDays = input.durationDays ?? MARKETPLACE_DURATION_DAYS;
@@ -484,6 +478,9 @@ export async function publishCampaign(userId: string, id: string) {
   if (campaign.status === "ARCHIVED" || campaign.status === "COMPLETED" || campaign.status === "EXPIRED") {
     throw new AppError("This campaign cannot be published.");
   }
+  if (!campaign.published) {
+    await assertAppNotAlreadyPublished(userId, campaign.appId, campaign.id);
+  }
   if (!campaignDependsOnPlayConnection(campaign)) {
     const startedAt = campaign.startedAt ?? new Date();
     const updated = await prisma.campaign.update({
@@ -511,25 +508,6 @@ export async function publishCampaign(userId: string, id: string) {
     refresh: true,
   });
   const testingType = requested.typeGuess as "INTERNAL" | "CLOSED" | "OPEN";
-  const duplicate = await prisma.campaign.findFirst({
-    where: {
-      userId,
-      appId: campaign.appId,
-      published: true,
-      status: "ACTIVE",
-      playTrack: requested.track,
-      testingType,
-      id: { not: id },
-    },
-  });
-  if (duplicate) {
-    throw new AppError(
-      "An active testing request already exists for this application and testing track.",
-      409,
-      "CAMPAIGN_DUPLICATE",
-      { existingCampaignId: duplicate.id },
-    );
-  }
   const testingUrl = campaignTestingUrl({
     testingType,
     packageName: campaign.app.packageName,

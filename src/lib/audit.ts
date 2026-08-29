@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { NotFoundError } from "@/lib/errors";
 
 export async function logActivity(input: {
   userId: string;
@@ -18,6 +19,16 @@ export async function logActivity(input: {
       metadata: input.metadata as object | undefined,
     },
   });
+}
+
+export async function removeOwnActivityLog(userId: string, id: string) {
+  const result = await prisma.activityLog.deleteMany({
+    where: { id, userId },
+  });
+  if (result.count === 0) {
+    throw new NotFoundError("This audit log entry could not be found.");
+  }
+  return { removed: true as const, id };
 }
 
 export async function notify(input: {

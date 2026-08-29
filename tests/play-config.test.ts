@@ -3,6 +3,7 @@ import type { PlayTrackRecord } from "../src/lib/integrations/types";
 import {
   classifyPlayTrack,
   detectTestingConfiguration,
+  playRecordsFromStoredTracks,
   playTrackDisplayName,
   playTrackUiStatus,
   preferDetectedTrack,
@@ -168,5 +169,28 @@ describe("playTrackUiStatus", () => {
     expect(playTrackUiStatus({ exists: false, releaseStatus: null, unsynced: true }).label).toBe(
       "Not yet synchronized",
     );
+  });
+});
+
+describe("playRecordsFromStoredTracks", () => {
+  it("maps stored TestLoop tracks without inventing Play release evidence", () => {
+    const tracks = playRecordsFromStoredTracks([
+      { trackId: "internal", name: "Internal testing", testingType: "INTERNAL" },
+    ]);
+    expect(tracks).toEqual([
+      {
+        track: "internal",
+        typeGuess: "INTERNAL",
+        displayName: "Internal testing",
+        releaseName: null,
+        versionCodes: [],
+        releaseStatus: null,
+        userFraction: null,
+        releaseNotes: null,
+        googleGroupCount: null,
+        googleGroups: null,
+      },
+    ]);
+    expect(preferDetectedTrack(detectTestingConfiguration(tracks))?.track.track).toBe("internal");
   });
 });

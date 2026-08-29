@@ -445,6 +445,24 @@ export function preferDetectedTrack(config: TestingConfiguration): PreferredTest
   };
 }
 
+/** Rebuild Play track records from TestLoop-stored TestingTrack rows without inventing Play evidence. */
+export function playRecordsFromStoredTracks(
+  tracks: Array<{ trackId: string; name: string; testingType: "INTERNAL" | "CLOSED" | "OPEN" }>,
+): PlayTrackRecord[] {
+  return tracks.map((track) => ({
+    track: track.trackId,
+    typeGuess: track.testingType,
+    displayName: track.name,
+    releaseName: null,
+    versionCodes: [],
+    releaseStatus: null,
+    userFraction: null,
+    releaseNotes: null,
+    googleGroupCount: null,
+    googleGroups: null,
+  }));
+}
+
 /** Stable snapshot of Play-reported track fields used to detect stale publish data. */
 export function playTrackFingerprint(track: PlayTrackRecord) {
   return [

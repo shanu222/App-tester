@@ -65,7 +65,12 @@ export default async function AppsPage() {
             testingType: track.testingType,
           })),
           campaign: app.campaign
-            ? { id: app.campaign.id, name: app.campaign.name, status: app.campaign.status }
+            ? {
+                id: app.campaign.id,
+                name: app.campaign.name,
+                status: app.campaign.status,
+                published: app.campaign.published,
+              }
             : null,
         }))}
       />

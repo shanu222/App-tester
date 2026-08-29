@@ -32,7 +32,7 @@ export type AppCardModel = {
   testersRegistered: number;
   testingActivity: number;
   tracks: Array<{ id: string; name: string; testingType: string }>;
-  campaign: { id: string; name: string; status: string } | null;
+  campaign: { id: string; name: string; status: string; published: boolean } | null;
 };
 
 type PlayNewApp = {
@@ -250,7 +250,10 @@ export function MyAppsWorkspace({
         <div className="grid gap-4 xl:grid-cols-2">
           {visible.map((app) => {
             const types = app.testingTypes.length ? app.testingTypes : [app.testingType];
-            const manageHref = app.campaign ? `/campaigns/${app.campaign.id}` : `/campaigns?appId=${app.id}`;
+            const livePublished = Boolean(app.campaign?.published && app.campaign.status === "ACTIVE");
+            const manageHref = livePublished && app.campaign
+              ? `/campaigns/${app.campaign.id}`
+              : `/campaigns?appId=${app.id}`;
             return (
               <Card key={app.id} className="flex flex-col">
                 <div className="flex gap-4">
@@ -288,7 +291,7 @@ export function MyAppsWorkspace({
                     href={manageHref}
                     className="inline-flex h-9.5 items-center rounded-control border border-line-strong bg-white px-4 text-sm font-medium text-slate-700 shadow-card transition-colors hover:bg-surface hover:text-slate-900"
                   >
-                    {app.campaign ? "Manage testing" : "Publish testing"}
+                    {livePublished ? "Manage testing" : "Publish testing"}
                   </Link>
                   <RemoveAppButton
                     appId={app.id}

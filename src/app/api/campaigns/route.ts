@@ -26,6 +26,7 @@ const createSchema = z
     testingInstructions: z.string().max(4000).optional(),
     reciprocalOpen: z.boolean().optional(),
     published: z.boolean().optional(),
+    skipPlayRefresh: z.boolean().optional(),
   })
   .refine((value) => {
     if (value.mode === "manual") return Boolean(value.appId || value.appName);

@@ -78,6 +78,7 @@ export function AddAppWizard({
   playConnected,
   lastSyncAt,
   onCancel,
+  flow = "add",
 }: {
   apps: PlayAppOption[];
   sources: Array<{ id: string; name: string }>;
@@ -85,6 +86,8 @@ export function AddAppWizard({
   playConnected: boolean;
   lastSyncAt?: string | null;
   onCancel?: () => void;
+  /** Add App keeps the source chooser. Publish skips it and uses already-saved apps. */
+  flow?: "add" | "publish";
 }) {
   const playApps = useMemo(() => apps.filter((app) => app.source === "play"), [apps]);
   const initialPlay =
@@ -92,9 +95,12 @@ export function AddAppWizard({
     playApps.find((app) => app.packageName === initialAppId) ||
     null;
   const initialManual = apps.find((app) => app.source === "manual" && app.id === initialAppId) || null;
-  const [step, setStep] = useState<"mode" | "play" | "manual">(
-    initialPlay ? "play" : initialManual ? "manual" : "mode",
-  );
+  const [step, setStep] = useState<"mode" | "play" | "manual">(() => {
+    if (initialPlay) return "play";
+    if (initialManual) return "manual";
+    if (flow === "publish") return "play";
+    return "mode";
+  });
 
   if (step === "mode") {
     return (
@@ -144,14 +150,20 @@ export function AddAppWizard({
         initialAppId={initialAppId}
         playConnected={playConnected}
         lastSyncAt={lastSyncAt}
-        onBack={() => setStep("mode")}
+        flow={flow}
+        onBack={flow === "publish" ? undefined : () => setStep("mode")}
         onCancel={onCancel}
       />
     );
   }
 
   return (
-    <ManualRequestForm initial={initialManual} onBack={() => setStep("mode")} onCancel={onCancel} />
+    <ManualRequestForm
+      initial={initialManual}
+      flow={flow}
+      onBack={flow === "publish" ? undefined : () => setStep("mode")}
+      onCancel={onCancel}
+    />
   );
 }
 
@@ -218,6 +230,7 @@ function PlayRequestForm({
   initialAppId,
   playConnected,
   lastSyncAt,
+  flow,
   onBack,
   onCancel,
 }: {
@@ -226,7 +239,8 @@ function PlayRequestForm({
   initialAppId?: string;
   playConnected: boolean;
   lastSyncAt?: string | null;
-  onBack: () => void;
+  flow: "add" | "publish";
+  onBack?: () => void;
   onCancel?: () => void;
 }) {
   const initial =
@@ -359,7 +373,6 @@ function PlayRequestForm({
     const form = new FormData(event.currentTarget);
     const fingerprint = playTrackFingerprint(chosen.track);
     try {
-      await refreshFromPlay(selected.packageName);
       const response = await fetch("/api/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -381,6 +394,7 @@ function PlayRequestForm({
           testingInstructions: instructions,
           reciprocalOpen: form.get("reciprocalOpen") === "on",
           published: true,
+          skipPlayRefresh: true,
         }),
       });
       const data = await response.json();
@@ -403,15 +417,24 @@ function PlayRequestForm({
     }
   }
 
-  if (!playConnected) {
+  const savedPlayApps = localApps.filter((app) => app.id);
+  const canPublishSaved = savedPlayApps.length > 0;
+
+  if (!playConnected && !canPublishSaved) {
     return (
       <Card>
         <CardHeader
           title="Connect Google Play"
           action={
-            <Button type="button" variant="ghost" onClick={onBack}>
-              Back
-            </Button>
+            onBack ? (
+              <Button type="button" variant="ghost" onClick={onBack}>
+                Back
+              </Button>
+            ) : onCancel ? (
+              <Button type="button" variant="ghost" onClick={onCancel}>
+                Cancel
+              </Button>
+            ) : null
           }
         />
         <p className="mt-4 text-sm leading-6 text-body">
@@ -421,9 +444,17 @@ function PlayRequestForm({
           <Link href="/play">
             <Button>Connect Google Play</Button>
           </Link>
-          <Button type="button" variant="secondary" onClick={onBack}>
-            Add manually instead
-          </Button>
+          {flow === "add" && onBack ? (
+            <Button type="button" variant="secondary" onClick={onBack}>
+              Add manually instead
+            </Button>
+          ) : (
+            <Link href="/apps">
+              <Button type="button" variant="secondary">
+                Open My Apps
+              </Button>
+            </Link>
+          )}
         </div>
       </Card>
     );
@@ -433,21 +464,41 @@ function PlayRequestForm({
     return (
       <Card>
         <CardHeader
-          title="No Google Play apps discovered"
+          title={flow === "publish" ? "Publish a testing request" : "No Google Play apps discovered"}
           action={
-            <Button type="button" variant="ghost" onClick={onBack}>
-              Back
-            </Button>
+            onBack ? (
+              <Button type="button" variant="ghost" onClick={onBack}>
+                Back
+              </Button>
+            ) : onCancel ? (
+              <Button type="button" variant="ghost" onClick={onCancel}>
+                Cancel
+              </Button>
+            ) : null
           }
         />
-        <p className="mt-4 text-sm leading-6 text-body">Refresh from Google Play Console, then select an existing app.</p>
+        <p className="mt-4 text-sm leading-6 text-body">
+          {flow === "publish"
+            ? "Add an app in My Apps first, then publish it from there. Already-imported Google Play apps stay in My Apps until you remove them."
+            : "Refresh from Google Play Console, then select an existing app."}
+        </p>
         <div className="mt-5 flex flex-wrap gap-2">
-          <Link href="/play">
-            <Button>Open Google Play</Button>
-          </Link>
-          <Button type="button" variant="secondary" onClick={onBack}>
-            Add manually instead
-          </Button>
+          {flow === "publish" ? (
+            <Link href="/apps">
+              <Button>Open My Apps</Button>
+            </Link>
+          ) : (
+            <>
+              <Link href="/play">
+                <Button>Open Google Play</Button>
+              </Link>
+              {onBack ? (
+                <Button type="button" variant="secondary" onClick={onBack}>
+                  Add manually instead
+                </Button>
+              ) : null}
+            </>
+          )}
         </div>
       </Card>
     );
@@ -460,9 +511,11 @@ function PlayRequestForm({
         description="TestLoop fills testing type from Google Play."
         action={
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="ghost" onClick={onBack}>
-              Back
-            </Button>
+            {onBack ? (
+              <Button type="button" variant="ghost" onClick={onBack}>
+                Back
+              </Button>
+            ) : null}
             {onCancel ? (
               <Button type="button" variant="ghost" onClick={onCancel}>
                 Cancel
@@ -671,11 +724,13 @@ function PlayRequestForm({
 
 function ManualRequestForm({
   initial,
+  flow,
   onBack,
   onCancel,
 }: {
   initial: PlayAppOption | null;
-  onBack: () => void;
+  flow: "add" | "publish";
+  onBack?: () => void;
   onCancel?: () => void;
 }) {
   const [appName, setAppName] = useState(initial?.name || "");
@@ -751,13 +806,15 @@ function ManualRequestForm({
   return (
     <Card>
       <CardHeader
-        title="Add manually"
+        title={flow === "publish" ? "New testing request" : "Add manually"}
         description="Publish a TestLoop testing request. TestLoop has not verified this app on Google Play."
         action={
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="ghost" onClick={onBack}>
-              Back
-            </Button>
+            {onBack ? (
+              <Button type="button" variant="ghost" onClick={onBack}>
+                Back
+              </Button>
+            ) : null}
             {onCancel ? (
               <Button type="button" variant="ghost" onClick={onCancel}>
                 Cancel

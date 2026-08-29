@@ -5,8 +5,7 @@ import { prisma } from "@/lib/db";
 import { CreateCampaignForm } from "@/components/campaigns/create-campaign-form";
 import { PublishedRequestsList } from "@/components/campaigns/published-requests-list";
 import { getPlayConnection } from "@/lib/services/play-connection";
-import { parseTracksSnapshot } from "@/lib/integrations/play-config";
-import { canonicalPlayStoreUrl } from "@/lib/play-url";
+import { parseTracksSnapshot, playRecordsFromStoredTracks } from "@/lib/integrations/play-config";
 import { isPlayConnectionActive } from "@/lib/play-disconnect";
 
 export default async function CampaignsPage({
@@ -16,17 +15,13 @@ export default async function CampaignsPage({
 }) {
   const user = await requireUser();
   const params = await searchParams;
-  const [campaigns, playConnection, googlePlayApps, sources, manualApps] = await Promise.all([
+  const [campaigns, playConnection, sources, myApps] = await Promise.all([
     listCampaigns(user.id),
     getPlayConnection(user.id),
-    prisma.googlePlayApp.findMany({
-      where: { userId: user.id },
-      include: { app: { include: { tracks: true } } },
-      orderBy: { name: "asc" },
-    }),
     prisma.facebookSource.findMany({ where: { userId: user.id } }),
     prisma.app.findMany({
-      where: { userId: user.id, syncedFromPlay: false },
+      where: { userId: user.id },
+      include: { tracks: true, playApps: true },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -35,41 +30,31 @@ export default async function CampaignsPage({
   return (
     <AppShell title="Testing Requests">
       <CreateCampaignForm
+        flow="publish"
         initialAppId={params.appId}
         playConnected={playConnected}
         lastSyncAt={playConnection?.lastSyncAt?.toISOString() ?? null}
-        apps={[
-          ...googlePlayApps.map((row) => ({
-            id: row.appId || "",
-            name: row.app?.name || row.name,
-            packageName: row.packageName,
-            source: "play" as const,
-            playStoreUrl: row.app?.playStoreUrl || canonicalPlayStoreUrl(row.packageName),
-            webOptInUrl: row.app?.webOptInUrl || null,
-            iconUrl: row.iconUrl || row.app?.iconUrl || null,
-            testerTarget: row.app?.testerTarget ?? 12,
-            lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
-            playTracks: parseTracksSnapshot(row.tracksSnapshot),
-            testingTracks: (row.app?.tracks || []).map((track) => ({
-              id: track.id,
-              playTrack: track.trackId,
-            })),
-          })),
-          ...manualApps.map((app) => ({
+        apps={myApps.map((app) => {
+          const cache = app.playApps[0];
+          const playTracks = parseTracksSnapshot(cache?.tracksSnapshot);
+          return {
             id: app.id,
             name: app.name,
             packageName: app.packageName,
-            source: "manual" as const,
+            source: app.syncedFromPlay ? ("play" as const) : ("manual" as const),
             testingType: app.testingType,
             playStoreUrl: app.playStoreUrl,
             webOptInUrl: app.webOptInUrl,
             iconUrl: app.iconUrl,
             testerTarget: app.testerTarget,
-            lastSyncAt: null,
-            playTracks: [],
-            testingTracks: [],
-          })),
-        ]}
+            lastSyncAt: (cache?.lastSyncAt || app.lastSyncedAt)?.toISOString() ?? null,
+            playTracks: playTracks.length ? playTracks : playRecordsFromStoredTracks(app.tracks),
+            testingTracks: app.tracks.map((track) => ({
+              id: track.id,
+              playTrack: track.trackId,
+            })),
+          };
+        })}
         sources={sources.map((item) => ({ id: item.id, name: item.name }))}
       />
       <PublishedRequestsList

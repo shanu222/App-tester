@@ -750,10 +750,60 @@ export async function selectPlayApp(input: { userId: string; packageName: string
   return { app, packageName: discovered.packageName };
 }
 
+/**
+ * Persist a Play Console import into TestLoop: link the GooglePlayApp cache,
+ * store the tracks snapshot, and write TestingTrack rows. The App row itself
+ * stays until the user explicitly removes it from My Apps.
+ */
+export async function persistImportedPlayApp(input: {
+  userId: string;
+  appId: string;
+  packageName: string;
+  name: string;
+  tracks: PlayTrackRecord[];
+  /** When false, keep the App row's googlePlayStatus (conflict review on Sync). */
+  updateAppStatus?: boolean;
+}) {
+  const connection = await getPlayConnection(input.userId);
+  if (connection) {
+    const lastSyncAt = new Date();
+    await prisma.googlePlayApp.upsert({
+      where: {
+        connectionId_packageName: { connectionId: connection.id, packageName: input.packageName },
+      },
+      update: {
+        name: input.name,
+        userId: input.userId,
+        appId: input.appId,
+        selected: true,
+        tracksSnapshot: input.tracks as Prisma.InputJsonValue,
+        lastSyncAt,
+      },
+      create: {
+        connectionId: connection.id,
+        userId: input.userId,
+        packageName: input.packageName,
+        name: input.name,
+        appId: input.appId,
+        selected: true,
+        tracksSnapshot: input.tracks as Prisma.InputJsonValue,
+        lastSyncAt,
+      },
+    });
+  }
+  await persistTestingTracks({
+    appId: input.appId,
+    packageName: input.packageName,
+    tracks: input.tracks,
+    updateAppStatus: input.updateAppStatus,
+  });
+}
+
 async function persistTestingTracks(input: {
   appId: string | null;
   packageName: string;
   tracks: PlayTrackRecord[];
+  updateAppStatus?: boolean;
 }) {
   if (!input.appId) return;
   const testing = input.tracks.filter((track) => track.typeGuess !== "PRODUCTION");
@@ -791,6 +841,7 @@ async function persistTestingTracks(input: {
   }
 
   const config = detectTestingConfiguration(input.tracks);
+  if (input.updateAppStatus === false) return;
   await prisma.app.update({
     where: { id: input.appId },
     data: {

@@ -5,7 +5,7 @@ import { searchPlayApps, listPlayTracks } from "@/lib/integrations/play";
 import { isDemoMode } from "@/lib/env";
 import { canonicalPlayStoreUrl } from "@/lib/play-url";
 import { statusFromPlayTracks } from "@/lib/services/apps";
-import { resolvePlayCredentials } from "@/lib/services/play-connection";
+import { persistImportedPlayApp, resolvePlayCredentials } from "@/lib/services/play-connection";
 
 export async function GET() {
   try {
@@ -54,6 +54,7 @@ export async function POST(request: Request) {
     const existing = await prisma.app.findMany({ where: { userId: user.id } });
     const byPackage = new Map(existing.map((app) => [app.packageName, app]));
     const addSet = new Set(addPackageNames.map((item) => item.trim()));
+    const importAllNew = addSet.size === 0;
     const updated = [];
     const imported = [];
     const newApps = [];
@@ -63,9 +64,10 @@ export async function POST(request: Request) {
       const local = byPackage.get(playApp.packageName);
       const tracks = await listPlayTracks(creds, playApp.packageName);
       const derived = tracks.ok ? statusFromPlayTracks(tracks.data) : null;
+      const playTracks = tracks.ok ? tracks.data : [];
 
       if (!local) {
-        if (addSet.has(playApp.packageName)) {
+        if (importAllNew || addSet.has(playApp.packageName)) {
           const app = await prisma.app.create({
             data: {
               userId: user.id,
@@ -78,6 +80,13 @@ export async function POST(request: Request) {
               syncedFromPlay: true,
               lastSyncedAt: new Date(),
             },
+          });
+          await persistImportedPlayApp({
+            userId: user.id,
+            appId: app.id,
+            packageName: playApp.packageName,
+            name: playApp.displayName,
+            tracks: playTracks,
           });
           imported.push(app);
           byPackage.set(app.packageName, app);
@@ -112,6 +121,14 @@ export async function POST(request: Request) {
         data.playConflictNote = null;
       }
       const app = await prisma.app.update({ where: { id: local.id }, data });
+      await persistImportedPlayApp({
+        userId: user.id,
+        appId: app.id,
+        packageName: playApp.packageName,
+        name: playApp.displayName,
+        tracks: playTracks,
+        updateAppStatus: false,
+      });
       updated.push(app);
     }
 

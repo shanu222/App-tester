@@ -14,6 +14,7 @@ import { marketplaceEndsAt, MARKETPLACE_DURATION_DAYS } from "@/lib/testing/mark
 import {
   detectTestingConfiguration,
   parseTracksSnapshot,
+  playRecordsFromStoredTracks,
   playTrackFingerprint,
   preferDetectedTrack,
 } from "@/lib/integrations/play-config";
@@ -173,6 +174,26 @@ async function loadPlayAppSnapshot(userId: string, packageName: string) {
   });
 }
 
+async function loadStoredPlayTracks(userId: string, packageName: string) {
+  const playApp = await loadPlayAppSnapshot(userId, packageName);
+  const fromCache = parseTracksSnapshot(playApp?.tracksSnapshot);
+  if (fromCache.length) return fromCache;
+
+  const app = await prisma.app.findFirst({
+    where: { userId, packageName, syncedFromPlay: true },
+    include: { tracks: true },
+  });
+  if (app?.tracks.length) return playRecordsFromStoredTracks(app.tracks);
+  if (!playApp) {
+    throw new AppError(
+      "This application is not in the apps discovered from Google Play Console. Connect Google Play and refresh apps first.",
+      409,
+      "PLAY_APP_REQUIRED",
+    );
+  }
+  return [];
+}
+
 async function resolvePlayTestingTrack(input: {
   userId: string;
   packageName: string;
@@ -186,16 +207,7 @@ async function resolvePlayTestingTrack(input: {
     await syncPackageTracks({ userId: input.userId, packageName: input.packageName });
   }
 
-  const playApp = await loadPlayAppSnapshot(input.userId, input.packageName);
-  if (!playApp) {
-    throw new AppError(
-      "This application is not in the apps discovered from Google Play Console. Connect Google Play and refresh apps first.",
-      409,
-      "PLAY_APP_REQUIRED",
-    );
-  }
-
-  const tracks = parseTracksSnapshot(playApp.tracksSnapshot);
+  const tracks = await loadStoredPlayTracks(input.userId, input.packageName);
   const config = detectTestingConfiguration(tracks);
   const preferred = preferDetectedTrack(config);
   if (!preferred) {
@@ -219,15 +231,15 @@ async function resolvePlayTestingTrack(input: {
     );
   }
 
-  if (input.refresh && input.playTrack && requested.track !== input.playTrack) {
+  if (!input.skipPlayRefresh && input.refresh && input.playTrack && requested.track !== input.playTrack) {
     throw new AppError(PLAY_CONFIG_CHANGED, 409, "PLAY_CONFIG_CHANGED", playConfigChangedDetails(preferred.track));
   }
 
-  if (input.refresh && input.fingerprint && playTrackFingerprint(requested) !== input.fingerprint) {
+  if (!input.skipPlayRefresh && input.refresh && input.fingerprint && playTrackFingerprint(requested) !== input.fingerprint) {
     throw new AppError(PLAY_CONFIG_CHANGED, 409, "PLAY_CONFIG_CHANGED", playConfigChangedDetails(requested));
   }
 
-  return { playApp, tracks, preferred, requested };
+  return { tracks, preferred, requested };
 }
 
 export async function createCampaign(

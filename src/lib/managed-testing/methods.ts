@@ -125,7 +125,7 @@ export function paymentMethods(): PaymentMethodCard[] {
     {
       id: "BINANCE_USDT",
       label: "Binance Pay / USDT",
-      shortLabel: "Binance USDT",
+      shortLabel: "Binance",
       kind: "crypto",
       available: true,
       unavailableReason: null,
@@ -168,6 +168,25 @@ export function paymentMethodById(id: PaymentMethodId | string | null | undefine
 export function providerForMethod(method: PaymentMethodId): "EASYPAISA" | "JAZZCASH" | "SADAPAY" | "NAYAPAY" | "BINANCE" | "REVENUECAT" {
   if (method === "BINANCE_USDT") return "BINANCE";
   return method;
+}
+
+export const WALLET_PURCHASE_METHOD_IDS = ["EASYPAISA", "JAZZCASH", "SADAPAY", "NAYAPAY", "BINANCE_USDT"] as const;
+export type WalletPurchaseMethodId = (typeof WALLET_PURCHASE_METHOD_IDS)[number];
+export const USD_TWELVE_PAYMENT_CHOICES = ["PADDLE", ...WALLET_PURCHASE_METHOD_IDS] as const;
+export type UsdTwelvePaymentChoice = (typeof USD_TWELVE_PAYMENT_CHOICES)[number];
+
+export function isWalletPurchaseMethod(id: string): id is WalletPurchaseMethodId {
+  return (WALLET_PURCHASE_METHOD_IDS as readonly string[]).includes(id);
+}
+
+export function isUsdTwelvePaymentChoice(id: string): id is UsdTwelvePaymentChoice {
+  return (USD_TWELVE_PAYMENT_CHOICES as readonly string[]).includes(id);
+}
+
+export function walletPurchaseMethods(): Array<PaymentMethodCard & { id: WalletPurchaseMethodId }> {
+  return paymentMethods().filter((item): item is PaymentMethodCard & { id: WalletPurchaseMethodId } =>
+    isWalletPurchaseMethod(item.id),
+  );
 }
 
 const OPEN_STATUSES: ManagedPaymentStatus[] = ["PENDING", "PENDING_PAYMENT", "PROOF_SUBMITTED", "UNDER_REVIEW", "REJECTED"];

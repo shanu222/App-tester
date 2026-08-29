@@ -17,7 +17,8 @@ export default function ErrorBoundary({ error, reset }: { error: Error; reset: (
           </span>
           <h1 className="mt-5 text-xl font-semibold text-slate-900">This page could not be loaded</h1>
           <p className="mt-2 text-sm leading-6 text-muted">
-            Something went wrong while loading this page. No Google Play data was changed.
+            Something went wrong while loading this page. Please try again. If this continues, contact support with the
+            technical details below.
           </p>
           {error.message ? (
             <details className="mt-4 text-left">

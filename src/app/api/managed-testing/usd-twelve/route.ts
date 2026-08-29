@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { json, handleRouteError, parseJson } from "@/lib/http";
 import { requireUser } from "@/auth";
+import { USD_TWELVE_PAYMENT_CHOICES } from "@/lib/managed-testing/methods";
 import { startUsdTwelveCheckout } from "@/lib/services/usd-twelve-package";
 
 const testingType = z.enum(["INTERNAL", "CLOSED", "OPEN"]);
+const paymentMethod = z.enum(USD_TWELVE_PAYMENT_CHOICES);
 
 export async function POST(request: Request) {
   try {
@@ -14,6 +16,7 @@ export async function POST(request: Request) {
         appId: z.string().min(1),
         testingType,
         testingUrl: z.string().min(1),
+        paymentMethod,
       }),
     );
     const result = await startUsdTwelveCheckout(user.id, body);

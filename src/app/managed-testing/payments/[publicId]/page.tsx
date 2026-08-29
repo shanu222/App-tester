@@ -34,7 +34,7 @@ export default async function ManagedPaymentPage({
       description={
         paddleCheckout
           ? "Complete the one-time $10 Paddle checkout. TestLoop activates access only after the transaction is verified."
-          : "Pay the listed amount, then upload proof. TestLoop activates the package only after review."
+          : "Pay $10 USD, then upload proof. An administrator must confirm before testers are invited."
       }
     >
       <Card className="max-w-2xl">
@@ -50,7 +50,10 @@ export default async function ManagedPaymentPage({
           {paddleCheckout ? (
             <div className="space-y-3">
               <PaddleResumeCheckout paymentPublicId={view.payment.publicId} customerEmail={view.developerEmail} />
-              <p className="text-sm text-muted">Or pay with a wallet and upload proof. Access still waits for verification.</p>
+              <p className="text-sm text-muted">
+                Or pay with a wallet and upload proof. An administrator must confirm wallet payments before testers are
+                invited.
+              </p>
             </div>
           ) : null}
           <PaymentCheckoutPanel

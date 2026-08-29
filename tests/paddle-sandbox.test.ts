@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { USD_TWELVE_PACKAGE_CODE, USD_TWELVE_PRICE_USD } from "../src/lib/managed-testing/usd-twelve";
+import { USD_TWELVE_PACKAGE_CODE, USD_TWELVE_PRICE_USD, isUsdTwelvePackage } from "../src/lib/managed-testing/usd-twelve";
 import { PADDLE_USD_CENTS } from "../src/lib/paddle/config";
 import {
   assertTrustedPaddlePurchase,
@@ -74,5 +74,16 @@ describe("paddle sandbox purchase verification", () => {
   it("ignores duplicate-looking unpaid events", () => {
     const result = assertTrustedPaddlePurchase(txn({ status: "ready" }), PRICE_ID);
     expect(result.ok).toBe(false);
+  });
+
+  it("keeps the $10 catalog as one-time usd_12_14, not a subscription or PKR pack", () => {
+    expect(isUsdTwelvePackage("usd_12_14")).toBe(true);
+    expect(isUsdTwelvePackage("testers_12")).toBe(false);
+    expect(isUsdTwelvePackage("testers_20")).toBe(false);
+    expect(isUsdTwelvePackage("testers_30")).toBe(false);
+    expect(isUsdTwelvePackage("testers_50")).toBe(false);
+    expect(isUsdTwelvePackage("custom")).toBe(false);
+    expect(USD_TWELVE_PACKAGE_CODE).toBe("usd_12_14");
+    expect(USD_TWELVE_PRICE_USD).toBe(10);
   });
 });

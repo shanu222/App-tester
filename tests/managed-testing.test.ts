@@ -7,8 +7,11 @@ import {
   paymentCanSubmitProof,
   paymentIsActivated,
   paymentMethods,
+  providerForMethod,
   revenueCatConfigured,
   validatePaymentProof,
+  walletPurchaseMethods,
+  WALLET_PURCHASE_METHOD_IDS,
 } from "../src/lib/managed-testing/methods";
 import {
   adminPaymentReviewEmail,
@@ -128,6 +131,20 @@ describe("managed testing payments", () => {
     expect(revenueCatConfigured()).toBe(false);
     expect(methods.find((item) => item.id === "REVENUECAT")?.available).toBe(false);
     expect(methods.find((item) => item.id === "REVENUECAT")?.unavailableReason).toMatch(/not configured/i);
+    expect(WALLET_PURCHASE_METHOD_IDS).toEqual(["EASYPAISA", "JAZZCASH", "SADAPAY", "NAYAPAY", "BINANCE_USDT"]);
+    expect(walletPurchaseMethods().map((item) => item.id)).toEqual([
+      "EASYPAISA",
+      "JAZZCASH",
+      "SADAPAY",
+      "NAYAPAY",
+      "BINANCE_USDT",
+    ]);
+    expect(walletPurchaseMethods().map((item) => item.id as string)).not.toContain("REVENUECAT");
+    expect(providerForMethod("EASYPAISA")).toBe("EASYPAISA");
+    expect(providerForMethod("JAZZCASH")).toBe("JAZZCASH");
+    expect(providerForMethod("SADAPAY")).toBe("SADAPAY");
+    expect(providerForMethod("NAYAPAY")).toBe("NAYAPAY");
+    expect(providerForMethod("BINANCE_USDT")).toBe("BINANCE");
   });
 
   it("keeps packages inactive until admin approval", () => {

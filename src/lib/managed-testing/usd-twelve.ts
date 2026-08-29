@@ -14,7 +14,7 @@ export const USD_TWELVE_INCLUDED = [
   "Tester confirmation tracking",
   "Tester screenshot submission",
   "Daily testing progress",
-  "Developer notification",
+  "Developer notifications",
   "14-day testing status",
 ] as const;
 

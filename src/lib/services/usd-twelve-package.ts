@@ -14,7 +14,7 @@ import {
   publicPaymentId,
   publicTesterId,
 } from "@/lib/managed-testing/catalog";
-import { PAYMENTS_ADMIN_EMAIL } from "@/lib/managed-testing/methods";
+import { PAYMENTS_ADMIN_EMAIL, isWalletPurchaseMethod, providerForMethod, type UsdTwelvePaymentChoice } from "@/lib/managed-testing/methods";
 import { resolveCheckoutProvider } from "@/lib/managed-testing/payments";
 import { paddleCheckoutConfigured } from "@/lib/paddle/config";
 import { ensurePaddleCheckoutTransaction } from "@/lib/paddle/checkout";
@@ -131,7 +131,7 @@ export async function ensureUsdTwelvePool() {
 
 export async function startUsdTwelveCheckout(
   userId: string,
-  input: { appId: string; testingType: TestingType; testingUrl: string },
+  input: { appId: string; testingType: TestingType; testingUrl: string; paymentMethod: UsdTwelvePaymentChoice },
 ) {
   const pack = await getUsdTwelvePackage();
   if (!pack) throw new NotFoundError("The $10 12-tester package is not available.");
@@ -151,8 +151,39 @@ export async function startUsdTwelveCheckout(
     testingType: input.testingType,
     testingUrl: validated.testingUrl || "",
   };
-  const usePaddle = paddleCheckoutConfigured();
-  const provider = usePaddle ? "PADDLE" : resolveCheckoutProvider() === "stub" ? "STUB" : "MANUAL";
+  const wantsPaddle = input.paymentMethod === "PADDLE";
+  if (wantsPaddle && !paddleCheckoutConfigured()) {
+    throw new AppError(
+      "Paddle sandbox checkout is not configured yet. Choose EasyPaisa, JazzCash, SadaPay, NayaPay, or Binance.",
+      503,
+      "PADDLE_NOT_CONFIGURED",
+    );
+  }
+  if (wantsPaddle) {
+    const payment = await prisma.managedTestingPayment.create({
+      data: {
+        publicId: publicPaymentId(),
+        userId,
+        packageId: pack.id,
+        amountPkr: pack.amountPkr,
+        currency: pack.currency,
+        provider: "PADDLE",
+        status: "PENDING_PAYMENT",
+        transactionReference: paymentReference(),
+        fulfillment,
+      },
+    });
+    const checkout = await ensurePaddleCheckoutTransaction({ userId, paymentPublicId: payment.publicId });
+    return {
+      paymentPublicId: payment.publicId,
+      paddleCheckout: true as const,
+      paddleTransactionId: checkout.transactionId,
+    };
+  }
+  if (!isWalletPurchaseMethod(input.paymentMethod)) {
+    throw new AppError("Choose Paddle or a wallet payment method.");
+  }
+  const provider = resolveCheckoutProvider() === "stub" ? "STUB" : providerForMethod(input.paymentMethod);
   const payment = await prisma.managedTestingPayment.create({
     data: {
       publicId: publicPaymentId(),
@@ -161,20 +192,13 @@ export async function startUsdTwelveCheckout(
       amountPkr: pack.amountPkr,
       currency: pack.currency,
       provider,
+      method: input.paymentMethod,
       status: "PENDING_PAYMENT",
       transactionReference: paymentReference(),
       fulfillment,
     },
   });
-  if (!usePaddle) {
-    return { paymentPublicId: payment.publicId, paddleCheckout: false as const, paddleTransactionId: null };
-  }
-  const checkout = await ensurePaddleCheckoutTransaction({ userId, paymentPublicId: payment.publicId });
-  return {
-    paymentPublicId: payment.publicId,
-    paddleCheckout: true as const,
-    paddleTransactionId: checkout.transactionId,
-  };
+  return { paymentPublicId: payment.publicId, paddleCheckout: false as const, paddleTransactionId: null };
 }
 
 export async function fulfillUsdTwelvePackage(paymentId: string) {

@@ -19,7 +19,10 @@ export default async function UsdTwelvePackagePage() {
   return (
     <AppShell title="TestLoop" description="One-time $10 USD purchase · 12 testers · 14 days of managed testing">
       <Card className="max-w-xl">
-        <CardHeader title="TestLoop" description="One-time payment. Access starts after Paddle verifies the transaction." />
+        <CardHeader
+          title="TestLoop"
+          description="$10 USD · one-time payment · 12 managed testers · 14 days"
+        />
         <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-muted">Product</dt>
@@ -34,7 +37,7 @@ export default async function UsdTwelvePackagePage() {
             <dd className="mt-0.5 font-semibold text-slate-900">One-time payment</dd>
           </div>
         </dl>
-        <p className="mt-5 text-sm font-medium text-slate-800">Includes:</p>
+        <p className="mt-5 text-sm font-medium text-slate-800">What is included:</p>
         <ul className="mt-2 space-y-1.5 text-sm text-slate-700">
           {USD_TWELVE_INCLUDED.map((item) => (
             <li key={item} className="flex gap-2">

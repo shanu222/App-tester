@@ -26,6 +26,7 @@ import {
 import {
   PAYMENTS_ADMIN_EMAIL,
   PAYMENT_PROOF_WHATSAPP,
+  isWalletPurchaseMethod,
   paymentCanSubmitProof,
   paymentIsActivated,
   paymentMethodById,
@@ -33,6 +34,7 @@ import {
   paymentNeedsReview,
   providerForMethod,
   validatePaymentProof,
+  walletPurchaseMethods,
   type PaymentMethodId,
 } from "@/lib/managed-testing/methods";
 import { testerDisplayLabel, validateManagedCampaignSetup } from "@/lib/managed-testing/setup";
@@ -174,7 +176,7 @@ export async function getPaymentCheckoutForUser(userId: string, publicId: string
   return {
     payment: publicPaymentView(payment),
     campaignPublicId: payment.campaign?.publicId ?? null,
-    methods: paymentMethods(),
+    methods: isUsdTwelvePackage(payment.package.code) ? walletPurchaseMethods() : paymentMethods(),
     whatsapp: PAYMENT_PROOF_WHATSAPP,
     developerEmail: payment.user.email,
     developerName: payment.user.developerName || payment.user.name || payment.user.email,
@@ -423,6 +425,9 @@ export async function selectPaymentMethod(userId: string, publicId: string, meth
   if (!method.available) {
     throw new AppError(method.unavailableReason || "That payment method is not available.");
   }
+  if (isUsdTwelvePackage(payment.package.code) && !isWalletPurchaseMethod(method.id)) {
+    throw new AppError("Choose EasyPaisa, JazzCash, SadaPay, NayaPay, or Binance.");
+  }
   const updated = await prisma.managedTestingPayment.update({
     where: { id: payment.id },
     data: {
@@ -446,6 +451,9 @@ export async function submitPaymentProof(input: {
   if (!method.available) {
     throw new AppError(method.unavailableReason || "That payment method is not available.");
   }
+  if (!isWalletPurchaseMethod(method.id) && method.id !== "REVENUECAT") {
+    throw new AppError("Choose a supported payment method.");
+  }
   const valid = validatePaymentProof(input.file);
   if (!valid.ok) throw new AppError(valid.error);
   const payment = await prisma.managedTestingPayment.findFirst({
@@ -459,8 +467,11 @@ export async function submitPaymentProof(input: {
   if (!paymentCanSubmitProof(payment.status)) {
     throw new AppError("This payment is already under review or approved.");
   }
-  const submittedAt = new Date();
   const usdTwelve = isUsdTwelvePackage(payment.package.code);
+  if (usdTwelve && !isWalletPurchaseMethod(method.id)) {
+    throw new AppError("Choose EasyPaisa, JazzCash, SadaPay, NayaPay, or Binance.");
+  }
+  const submittedAt = new Date();
   const issued = usdTwelve ? issuePaymentConfirmToken(payment.publicId) : null;
   const updated = await prisma.managedTestingPayment.update({
     where: { id: payment.id },

@@ -51,6 +51,13 @@ export async function ensurePaddleCheckoutTransaction(input: { userId: string; p
       paymentPublicId: payment.publicId,
       packageCode: USD_TWELVE_PACKAGE_CODE,
     },
+  }).catch((error) => {
+    console.error("Paddle checkout create failed", error instanceof Error ? error.name : "error");
+    throw new AppError(
+      "Paddle checkout could not be started. Pay with EasyPaisa, JazzCash, SadaPay, NayaPay, or Binance instead, or try Paddle again.",
+      503,
+      "PADDLE_CHECKOUT_FAILED",
+    );
   });
 
   await prisma.managedTestingPayment.update({

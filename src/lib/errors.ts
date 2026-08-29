@@ -52,17 +52,19 @@ export function publicErrorMessage(error: unknown) {
   if (error instanceof AppError && error.expose) return error.message;
   const mapped = mapInfrastructureError(error);
   if (mapped) return mapped.message;
-  return "An unexpected error occurred. No Google Play data was changed.";
+  return "An unexpected error occurred. Please try again.";
 }
 
 /**
  * Turns infrastructure failures (missing ENCRYPTION_KEY, unmigrated tables)
- * into an actionable message. Google API results must never be swallowed by
- * these — callers should map them before falling through here.
+ * into an actionable message. Google Play wording is used only when the
+ * failure is actually about Play credentials or the Play connection table.
  */
 export function mapInfrastructureError(error: unknown): AppError | null {
   const code = prismaErrorCode(error);
-  const message = error instanceof Error ? error.message : "";
+  const message = errorMessage(error);
+  const model = prismaModelName(error);
+  const playRelated = isPlayInfrastructureFailure(message, model);
 
   if (/ENCRYPTION_KEY is required/i.test(message) || /Invalid encrypted payload/i.test(message)) {
     return new AppError(
@@ -73,25 +75,62 @@ export function mapInfrastructureError(error: unknown): AppError | null {
   }
 
   if (code === "P2021" || code === "P2010" || /does not exist/i.test(message)) {
+    if (playRelated) {
+      return new AppError(
+        "The Google Play connection table is missing from the database. Apply pending Prisma migrations (`prisma migrate deploy`) and retry.",
+        500,
+        "PLAY_SCHEMA_MISSING",
+      );
+    }
     return new AppError(
-      "The Google Play connection table is missing from the database. Apply pending Prisma migrations (`prisma migrate deploy`) and retry.",
+      "A required database table is missing. Apply pending Prisma migrations (`prisma migrate deploy`) and retry.",
       500,
-      "PLAY_SCHEMA_MISSING",
+      "SCHEMA_MISSING",
     );
   }
 
   if (code === "P2002") {
-    return new AppError("A Google Play connection already exists for this account. Disconnect it, then connect again.", 409, "PLAY_CONNECTION_EXISTS");
+    if (playRelated) {
+      return new AppError("A Google Play connection already exists for this account. Disconnect it, then connect again.", 409, "PLAY_CONNECTION_EXISTS");
+    }
+    return new AppError("That record already exists.", 409, "UNIQUE_CONSTRAINT");
   }
 
   if (code) {
+    if (playRelated) {
+      return new AppError(
+        "The Google Play connection could not be saved to the database. Check that migrations have been applied and retry.",
+        500,
+        "PLAY_PERSIST_FAILED",
+      );
+    }
     return new AppError(
-      "The Google Play connection could not be saved to the database. Check that migrations have been applied and retry.",
+      "This request could not be saved. If this continues, apply pending database migrations and retry.",
       500,
-      "PLAY_PERSIST_FAILED",
+      "PERSIST_FAILED",
     );
   }
 
+  return null;
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object" && "message" in error && typeof (error as { message: unknown }).message === "string") {
+    return (error as { message: string }).message;
+  }
+  return "";
+}
+
+function isPlayInfrastructureFailure(message: string, model: string | null) {
+  if (model && /googleplay|playconnection/i.test(model)) return true;
+  return /GooglePlayConnection|play credentials|google play connection/i.test(message);
+}
+
+function prismaModelName(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  const meta = "meta" in error ? (error as { meta?: { modelName?: unknown } }).meta : undefined;
+  if (meta && typeof meta.modelName === "string") return meta.modelName;
   return null;
 }
 

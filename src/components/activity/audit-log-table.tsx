@@ -8,6 +8,9 @@ import { formatDateTime } from "@/lib/utils";
 
 const CONFIRM_TITLE = "Remove this audit log entry from TestLoop?";
 const CONFIRM_BODY = "The selected audit log entry will be removed from TestLoop.";
+const CONFIRM_ALL_TITLE = "Remove all audit log entries from TestLoop?";
+const CONFIRM_ALL_BODY =
+  "This only removes the audit log entries from TestLoop. It does not affect any apps, testing requests, Google Play Console data, or other account data.";
 
 export type AuditLogRow = {
   id: string;
@@ -20,6 +23,7 @@ export type AuditLogRow = {
 export function AuditLogTable({ logs }: { logs: AuditLogRow[] }) {
   const [rows, setRows] = useState(logs);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [confirmAll, setConfirmAll] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,12 +35,13 @@ export function AuditLogTable({ logs }: { logs: AuditLogRow[] }) {
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape" && !pending) {
         setConfirmId(null);
+        setConfirmAll(false);
         setError(null);
       }
     }
-    if (confirmId) window.addEventListener("keydown", onKey);
+    if (confirmId || confirmAll) window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [confirmId, pending]);
+  }, [confirmId, confirmAll, pending]);
 
   async function confirm() {
     if (!confirmId) return;
@@ -59,12 +64,45 @@ export function AuditLogTable({ logs }: { logs: AuditLogRow[] }) {
     }
   }
 
+  async function confirmRemoveAll() {
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/activity", { method: "DELETE" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.error || "Audit log entries could not be removed. Try again.");
+        return;
+      }
+      setConfirmAll(false);
+      setRows([]);
+    } catch {
+      setError("Audit log entries could not be removed. Try again.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   if (rows.length === 0) {
     return <EmptyState title="No activity yet" body="Campaign and testing actions you take are recorded here." />;
   }
 
   return (
     <>
+      <div className="mb-3 flex justify-end">
+        <Button
+          type="button"
+          variant="danger"
+          size="sm"
+          onClick={() => {
+            setError(null);
+            setConfirmId(null);
+            setConfirmAll(true);
+          }}
+        >
+          Remove All
+        </Button>
+      </div>
       <TableWrap>
         <Table>
           <thead>
@@ -150,6 +188,59 @@ export function AuditLogTable({ logs }: { logs: AuditLogRow[] }) {
                 onClick={() => void confirm()}
               >
                 {pending ? "Removing…" : "Remove"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {confirmAll ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center"
+          role="presentation"
+          onClick={() => {
+            if (!pending) {
+              setConfirmAll(false);
+              setError(null);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-all-audit-log-title"
+            aria-describedby="remove-all-audit-log-body"
+            className="w-full max-w-md rounded-card border border-line bg-white p-5 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="remove-all-audit-log-title" className="text-lg font-semibold text-slate-900">
+              {CONFIRM_ALL_TITLE}
+            </h2>
+            <p id="remove-all-audit-log-body" className="mt-3 text-sm leading-6 text-slate-700">
+              {CONFIRM_ALL_BODY}
+            </p>
+            {error ? (
+              <p className="mt-4 rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-800">
+                {error}
+              </p>
+            ) : null}
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Button
+                variant="secondary"
+                disabled={pending}
+                onClick={() => {
+                  setConfirmAll(false);
+                  setError(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                disabled={pending}
+                className="border-red-700 bg-red-600 text-white hover:bg-red-700"
+                onClick={() => void confirmRemoveAll()}
+              >
+                {pending ? "Removing…" : "Remove All"}
               </Button>
             </div>
           </div>

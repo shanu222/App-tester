@@ -31,6 +31,13 @@ export async function removeOwnActivityLog(userId: string, id: string) {
   return { removed: true as const, id };
 }
 
+export async function removeAllOwnActivityLogs(userId: string) {
+  await prisma.activityLog.deleteMany({
+    where: { userId },
+  });
+  return { removed: true as const };
+}
+
 export async function notify(input: {
   userId: string;
   type: string;

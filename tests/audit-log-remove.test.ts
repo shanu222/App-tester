@@ -15,6 +15,11 @@ describe("Remove own audit log entries", () => {
     expect(table).not.toMatch(/>\s*Delete\s*</);
     expect(table).toContain("Remove this audit log entry from TestLoop?");
     expect(table).toContain("The selected audit log entry will be removed from TestLoop.");
+    expect(table).toContain("Remove All");
+    expect(table).toContain("Remove all audit log entries from TestLoop?");
+    expect(table).toContain(
+      "This only removes the audit log entries from TestLoop. It does not affect any apps, testing requests, Google Play Console data, or other account data.",
+    );
     const copy = table.slice(table.indexOf("const CONFIRM_TITLE"), table.indexOf("export type AuditLogRow"));
     expect(copy).not.toMatch(/database|backend|Prisma|API|Firebase/i);
   });
@@ -27,5 +32,7 @@ describe("Remove own audit log entries", () => {
     expect(remove).toContain("activityLog.deleteMany");
     expect(remove).toContain("where: { id, userId }");
     expect(source("src/app/api/activity/[id]/route.ts")).toContain("removeOwnActivityLog");
+    expect(source("src/lib/audit.ts")).toContain("export async function removeAllOwnActivityLogs");
+    expect(source("src/app/api/activity/route.ts")).toContain("removeAllOwnActivityLogs");
   });
 });

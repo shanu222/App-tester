@@ -61,12 +61,23 @@ export default async function DashboardPage() {
         <StatCard label="Pending actions" value={stats.pendingTesters + unread} />
       </div>
 
-      <div className="mt-6 rounded-card border border-line bg-white p-5 shadow-card">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <SectionLabel>Managed Beta Testing</SectionLabel>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-700">
-              Purchase a tester package and TestLoop coordinates consenting testing participants for your app.
+      <div className="relative mt-6 overflow-hidden rounded-card border border-brand/25 bg-gradient-to-br from-brand-soft via-white to-white p-5 shadow-card ring-1 ring-brand/15">
+        <Link
+          href="/managed-testing"
+          className="absolute inset-0 z-0 rounded-card"
+          aria-label="Open Managed Testing"
+        />
+        <div className="relative z-10 flex flex-wrap items-start justify-between gap-3">
+          <div className="pointer-events-none max-w-xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <SectionLabel className="text-brand">Managed Beta Testing</SectionLabel>
+              <span className="rounded border border-brand/20 bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-brand">
+                PRO
+              </span>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-700">
+              Managed Testing area. Purchase a tester package and TestLoop coordinates consenting testing
+              participants for your app.
             </p>
             {billing.activePackage ? (
               <p className="mt-2 text-sm text-slate-600">
@@ -76,9 +87,10 @@ export default async function DashboardPage() {
             ) : (
               <p className="mt-2 text-sm text-muted">No approved tester package yet.</p>
             )}
+            <p className="mt-2 text-xs font-medium text-brand">Open Managed Testing →</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Link href="/settings">
+          <div className="relative z-10 flex flex-wrap gap-2">
+            <Link href="/managed-testing/payments">
               <Button variant="secondary">Payments & Packages</Button>
             </Link>
             <Link href="/managed-testing/usd-twelve">

@@ -18,7 +18,7 @@ const NAV: NavItem[] = [
   { href: "/testing", label: "My Testing", section: "Main", icon: "testing" },
   { href: "/apps", label: "My Apps", section: "Developer", icon: "apps" },
   { href: "/campaigns", label: "Testing Requests", section: "Developer", icon: "campaigns" },
-  { href: "/managed-testing", label: "Managed Testing", section: "Developer", icon: "managed" },
+  { href: "/managed-testing", label: "Managed Testing", section: "Developer", icon: "managed", badge: "PRO" },
   { href: "/play", label: "Google Play", section: "Developer", icon: "play" },
   { href: "/testers", label: "Testers", section: "Developer", icon: "testers" },
   { href: "/activity", label: "Notifications", section: "Account", icon: "notifications" },

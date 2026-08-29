@@ -35,7 +35,7 @@ const ICONS = {
   notifications: Bell,
 } as const;
 
-export type NavItem = { href: string; label: string; section?: string; icon: NavIcon };
+export type NavItem = { href: string; label: string; section?: string; icon: NavIcon; badge?: string };
 
 export function SidebarNav({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
   const pathname = usePathname();
@@ -73,6 +73,18 @@ export function SidebarNav({ items, onNavigate }: { items: NavItem[]; onNavigate
                 aria-hidden
               />
               <span className="truncate">{item.label}</span>
+              {item.badge ? (
+                <span
+                  className={cn(
+                    "ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em]",
+                    active
+                      ? "bg-white/80 text-brand"
+                      : "border border-brand/20 bg-brand-soft text-brand",
+                  )}
+                >
+                  {item.badge}
+                </span>
+              ) : null}
             </Link>
           </div>
         );

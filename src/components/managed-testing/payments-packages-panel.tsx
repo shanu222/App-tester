@@ -38,7 +38,7 @@ export function PaymentsPackagesPanel({
   allocation: { purchased: number; assigned: number; remaining: number };
 }) {
   return (
-    <Card>
+    <Card id="payments-packages" className="scroll-mt-6">
       <CardHeader
         title="Payments & Packages"
         description="Managed testing purchases stay inactive until TestLoop approves the payment."

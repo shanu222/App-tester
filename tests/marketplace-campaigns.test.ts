@@ -43,6 +43,14 @@ describe("marketplace 14-day campaigns", () => {
     expect(shouldReuseActiveCampaign(null)).toBeNull();
     expect(source("src/lib/services/marketplace-campaigns.ts")).toContain("already-active");
     expect(source("src/lib/services/marketplace-campaigns.ts")).toContain("ensureMarketplaceCampaignForApp");
+    expect(source("src/lib/services/marketplace-campaigns.ts")).toContain("needs-publish");
+    const service = source("src/lib/services/marketplace-campaigns.ts");
+    const ensure = service.slice(
+      service.indexOf("export async function ensureMarketplaceCampaignForApp"),
+      service.indexOf("async function afterPublishedSafe"),
+    );
+    expect(ensure).not.toContain("prisma.campaign.create");
+    expect(ensure).toContain("needs-publish");
   });
 });
 

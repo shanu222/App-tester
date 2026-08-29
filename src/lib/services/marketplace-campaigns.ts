@@ -12,7 +12,6 @@ import {
 } from "@/lib/notifications/templates";
 import { campaignTestingUrl } from "@/lib/integrations/play-testers";
 import { testingTypeLabel } from "@/lib/campaign-autofill";
-import { allocateCampaignSlug } from "@/lib/services/campaigns";
 import { sendDeveloperNotification } from "@/lib/services/notifications";
 import { issueMarketplaceActionToken, verifyMarketplaceActionToken } from "@/lib/testing/email-action-token";
 import {
@@ -85,7 +84,6 @@ function destinationPlayUrl(input: {
 export async function ensureMarketplaceCampaignForApp(appId: string) {
   const app = await prisma.app.findUnique({
     where: { id: appId },
-    include: { user: { select: { developerName: true, name: true, company: true } } },
   });
   if (!app) throw new NotFoundError("App not found.");
   if (app.isDemo) return { skipped: "demo" as const, campaign: null };
@@ -98,43 +96,7 @@ export async function ensureMarketplaceCampaignForApp(appId: string) {
     return { skipped: "already-active" as const, campaign: existing, created: false as const };
   }
 
-  const playUrl = destinationPlayUrl({
-    testingType: app.testingType,
-    packageName: app.packageName,
-    webOptInUrl: app.webOptInUrl,
-    playStoreUrl: app.playStoreUrl,
-  });
-  if (!playUrl) {
-    return { skipped: "missing-testing-url" as const, campaign: null };
-  }
-
-  const now = new Date();
-  const publicSlug = await allocateCampaignSlug(app.name);
-  const campaign = await prisma.campaign.create({
-    data: {
-      userId: app.userId,
-      appId: app.id,
-      name: `${app.name} — TestLoop testing`,
-      status: "ACTIVE",
-      published: true,
-      publishedAt: now,
-      startedAt: now,
-      endsAt: marketplaceEndsAt(now, MARKETPLACE_DURATION_DAYS),
-      durationDays: MARKETPLACE_DURATION_DAYS,
-      requiredActiveDays: MARKETPLACE_DURATION_DAYS,
-      testingType: app.testingType,
-      testingUrl: playUrl,
-      playStoreUrl: app.playStoreUrl,
-      webOptInUrl: app.webOptInUrl,
-      publicSlug,
-      targetTesters: app.testerTarget || 12,
-      requiredTesters: app.testerTarget || 12,
-      isDemo: false,
-    },
-  });
-  await logActivity({ userId: app.userId, campaignId: campaign.id, action: "MARKETPLACE_CAMPAIGN_CREATED", result: app.name });
-  await notifyMarketplaceCampaignPublished(campaign.id);
-  return { skipped: null, campaign, created: true as const };
+  return { skipped: "needs-publish" as const, campaign: existing ?? null, created: false as const };
 }
 
 async function afterPublishedSafe(campaignId: string, userId: string) {

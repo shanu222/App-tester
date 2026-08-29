@@ -29,17 +29,17 @@ const firebaseProvider = Credentials({
     if (!idToken) return null;
     const identity = await verifyFirebaseIdToken(idToken);
     if (!identity) return null;
-    if (identity.provider === "password" && !identity.emailVerified) {
-      const { isPasswordEmailOtpVerified } = await import("@/lib/auth/email-signup-otp");
-      if (!(await isPasswordEmailOtpVerified(identity.uid, identity.email))) return null;
-    }
     if (isGoogleAuthProvider(identity.provider) && googleSignInConflictsWithPassword(identity.providers)) return null;
     if (isPasswordAuthProvider(identity.provider) && passwordSignInConflictsWithGoogle(identity.providers)) return null;
+    // OTP is enforced in auth.ts (Node). Do not import the OTP store here:
+    // that would pull Prisma and nodemailer into Edge middleware and exceed Vercel's 1 MB limit.
     return {
       id: identity.uid,
       email: identity.email,
       name: identity.name ?? null,
       image: identity.image ?? null,
+      firebaseEmailVerified: identity.emailVerified,
+      authProvider: identity.provider,
     };
   },
 });

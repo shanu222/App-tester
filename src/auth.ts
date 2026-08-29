@@ -1,6 +1,7 @@
 import "@/lib/apply-auth-url";
 import NextAuth from "next-auth";
 import { authConfig } from "@/auth.config";
+import { isPasswordEmailOtpVerified } from "@/lib/auth/email-otp-status";
 import { prisma } from "@/lib/db";
 import { AppError, ForbiddenError, UnauthorizedError } from "@/lib/errors";
 import { DEFAULT_TEMPLATES } from "@/lib/templates";
@@ -67,6 +68,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     ...authConfig.callbacks,
     async signIn({ user }) {
       if (!user.email) return false;
+      if (user.authProvider === "password" && !user.firebaseEmailVerified) {
+        if (!(await isPasswordEmailOtpVerified(String(user.id), user.email))) return false;
+      }
       try {
         await bootstrapDeveloper({ email: user.email, name: user.name, image: user.image });
       } catch (error) {

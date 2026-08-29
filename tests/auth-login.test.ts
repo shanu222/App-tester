@@ -41,14 +41,19 @@ describe("sign-in password visibility and email verification", () => {
 
   it("requires a one-time email code before email/password accounts can use TestLoop", () => {
     const login = source("src/components/auth/firebase-login.tsx");
+    const auth = source("src/auth.ts");
     const authConfig = source("src/auth.config.ts");
     const middleware = source("src/middleware.ts");
     expect(login).toContain("Verify your email");
     expect(login).toContain("Resend code");
     expect(login).toContain("/api/email-otp");
     expect(login).not.toContain("sendEmailVerification");
-    expect(authConfig).toContain('identity.provider === "password" && !identity.emailVerified');
-    expect(authConfig).toContain("isPasswordEmailOtpVerified");
+    expect(auth).toContain("isPasswordEmailOtpVerified");
+    expect(auth).toContain('user.authProvider === "password" && !user.firebaseEmailVerified');
+    expect(authConfig).not.toContain("email-signup-otp");
+    expect(authConfig).not.toContain("isPasswordEmailOtpVerified");
+    expect(authConfig).toContain("authProvider: identity.provider");
+    expect(middleware).not.toContain("email-signup-otp");
     expect(middleware).toContain("/api/email-otp");
     expect(OTP_INCORRECT).toBe("That verification code is incorrect.");
     expect(OTP_EXPIRED).toBe("That verification code has expired. Request a new code.");

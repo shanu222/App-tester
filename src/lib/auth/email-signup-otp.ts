@@ -9,11 +9,14 @@ import {
   isPasswordAuthProvider,
   passwordSignInConflictsWithGoogle,
 } from "@/lib/auth/auth-method-conflict";
+import { isPasswordEmailOtpVerified } from "@/lib/auth/email-otp-status";
 import {
   OTP_EXPIRED,
   OTP_INCORRECT,
   OTP_SEND_FAILED,
 } from "@/lib/auth/firebase-auth-messages";
+
+export { isPasswordEmailOtpVerified };
 
 export const EMAIL_OTP_TTL_MS = 15 * 60 * 1000;
 export const EMAIL_OTP_MAX_ATTEMPTS = 5;
@@ -45,12 +48,6 @@ async function requirePasswordIdentity(idToken: string) {
     throw new AppError("This verification method is only for email and password accounts.", 400, "OTP_WRONG_PROVIDER");
   }
   return identity;
-}
-
-export async function isPasswordEmailOtpVerified(uid: string, email: string) {
-  const row = await prisma.emailSignupOtp.findUnique({ where: { firebaseUid: uid } });
-  if (!row?.verifiedAt) return false;
-  return row.email === email.trim().toLowerCase();
 }
 
 export async function sendPasswordSignupEmailOtp(idToken: string) {

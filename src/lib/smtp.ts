@@ -1,4 +1,5 @@
 import { env, smtpConfigured } from "@/lib/env";
+import { withHtmlSpamHint, withPlainTextSpamHint } from "@/lib/notifications/templates";
 
 export type SmtpSendResult = { ok: true } | { ok: false; error: string; skipped?: boolean };
 
@@ -44,8 +45,8 @@ export async function sendSmtpEmail(input: {
       from: fromHeader(),
       to,
       subject: input.subject,
-      text: input.text,
-      html: input.html,
+      text: withPlainTextSpamHint(input.text),
+      html: input.html ? withHtmlSpamHint(input.html) : undefined,
       attachments: input.attachments?.map((file) => ({
         filename: file.filename,
         content: file.content,

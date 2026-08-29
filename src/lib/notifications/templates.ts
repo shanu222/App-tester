@@ -2,6 +2,20 @@ import { env } from "@/lib/env";
 
 const BRAND = "#2563eb";
 
+export const SPAM_FOLDER_HINT = "Didn't receive the email? Please check your Spam or Junk folder.";
+
+export function withPlainTextSpamHint(text: string) {
+  if (text.includes("Spam or Junk folder")) return text;
+  return `${text.trimEnd()}\n\n${SPAM_FOLDER_HINT}`;
+}
+
+export function withHtmlSpamHint(html: string) {
+  if (html.includes("Spam or Junk folder")) return html;
+  const note = `<p style="margin-top:20px;font-size:12px;line-height:1.5;color:#64748b">${SPAM_FOLDER_HINT}</p>`;
+  if (html.includes("</body>")) return html.replace("</body>", `${note}</body>`);
+  return `${html}${note}`;
+}
+
 export function emailButton(href: string, label: string) {
   const safeHref = href.replace(/"/g, "");
   return `<p style="margin:24px 0"><a href="${safeHref}" style="display:inline-block;background:${BRAND};color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600;font-size:14px">${label}</a></p>`;
@@ -23,6 +37,7 @@ export function wrapEmail(bodyHtml: string) {
           </tr>
           <tr>
             <td style="padding-top:24px;font-size:12px;line-height:1.5;color:#64748b;border-top:1px solid #e2e8f0">
+              ${SPAM_FOLDER_HINT}<br><br>
               TestLoop<br>A product of Resilience Technologies Labs
             </td>
           </tr>

@@ -13,10 +13,12 @@ import {
 } from "../src/lib/notifications/schedule";
 import {
   dailySummaryEmail,
+  SPAM_FOLDER_HINT,
   testerApprovedEmail,
   testerJoinedEmail,
   testNotificationEmail,
   verificationEmail,
+  withPlainTextSpamHint,
 } from "../src/lib/notifications/templates";
 import { omitNotificationSecrets, publicNotificationSettings } from "../src/lib/services/notifications";
 import { smtpConfigured } from "../src/lib/env";
@@ -287,9 +289,13 @@ describe("email templates", () => {
     expect(verify.text).toContain("You requested to receive TestLoop notifications at this email address.");
     expect(verify.html).toContain("Verify Email");
     expect(verify.html).toContain("/notifications/verify?token=");
+    expect(verify.html).toContain("Didn't receive the email? Please check your Spam or Junk folder.");
     const test = testNotificationEmail();
     expect(test.subject).toBe("TestLoop Notification Test");
     expect(test.text).toContain("Your TestLoop email notifications are working correctly.");
+    expect(test.html).toContain(SPAM_FOLDER_HINT);
+    expect(withPlainTextSpamHint("Hello")).toContain(SPAM_FOLDER_HINT);
+    expect(withPlainTextSpamHint(withPlainTextSpamHint("Hello")).split(SPAM_FOLDER_HINT)).toHaveLength(2);
     const summary = dailySummaryEmail({
       dateLabel: "2026-08-28",
       lines: ["Testing requests: 1 active"],

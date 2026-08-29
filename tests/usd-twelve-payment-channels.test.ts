@@ -94,7 +94,7 @@ describe("usd_12_14 payment channels", () => {
   it("creates Paddle transactions from the server PADDLE_PRICE_ID only", () => {
     const checkout = source("src/lib/paddle/checkout.ts");
     expect(checkout).toContain("paddlePriceId()");
-    expect(checkout).toContain("items: [{ priceId, quantity: 1 }]");
+    expect(checkout).toContain("createSandboxCheckoutTransaction");
     expect(checkout).not.toMatch(/input\.priceId|body\.priceId|clientPriceId/);
     const route = source("src/app/api/managed-testing/usd-twelve/route.ts");
     expect(route).toContain("USD_TWELVE_PAYMENT_CHOICES");
@@ -107,9 +107,11 @@ describe("usd_12_14 payment channels", () => {
     const webhook = source("src/app/api/webhooks/paddle/route.ts");
     expect(webhook).toContain("unmarshal");
     expect(webhook).toContain("paddleWebhookAlreadyProcessed");
-    expect(webhook).toContain("TransactionCompleted");
-    expect(webhook).toContain("TransactionPaid");
+    expect(webhook).toContain("isPaddleFulfillmentEvent");
     expect(webhook).not.toContain("requireUser");
+    const events = source("src/lib/paddle/events.ts");
+    expect(events).toContain("transaction.completed");
+    expect(events).toContain("transaction.paid");
     const fulfill = source("src/lib/paddle/fulfill.ts");
     expect(fulfill).toContain("activateManagedPaymentFromPaddle");
     expect(fulfill).toContain("paddlePriceId()");

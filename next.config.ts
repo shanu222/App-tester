@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
-  serverExternalPackages: ["googleapis", "google-auth-library"],
+  serverExternalPackages: ["googleapis", "google-auth-library", "@paddle/paddle-node-sdk"],
   async headers() {
     return [
       {

@@ -1,6 +1,6 @@
 import type { TestingType } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { AppError, NotFoundError } from "@/lib/errors";
+import { AppError, NotFoundError, logDatabaseError } from "@/lib/errors";
 import { randomToken, sha256 } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { sendSmtpEmail } from "@/lib/smtp";
@@ -16,7 +16,8 @@ import {
 } from "@/lib/managed-testing/catalog";
 import { PAYMENTS_ADMIN_EMAIL, isWalletPurchaseMethod, providerForMethod, type UsdTwelvePaymentChoice } from "@/lib/managed-testing/methods";
 import { resolveCheckoutProvider } from "@/lib/managed-testing/payments";
-import { paddleCheckoutConfigured } from "@/lib/paddle/config";
+import { describePaddleConfig, paddleCheckoutConfigured } from "@/lib/paddle/config";
+import { paddleConfigurationError } from "@/lib/paddle/api-error";
 import { ensurePaddleCheckoutTransaction } from "@/lib/paddle/checkout";
 import {
   USD_TWELVE_DURATION_DAYS,
@@ -153,26 +154,27 @@ export async function startUsdTwelveCheckout(
   };
   const wantsPaddle = input.paymentMethod === "PADDLE";
   if (wantsPaddle && !paddleCheckoutConfigured()) {
-    throw new AppError(
-      "Paddle sandbox checkout is not configured yet. Choose EasyPaisa, JazzCash, SadaPay, NayaPay, or Binance.",
-      503,
-      "PADDLE_NOT_CONFIGURED",
-    );
+    throw paddleConfigurationError("checkout not configured", describePaddleConfig().missingNames);
   }
   if (wantsPaddle) {
-    const payment = await prisma.managedTestingPayment.create({
-      data: {
-        publicId: publicPaymentId(),
-        userId,
-        packageId: pack.id,
-        amountPkr: pack.amountPkr,
-        currency: pack.currency,
-        provider: "PADDLE",
-        status: "PENDING_PAYMENT",
-        transactionReference: paymentReference(),
-        fulfillment,
-      },
-    });
+    let payment;
+    try {
+      payment = await prisma.managedTestingPayment.create({
+        data: {
+          publicId: publicPaymentId(),
+          userId,
+          packageId: pack.id,
+          amountPkr: pack.amountPkr,
+          currency: pack.currency,
+          provider: "PADDLE",
+          status: "PENDING_PAYMENT",
+          transactionReference: paymentReference(),
+          fulfillment,
+        },
+      });
+    } catch (error) {
+      throw logDatabaseError("startUsdTwelveCheckout.create", error);
+    }
     const checkout = await ensurePaddleCheckoutTransaction({ userId, paymentPublicId: payment.publicId });
     return {
       paymentPublicId: payment.publicId,

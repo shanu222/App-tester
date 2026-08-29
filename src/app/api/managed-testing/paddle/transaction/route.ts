@@ -3,6 +3,9 @@ import { json, handleRouteError, parseJson } from "@/lib/http";
 import { requireUser } from "@/auth";
 import { ensurePaddleCheckoutTransaction } from "@/lib/paddle/checkout";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   try {
     const user = await requireUser();

@@ -114,6 +114,33 @@ export function mapInfrastructureError(error: unknown): AppError | null {
   return null;
 }
 
+export function prismaErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  const record = error as { code?: unknown; name?: unknown };
+  if (typeof record.code === "string" && /^P\d{4}$/.test(record.code)) return record.code;
+  const cause = "cause" in error ? (error as { cause?: unknown }).cause : undefined;
+  if (cause && typeof cause === "object" && typeof (cause as { code?: unknown }).code === "string") {
+    const nested = (cause as { code: string }).code;
+    if (/^P\d{4}$/.test(nested)) return nested;
+  }
+  return null;
+}
+
+/** Logs DATABASE_ERROR without query payloads or secrets, then returns a safe AppError. */
+export function logDatabaseError(context: string, error: unknown) {
+  const prismaCode = prismaErrorCode(error);
+  console.error(`[DATABASE_ERROR] context=${context} prismaCode=${prismaCode || "none"}`);
+  const mapped = mapInfrastructureError(error);
+  if (mapped) {
+    return new AppError(mapped.message, mapped.status, "DATABASE_ERROR");
+  }
+  return new AppError(
+    "This request could not be saved. If this continues, apply pending database migrations and retry.",
+    503,
+    "DATABASE_ERROR",
+  );
+}
+
 function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   if (error && typeof error === "object" && "message" in error && typeof (error as { message: unknown }).message === "string") {
@@ -131,17 +158,5 @@ function prismaModelName(error: unknown): string | null {
   if (!error || typeof error !== "object") return null;
   const meta = "meta" in error ? (error as { meta?: { modelName?: unknown } }).meta : undefined;
   if (meta && typeof meta.modelName === "string") return meta.modelName;
-  return null;
-}
-
-function prismaErrorCode(error: unknown): string | null {
-  if (!error || typeof error !== "object") return null;
-  const record = error as { code?: unknown; name?: unknown };
-  if (typeof record.code === "string" && /^P\d{4}$/.test(record.code)) return record.code;
-  const cause = "cause" in error ? (error as { cause?: unknown }).cause : undefined;
-  if (cause && typeof cause === "object" && typeof (cause as { code?: unknown }).code === "string") {
-    const nested = (cause as { code: string }).code;
-    if (/^P\d{4}$/.test(nested)) return nested;
-  }
   return null;
 }

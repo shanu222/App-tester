@@ -3,6 +3,7 @@ import { json, handleRouteError, parseJson } from "@/lib/http";
 import { requireUser } from "@/auth";
 import { syncPaddleTransactionFromApi } from "@/lib/paddle/fulfill";
 
+export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {

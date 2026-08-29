@@ -4,6 +4,9 @@ import { requireUser } from "@/auth";
 import { USD_TWELVE_PAYMENT_CHOICES } from "@/lib/managed-testing/methods";
 import { startUsdTwelveCheckout } from "@/lib/services/usd-twelve-package";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 const testingType = z.enum(["INTERNAL", "CLOSED", "OPEN"]);
 const paymentMethod = z.enum(USD_TWELVE_PAYMENT_CHOICES);
 

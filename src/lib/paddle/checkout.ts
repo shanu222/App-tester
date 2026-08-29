@@ -1,19 +1,35 @@
 import { prisma } from "@/lib/db";
-import { AppError, NotFoundError } from "@/lib/errors";
+import { AppError, NotFoundError, logDatabaseError } from "@/lib/errors";
 import { USD_TWELVE_PACKAGE_CODE, isUsdTwelvePackage } from "@/lib/managed-testing/usd-twelve";
+import { paddleCheckoutFailure, paddleConfigurationError } from "@/lib/paddle/api-error";
 import { getPaddleSandboxClient } from "@/lib/paddle/client";
-import { paddleServerConfigured, paddlePriceId } from "@/lib/paddle/config";
+import {
+  EXPECTED_PADDLE_PRICE_ID,
+  describePaddleConfig,
+  paddleCheckoutConfigured,
+  paddlePriceId,
+} from "@/lib/paddle/config";
+import { createSandboxCheckoutTransaction } from "@/lib/paddle/events";
 import { isFulfillablePaddleStatus } from "@/lib/paddle/verify";
 
 export async function ensurePaddleCheckoutTransaction(input: { userId: string; paymentPublicId: string }) {
-  if (!paddleServerConfigured()) {
-    throw new AppError("Paddle sandbox checkout is not configured yet.", 503, "PADDLE_NOT_CONFIGURED");
+  if (!paddleCheckoutConfigured()) {
+    throw paddleConfigurationError("checkout not configured", describePaddleConfig().missingNames);
   }
   const priceId = paddlePriceId();
-  const payment = await prisma.managedTestingPayment.findFirst({
-    where: { publicId: input.paymentPublicId, userId: input.userId },
-    include: { package: true },
-  });
+  if (priceId !== EXPECTED_PADDLE_PRICE_ID) {
+    throw paddleConfigurationError("PADDLE_PRICE_ID is not the TestLoop $10 sandbox price", ["PADDLE_PRICE_ID"]);
+  }
+
+  let payment;
+  try {
+    payment = await prisma.managedTestingPayment.findFirst({
+      where: { publicId: input.paymentPublicId, userId: input.userId },
+      include: { package: true },
+    });
+  } catch (error) {
+    throw logDatabaseError("ensurePaddleCheckoutTransaction.findFirst", error);
+  }
   if (!payment) throw new NotFoundError("Payment not found.");
   if (!isUsdTwelvePackage(payment.package.code)) {
     throw new AppError("Paddle checkout is only available for the TestLoop $10 package.");
@@ -44,29 +60,29 @@ export async function ensurePaddleCheckoutTransaction(input: { userId: string; p
     }
   }
 
-  const transaction = await paddle.transactions.create({
-    items: [{ priceId, quantity: 1 }],
-    collectionMode: "automatic",
-    customData: {
+  let created: { transactionId: string };
+  try {
+    created = await createSandboxCheckoutTransaction(paddle, {
+      priceId,
       paymentPublicId: payment.publicId,
       packageCode: USD_TWELVE_PACKAGE_CODE,
-    },
-  }).catch((error) => {
-    console.error("Paddle checkout create failed", error instanceof Error ? error.name : "error");
-    throw new AppError(
-      "Paddle checkout could not be started. Pay with EasyPaisa, JazzCash, SadaPay, NayaPay, or Binance instead, or try Paddle again.",
-      503,
-      "PADDLE_CHECKOUT_FAILED",
-    );
-  });
+    });
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw paddleCheckoutFailure(error);
+  }
 
-  await prisma.managedTestingPayment.update({
-    where: { id: payment.id },
-    data: {
-      paddleTransactionId: transaction.id,
-      provider: "PADDLE",
-    },
-  });
+  try {
+    await prisma.managedTestingPayment.update({
+      where: { id: payment.id },
+      data: {
+        paddleTransactionId: created.transactionId,
+        provider: "PADDLE",
+      },
+    });
+  } catch (error) {
+    throw logDatabaseError("ensurePaddleCheckoutTransaction.update", error);
+  }
 
-  return { transactionId: transaction.id, reused: false as const };
+  return { transactionId: created.transactionId, reused: false as const };
 }

@@ -6,7 +6,7 @@ import { getPaddleSandboxClient } from "@/lib/paddle/client";
 import { paddlePriceId } from "@/lib/paddle/config";
 import { assertTrustedPaddlePurchase, type PaddleTransactionLike } from "@/lib/paddle/verify";
 
-function prismaUnique(error: unknown) {
+export function isPrismaUniqueConstraint(error: unknown) {
   return Boolean(error && typeof error === "object" && "code" in error && (error as { code: string }).code === "P2002");
 }
 
@@ -15,7 +15,7 @@ export async function recordPaddleWebhookEvent(eventId: string, eventType: strin
     await prisma.paddleWebhookEvent.create({ data: { eventId, eventType } });
     return "recorded" as const;
   } catch (error) {
-    if (prismaUnique(error)) return "duplicate" as const;
+    if (isPrismaUniqueConstraint(error)) return "duplicate" as const;
     throw error;
   }
 }

@@ -1,23 +1,37 @@
-import { Environment, LogLevel, Paddle } from "@paddle/paddle-node-sdk";
-import { AppError } from "@/lib/errors";
-import { assertPaddleSandboxOnly, paddleApiKey } from "@/lib/paddle/config";
+import { Paddle, type PaddleOptions } from "@paddle/paddle-node-sdk";
+import { paddleConfigurationError } from "@/lib/paddle/api-error";
+import {
+  assertPaddleSandboxOnly,
+  classifyApiKey,
+  describePaddleConfig,
+  paddleApiKey,
+} from "@/lib/paddle/config";
+
+/** String literal — do not use the SDK Environment enum (Next.js bundling can leave it undefined). */
+const SANDBOX_CLIENT_OPTIONS = {
+  environment: "sandbox",
+  logLevel: "error",
+} as PaddleOptions;
 
 export function getPaddleSandboxClient() {
   try {
     assertPaddleSandboxOnly();
   } catch (error) {
-    throw new AppError(
+    throw paddleConfigurationError(
       error instanceof Error ? error.message : "Paddle Live is disabled.",
-      503,
-      "PADDLE_LIVE_DISABLED",
+      describePaddleConfig().missingNames,
     );
+  }
+  if (classifyApiKey() !== "sandbox") {
+    throw paddleConfigurationError("sandbox API key missing or invalid", describePaddleConfig().missingNames);
   }
   const apiKey = paddleApiKey();
   if (!apiKey) {
-    throw new AppError("Paddle sandbox is not configured on this server.", 503, "PADDLE_NOT_CONFIGURED");
+    throw paddleConfigurationError("PADDLE_API_KEY missing", ["PADDLE_API_KEY"]);
   }
-  return new Paddle(apiKey, {
-    environment: Environment.sandbox,
-    logLevel: LogLevel.error,
-  });
+  return new Paddle(apiKey, SANDBOX_CLIENT_OPTIONS);
+}
+
+export function paddleSandboxClientOptions() {
+  return SANDBOX_CLIENT_OPTIONS;
 }

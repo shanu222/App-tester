@@ -62,7 +62,7 @@ describe("publish / add / Play sync flow", () => {
   it("does not auto-publish and keeps duplicate-publishing protection", () => {
     const wizard = source("src/components/apps/add-app-wizard.tsx");
     expect(wizard).toContain('{pending ? "Publishing…" : "Publish testing request"}');
-    expect(wizard).toContain("This app is already published.");
+    expect(wizard).toContain("This app is already published for Closed Testing.");
     const marketplace = source("src/lib/services/marketplace-campaigns.ts");
     const ensure = marketplace.slice(
       marketplace.indexOf("export async function ensureMarketplaceCampaignForApp"),

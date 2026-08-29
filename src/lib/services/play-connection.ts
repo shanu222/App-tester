@@ -1039,7 +1039,7 @@ export async function managePlayTrack(input: {
   });
   if (existing) {
     if (existing.status === "ARCHIVED" || !existing.published) {
-      await assertAppNotAlreadyPublished(input.userId, app.id, existing.id);
+      await assertAppNotAlreadyPublished(input.userId, app.id, testingType, existing.id);
       const restored = await prisma.campaign.update({
         where: { id: existing.id },
         data: {

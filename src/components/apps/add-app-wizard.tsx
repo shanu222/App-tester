@@ -169,9 +169,11 @@ export function AddAppWizard({
 
 function AlreadyPublishedNotice({
   campaignId,
+  message,
   onRemoved,
 }: {
   campaignId: string;
+  message: string;
   onRemoved: () => void;
 }) {
   const [pending, setPending] = useState(false);
@@ -204,10 +206,10 @@ function AlreadyPublishedNotice({
       role="status"
       className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 md:col-span-2"
     >
-      <p>This app is already published.</p>
+      <p>{message}</p>
       <p className="mt-1 text-amber-800">
-        Remove the previous publishing to publish this app again. This does not remove the app or change Google Play
-        Console.
+        Remove the previous publishing to publish this testing type again. This does not remove the app, its other
+        testing postings, or change Google Play Console.
       </p>
       {error ? <p className="mt-2 text-red-700">{error}</p> : null}
       <Button
@@ -629,6 +631,7 @@ function PlayRequestForm({
         {existingCampaignId ? (
           <AlreadyPublishedNotice
             campaignId={existingCampaignId}
+            message={error || "This app is already published for Closed Testing."}
             onRemoved={() => {
               setExistingCampaignId(null);
               setError(null);
@@ -978,6 +981,7 @@ function ManualRequestForm({
         {existingCampaignId ? (
           <AlreadyPublishedNotice
             campaignId={existingCampaignId}
+            message={error || "This app is already published for Closed Testing."}
             onRemoved={() => {
               setExistingCampaignId(null);
               setError(null);

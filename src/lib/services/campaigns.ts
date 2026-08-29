@@ -1,4 +1,4 @@
-import { CampaignStatus, Prisma } from "@prisma/client";
+import { CampaignStatus, Prisma, type TestingType } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { NotFoundError, AppError } from "@/lib/errors";
 import { logActivity } from "@/lib/audit";
@@ -54,17 +54,23 @@ const ALLOWED_CAMPAIGN: Record<CampaignStatus, CampaignStatus[]> = {
   EXPIRED: ["ARCHIVED"],
 };
 
-export const APP_ALREADY_PUBLISHED_MESSAGE = "This app is already published.";
+export function alreadyPublishedForTypeMessage(testingType: TestingType) {
+  const label =
+    testingType === "OPEN" ? "Open Testing" : testingType === "INTERNAL" ? "Internal Testing" : "Closed Testing";
+  return `This app is already published for ${label}.`;
+}
 
 export async function findActivePublishedCampaignForApp(
   userId: string,
   appId: string,
+  testingType: TestingType,
   exceptId?: string,
 ) {
   return prisma.campaign.findFirst({
     where: {
       userId,
       appId,
+      testingType,
       published: true,
       status: "ACTIVE",
       ...(exceptId ? { id: { not: exceptId } } : {}),
@@ -74,11 +80,17 @@ export async function findActivePublishedCampaignForApp(
   });
 }
 
-export async function assertAppNotAlreadyPublished(userId: string, appId: string, exceptId?: string) {
-  const existing = await findActivePublishedCampaignForApp(userId, appId, exceptId);
+export async function assertAppNotAlreadyPublished(
+  userId: string,
+  appId: string,
+  testingType: TestingType,
+  exceptId?: string,
+) {
+  const existing = await findActivePublishedCampaignForApp(userId, appId, testingType, exceptId);
   if (!existing) return;
-  throw new AppError(APP_ALREADY_PUBLISHED_MESSAGE, 409, "CAMPAIGN_DUPLICATE", {
+  throw new AppError(alreadyPublishedForTypeMessage(testingType), 409, "CAMPAIGN_DUPLICATE", {
     existingCampaignId: existing.id,
+    testingType,
   });
 }
 
@@ -318,7 +330,7 @@ export async function createCampaign(
 
   const webOptInUrl = input.webOptInUrl || app.webOptInUrl || undefined;
   if (input.published) {
-    await assertAppNotAlreadyPublished(userId, app.id);
+    await assertAppNotAlreadyPublished(userId, app.id, testingType);
   }
 
   const durationDays = input.durationDays ?? MARKETPLACE_DURATION_DAYS;
@@ -424,7 +436,7 @@ async function createManualCampaign(
   }
 
   if (input.published) {
-    await assertAppNotAlreadyPublished(userId, app.id);
+    await assertAppNotAlreadyPublished(userId, app.id, testingType);
   }
 
   const durationDays = input.durationDays ?? MARKETPLACE_DURATION_DAYS;
@@ -491,7 +503,7 @@ export async function publishCampaign(userId: string, id: string) {
     throw new AppError("This campaign cannot be published.");
   }
   if (!campaign.published) {
-    await assertAppNotAlreadyPublished(userId, campaign.appId, campaign.id);
+    await assertAppNotAlreadyPublished(userId, campaign.appId, campaign.testingType, campaign.id);
   }
   if (!campaignDependsOnPlayConnection(campaign)) {
     const startedAt = campaign.startedAt ?? new Date();

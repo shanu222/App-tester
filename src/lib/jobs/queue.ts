@@ -8,6 +8,7 @@ import { createOrGetTester, setTesterStatus } from "@/lib/services/testers";
 import { logActivity, notify } from "@/lib/audit";
 import { markIntegrationExpired } from "@/lib/integrations/store";
 import { verifyPlayConnection, refreshFromGooglePlay } from "@/lib/services/play-connection";
+import { serializeErrorForLog, redactSecrets } from "@/lib/integrations/google-api-error";
 
 const TIMEOUT = 25_000;
 
@@ -239,14 +240,14 @@ async function checkIntegrationHealth(userId: string) {
           userId,
           type: "integration",
           title: "Google Play authorization error",
-          body: result.errorMessage || "Google Play authorization failed.",
+          body: redactSecrets(result.errorMessage || "Google Play authorization failed."),
           href: "/play",
         });
       }
     } catch (error) {
       // verifyPlayConnection already recorded the failure on the connection.
       notes += "play=error;";
-      console.error("Play health check failed", error);
+      console.error("Play health check failed", serializeErrorForLog(error));
     }
   }
 

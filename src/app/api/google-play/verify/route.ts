@@ -2,6 +2,7 @@ import { z } from "zod";
 import { handleRouteError, json, parseJson } from "@/lib/http";
 import { requireUser } from "@/auth";
 import { verifyPlayConnection } from "@/lib/services/play-connection";
+import { publicPlayDiagnostics } from "@/lib/integrations/play-diagnostics";
 
 export const maxDuration = 60;
 
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
       userId: user.id,
       packageName: body.packageName,
     });
-    return json(diagnostics, diagnostics.connected ? 200 : 409);
+    return json(publicPlayDiagnostics(diagnostics), diagnostics.connected ? 200 : 409);
   } catch (error) {
     return handleRouteError(error);
   }

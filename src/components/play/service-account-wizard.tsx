@@ -1,9 +1,9 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Hint, Input, Label, Textarea } from "@/components/ui/fields";
+import { Hint, Input, Label } from "@/components/ui/fields";
 import { PlayDiagnosticsPanel, type Diagnostics } from "@/components/play/play-diagnostics-panel";
 
 const STEPS = [
@@ -28,13 +28,14 @@ const STEPS = [
     body: "Give it view access to app information plus release permissions for the testing tracks you want TestLoop to manage.",
   },
   {
-    title: "Paste the key below",
-    body: "TestLoop verifies it against the real Play API and stores it encrypted. The key is never shown again.",
+    title: "Upload the key file",
+    body: "TestLoop verifies it against the real Play API and stores it in encrypted server-side storage. The key is never shown again.",
   },
 ];
 
 export function ServiceAccountWizard({ onCancel }: { onCancel?: () => void }) {
   const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Diagnostics | null>(null);
@@ -44,20 +45,20 @@ export function ServiceAccountWizard({ onCancel }: { onCancel?: () => void }) {
     setPending(true);
     setError(null);
     setResult(null);
-    const form = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const payload = new FormData(form);
     try {
       const response = await fetch("/api/google-play/connect/service-account", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          serviceAccountJson: form.get("serviceAccountJson"),
-          packageName: String(form.get("packageName") || "").trim() || undefined,
-        }),
+        body: payload,
       });
       const data = await response.json();
       if (typeof data?.connected === "boolean") {
         setResult(data as Diagnostics);
-        if (data.connected) router.refresh();
+        if (data.connected) {
+          if (fileRef.current) fileRef.current.value = "";
+          router.refresh();
+        }
         return;
       }
       setError(data?.error || `Connection check failed (HTTP ${response.status}).`);
@@ -85,17 +86,19 @@ export function ServiceAccountWizard({ onCancel }: { onCancel?: () => void }) {
       </ol>
 
       <form onSubmit={onSubmit} className="mt-5 border-t border-line pt-5">
-        <Label htmlFor="serviceAccountJson">Service account JSON key</Label>
-        <Textarea
-          id="serviceAccountJson"
-          name="serviceAccountJson"
+        <Label htmlFor="keyFile">Service account JSON key file</Label>
+        <input
+          ref={fileRef}
+          id="keyFile"
+          name="keyFile"
+          type="file"
+          accept="application/json,.json"
           required
-          spellCheck={false}
-          className="min-h-40 font-mono text-xs"
-          placeholder={'{\n  "type": "service_account",\n  "project_id": "...",\n  "client_email": "...",\n  "private_key": "-----BEGIN PRIVATE KEY-----..."\n}'}
+          disabled={pending}
+          className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-control file:border file:border-line file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-800"
         />
         <Hint>
-          Stored encrypted on the server and never returned to the browser. Paste the file exactly as downloaded.
+          The file is sent to TestLoop once, stored encrypted on the server, and never returned to the browser.
         </Hint>
 
         <div className="mt-4">

@@ -66,16 +66,10 @@ export function PlayDiagnosticsPanel({
       />
 
       <dl className="mt-3 grid gap-2 border-t border-line pt-3 text-xs sm:grid-cols-2">
-        {result.accountEmail ? (
+        {result.method === "OAUTH" && result.accountEmail ? (
           <div className="min-w-0">
             <dt className="text-muted">Account</dt>
             <dd className="mt-0.5 truncate font-mono text-slate-700">{result.accountEmail}</dd>
-          </div>
-        ) : null}
-        {result.projectId ? (
-          <div className="min-w-0">
-            <dt className="text-muted">Cloud project</dt>
-            <dd className="mt-0.5 truncate font-mono text-slate-700">{result.projectId}</dd>
           </div>
         ) : null}
       </dl>

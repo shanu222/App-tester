@@ -41,6 +41,8 @@ export async function deleteTestLoopAccount(userId: string) {
       await tx.telemetryEvent.deleteMany({ where: { userId } });
       await tx.developerBlock.deleteMany({ where: { blockedId: userId } });
       await tx.verificationToken.deleteMany({ where: { identifier: user.email } });
+      const { shredPlayServiceAccountSecret } = await import("@/lib/secrets/play-service-account");
+      await shredPlayServiceAccountSecret(userId, tx);
       await tx.user.delete({ where: { id: userId } });
     },
     { timeout: 60_000 },

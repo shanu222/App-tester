@@ -28,14 +28,37 @@ type ErrorEnvelope = {
 
 const PEM_BLOCK = /-----BEGIN[\s\S]*?-----END[^-]*-----/g;
 const LONG_SECRET = /\b[A-Za-z0-9+/_-]{120,}={0,2}\b/g;
+const PRIVATE_KEY_JSON = /"private_key"\s*:\s*"(?:\\.|[^"\\])*"/gi;
+const CLIENT_EMAIL_JSON = /"client_email"\s*:\s*"(?:\\.|[^"\\])*"/gi;
+const PROJECT_ID_JSON = /"project_id"\s*:\s*"(?:\\.|[^"\\])*"/gi;
+const SERVICE_ACCOUNT_EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.iam\.gserviceaccount\.com/gi;
 
 /**
- * Strips anything shaped like a private key or bearer token. Google never echoes
- * credentials back, but this guarantees a key can never reach a log or a client
- * even if a message is built from input we did not expect.
+ * Strips anything shaped like a private key, service-account JSON field, or
+ * bearer token. Google never echoes credentials back, but this guarantees a
+ * key can never reach a log or a client even if a message is built from input
+ * we did not expect.
  */
 export function redactSecrets(value: string) {
-  return value.replace(PEM_BLOCK, "[redacted key]").replace(LONG_SECRET, "[redacted]");
+  return value
+    .replace(PEM_BLOCK, "[redacted key]")
+    .replace(PRIVATE_KEY_JSON, '"private_key":"[redacted]"')
+    .replace(CLIENT_EMAIL_JSON, '"client_email":"[redacted]"')
+    .replace(PROJECT_ID_JSON, '"project_id":"[redacted]"')
+    .replace(SERVICE_ACCOUNT_EMAIL, "[redacted account]")
+    .replace(LONG_SECRET, "[redacted]");
+}
+
+export function serializeErrorForLog(error: unknown) {
+  if (error instanceof Error) {
+    const stack = error.stack ? `\n${error.stack}` : "";
+    return redactSecrets(`${error.name}: ${error.message}${stack}`);
+  }
+  try {
+    return redactSecrets(typeof error === "string" ? error : JSON.stringify(error));
+  } catch {
+    return "[unserializable error]";
+  }
 }
 
 export function parseGoogleApiError(httpStatus: number, body: unknown): GoogleApiError {

@@ -46,13 +46,22 @@ import {
   protectingAppIdsFromPayments,
   stripPlayDisconnectedNote,
 } from "@/lib/play-disconnect";
+import { serializeErrorForLog, redactSecrets } from "@/lib/integrations/google-api-error";
+import {
+  maskServiceAccountIdentifier,
+  playServiceAccountFingerprint,
+  playServiceAccountSecretPresent,
+  readPlayServiceAccountJson,
+  shredPlayServiceAccountSecret,
+  writePlayServiceAccountJson,
+} from "@/lib/secrets/play-service-account";
 
 /**
  * Shape of the credential blob held in GooglePlayConnection.encryptedCredentials.
- * It never leaves this module, and no field of it is ever returned to a client.
+ * Service-account JSON is never stored here. OAuth refresh tokens may be.
+ * The blob never leaves this module.
  */
 type StoredPlayCredentials = {
-  serviceAccountJson?: string;
   refreshToken?: string;
 };
 
@@ -74,16 +83,19 @@ export type SafePlayConnection = {
 export function safePlayConnection(
   connection: GooglePlayConnection | null,
 ): SafePlayConnection {
+  const oauth = connection?.method === "OAUTH";
   return {
     connected: connection?.status === "CONNECTED",
     method: connection?.method ?? null,
     status: connection?.status ?? "NOT_CONNECTED",
-    accountEmail: connection?.googleAccountEmail ?? null,
-    cloudProjectId: connection?.cloudProjectId ?? null,
+    accountEmail: oauth
+      ? connection?.googleAccountEmail ?? null
+      : connection?.maskedCredentialLabel ?? null,
+    cloudProjectId: null,
     scopes: connection?.scopes ?? [],
     lastVerifiedAt: connection?.lastVerifiedAt?.toISOString() ?? null,
     lastSyncAt: connection?.lastSyncAt?.toISOString() ?? null,
-    lastError: connection?.lastError ?? null,
+    lastError: connection?.lastError ? redactSecrets(connection.lastError) : null,
     errorCode: connection?.errorCode ?? null,
     oauthAvailable: playOAuthConfigured(),
   };
@@ -102,16 +114,78 @@ export function getPlayConnection(userId: string) {
  */
 export async function requireConnectedPlay(userId: string) {
   const connection = await getPlayConnection(userId);
-  if (!connection || connection.status !== "CONNECTED" || !connection.encryptedCredentials) {
+  if (!connection || connection.status !== "CONNECTED") {
     throw new AppError(PLAY_NOT_CONNECTED_FEATURE, 409, "PLAY_NOT_CONNECTED");
   }
-  return connection;
+  if (connection.playSecretPresent) return connection;
+  if (connection.method === "SERVICE_ACCOUNT" && (await playServiceAccountSecretPresent(userId))) {
+    return connection;
+  }
+  if (connection.encryptedCredentials) return connection;
+  throw new AppError(PLAY_NOT_CONNECTED_FEATURE, 409, "PLAY_NOT_CONNECTED");
+}
+
+async function migrateLegacyServiceAccountJson(userId: string, connection: GooglePlayConnection) {
+  if (!connection.encryptedCredentials) {
+    throw new AppError("The stored service account key is unreadable. Reconnect Google Play.");
+  }
+  let stored: StoredPlayCredentials & { serviceAccountJson?: string };
+  try {
+    stored = decryptJson<StoredPlayCredentials & { serviceAccountJson?: string }>(
+      connection.encryptedCredentials,
+    );
+  } catch {
+    throw new AppError(
+      "Stored Google Play credentials could not be decrypted. This usually means ENCRYPTION_KEY changed. Reconnect Google Play.",
+    );
+  }
+  if (!stored.serviceAccountJson) {
+    throw new AppError("The stored service account key is unreadable. Reconnect Google Play.");
+  }
+  const parsed = parseServiceAccount(stored.serviceAccountJson);
+  if (!parsed.ok) {
+    throw new AppError("The stored service account key is unreadable. Reconnect Google Play.");
+  }
+  const canonical = JSON.stringify(JSON.parse(stored.serviceAccountJson.trim()));
+  await writePlayServiceAccountJson({
+    userId,
+    json: canonical,
+    fingerprint: playServiceAccountFingerprint(
+      parsed.serviceAccount.privateKeyId,
+      parsed.serviceAccount.clientEmail,
+    ),
+  });
+  const leftover: StoredPlayCredentials = {};
+  if (stored.refreshToken) leftover.refreshToken = stored.refreshToken;
+  await prisma.googlePlayConnection.update({
+    where: { userId },
+    data: {
+      encryptedCredentials: leftover.refreshToken ? encryptJson(leftover) : null,
+      googleAccountEmail: null,
+      cloudProjectId: null,
+      maskedCredentialLabel: maskServiceAccountIdentifier(parsed.serviceAccount.clientEmail),
+      playSecretPresent: true,
+    },
+  });
+  return canonical;
 }
 
 export async function resolvePlayCredentials(userId: string): Promise<PlayCredentials> {
   const connection = await requireConnectedPlay(userId);
+
+  if (connection.method === "SERVICE_ACCOUNT") {
+    const json =
+      (await readPlayServiceAccountJson(userId)) || (await migrateLegacyServiceAccountJson(userId, connection));
+    return {
+      method: "SERVICE_ACCOUNT",
+      serviceAccount: JSON.parse(json) as ServiceAccountJson,
+    };
+  }
+
   if (!connection.encryptedCredentials) {
-    throw new AppError(PLAY_NOT_CONNECTED_FEATURE, 409, "PLAY_NOT_CONNECTED");
+    throw new AppError(
+      "Google Play authorisation is missing its refresh token. Reconnect Google Play with Google.",
+    );
   }
 
   let stored: StoredPlayCredentials;
@@ -121,16 +195,6 @@ export async function resolvePlayCredentials(userId: string): Promise<PlayCreden
     throw new AppError(
       "Stored Google Play credentials could not be decrypted. This usually means ENCRYPTION_KEY changed. Reconnect Google Play.",
     );
-  }
-
-  if (connection.method === "SERVICE_ACCOUNT") {
-    if (!stored.serviceAccountJson) {
-      throw new AppError("The stored service account key is unreadable. Reconnect Google Play.");
-    }
-    return {
-      method: "SERVICE_ACCOUNT",
-      serviceAccount: JSON.parse(stored.serviceAccountJson) as ServiceAccountJson,
-    };
   }
 
   if (!stored.refreshToken) {
@@ -147,38 +211,42 @@ async function persist(input: {
   diagnostics: PlayDiagnostics;
   credentials?: StoredPlayCredentials;
   scopes: string[];
+  wipeApplicationCredentialBlob?: boolean;
 }) {
   const { userId, method, diagnostics, credentials, scopes } = input;
-  let encrypted: string | undefined;
+  let encrypted: string | null | undefined;
   try {
-    encrypted = credentials ? encryptJson(credentials) : undefined;
+    if (input.wipeApplicationCredentialBlob) encrypted = null;
+    else if (credentials) encrypted = encryptJson(credentials);
   } catch (error) {
     throw mapInfrastructureError(error) ?? error;
   }
+  const oauth = method === "OAUTH";
   const shared = {
     method,
     status: diagnostics.connected ? ("CONNECTED" as const) : ("ERROR" as const),
-    googleAccountEmail: diagnostics.accountEmail,
-    cloudProjectId: diagnostics.projectId,
+    googleAccountEmail: oauth ? diagnostics.accountEmail : null,
+    cloudProjectId: oauth ? diagnostics.projectId : null,
+    maskedCredentialLabel: oauth ? null : maskServiceAccountIdentifier(diagnostics.accountEmail),
     scopes,
     lastVerifiedAt: diagnostics.connected ? new Date() : null,
     lastError: diagnostics.connected ? null : diagnostics.errorMessage,
     errorCode: diagnostics.connected ? null : diagnostics.errorCode,
+    ...(diagnostics.connected ? { playSecretPresent: true as const } : {}),
   };
   return prisma.googlePlayConnection.upsert({
     where: { userId },
-    update: { ...shared, ...(encrypted ? { encryptedCredentials: encrypted } : {}) },
-    create: { userId, ...shared, encryptedCredentials: encrypted },
+    update: { ...shared, ...(encrypted !== undefined ? { encryptedCredentials: encrypted } : {}) },
+    create: { userId, ...shared, encryptedCredentials: encrypted ?? undefined },
   }).catch((error) => {
     throw mapInfrastructureError(error) ?? error;
   });
 }
 
 /**
- * Verify a pasted service-account key against the real Play API and store it
- * only if Google accepted it. A rejected key is never written, so the
- * connection can never claim to be healthy on the strength of an unchecked
- * paste.
+ * Verify an uploaded service-account key against the real Play API and store it
+ * only in the encrypted vault if Google accepted it. A rejected key is never
+ * written. The JSON never lands on GooglePlayConnection.
  */
 export async function connectServiceAccount(input: {
   userId: string;
@@ -193,28 +261,34 @@ export async function connectServiceAccount(input: {
   const diagnostics = await runPlayDiagnostics(parsed.serviceAccount, input.packageName);
 
   try {
+    if (diagnostics.connected) {
+      const canonical = JSON.stringify(JSON.parse(input.serviceAccountJson.trim()));
+      await writePlayServiceAccountJson({
+        userId: input.userId,
+        json: canonical,
+        fingerprint: playServiceAccountFingerprint(
+          parsed.serviceAccount.privateKeyId,
+          parsed.serviceAccount.clientEmail,
+        ),
+      });
+    }
     await persist({
       userId: input.userId,
       method: "SERVICE_ACCOUNT",
       diagnostics,
-      // Re-serialising the parsed JSON drops any stray formatting from the paste.
-      credentials: diagnostics.connected
-        ? { serviceAccountJson: JSON.stringify(JSON.parse(input.serviceAccountJson.trim())) }
-        : undefined,
       scopes: [ANDROID_PUBLISHER_SCOPE],
+      wipeApplicationCredentialBlob: diagnostics.connected,
     });
     await logActivity({
       userId: input.userId,
       action: diagnostics.connected ? "PLAY_CONNECTED" : "PLAY_CONNECT_FAILED",
-      result: `service account · ${diagnostics.accountEmail ?? "unknown"}${
-        diagnostics.connected ? "" : ` · ${diagnostics.errorCode ?? "error"}`
-      }`,
+      result: diagnostics.connected
+        ? "service account"
+        : `service account · ${diagnostics.errorCode ?? "error"}`,
     });
   } catch (error) {
     const mapped = mapInfrastructureError(error) ?? (error instanceof AppError ? error : null);
     if (!mapped) throw error;
-    // Google already answered. Do not hide that behind a generic 500 — report
-    // that the credentials worked (or failed) and that storing them did not.
     return {
       ...diagnostics,
       connected: false,
@@ -276,6 +350,10 @@ export async function connectOAuthCode(input: {
       playAccessToken({ method: "OAUTH", refreshToken: token }, [ANDROID_PUBLISHER_SCOPE]),
   });
 
+  if (diagnostics.connected) {
+    await shredPlayServiceAccountSecret(input.userId);
+  }
+
   await persist({
     userId: input.userId,
     method: "OAUTH",
@@ -332,7 +410,14 @@ export async function verifyPlayConnection(input: {
       lastVerifiedAt: diagnostics.connected ? new Date() : connection.lastVerifiedAt,
       lastError: diagnostics.connected ? null : diagnostics.errorMessage,
       errorCode: diagnostics.connected ? null : diagnostics.errorCode,
-      googleAccountEmail: diagnostics.accountEmail ?? connection.googleAccountEmail,
+      googleAccountEmail:
+        creds.method === "OAUTH"
+          ? diagnostics.accountEmail ?? connection.googleAccountEmail
+          : null,
+      maskedCredentialLabel:
+        creds.method === "SERVICE_ACCOUNT"
+          ? maskServiceAccountIdentifier(diagnostics.accountEmail) ?? connection.maskedCredentialLabel
+          : connection.maskedCredentialLabel,
     },
   });
 
@@ -488,6 +573,7 @@ export async function disconnectPlay(userId: string): Promise<PlayDisconnectResu
         const result = await cleanupPlayDependentTestLoopData(userId, tx);
         const remaining = await tx.googlePlayConnection.findUnique({ where: { userId } });
         if (remaining) {
+          await shredPlayServiceAccountSecret(userId, tx);
           await tx.googlePlayConnection.delete({ where: { userId } });
         }
         await clearLegacyPlayIntegration(userId, tx);
@@ -496,7 +582,7 @@ export async function disconnectPlay(userId: string): Promise<PlayDisconnectResu
       { timeout: 60_000 },
     );
   } catch (error) {
-    console.error("Play disconnect cleanup failed", error);
+    console.error("Play disconnect cleanup failed", serializeErrorForLog(error));
     throw (
       mapInfrastructureError(error) ??
       new AppError("Google Play could not be disconnected. Try again.", 500, "PLAY_DISCONNECT_FAILED")
@@ -508,7 +594,7 @@ export async function disconnectPlay(userId: string): Promise<PlayDisconnectResu
       userId,
       action: "PLAY_DISCONNECTED",
       result: connection.googleAccountEmail ?? connection.method,
-    }).catch((error) => console.error("Play disconnect audit log failed", error));
+    }).catch((error) => console.error("Play disconnect audit log failed", serializeErrorForLog(error)));
   }
 
   return { disconnected: true, cleanupCompleted: true, ...cleanup };
@@ -551,7 +637,7 @@ async function discoverAppsAfterConnect(userId: string) {
   try {
     await discoverPlayApps(userId, { syncTracks: false });
   } catch (error) {
-    console.error("Play app discovery after connect failed", error);
+    console.error("Play app discovery after connect failed", serializeErrorForLog(error));
   }
 }
 
@@ -692,7 +778,7 @@ export async function listDiscoveredApps(userId: string): Promise<DiscoveredApp[
         : { testers: 0, pendingPlayAction: 0 };
       return [app];
     } catch (error) {
-      console.error("[testloop][play] skipped a cached Play app that could not be read", error);
+      console.error("[testloop][play] skipped a cached Play app that could not be read", serializeErrorForLog(error));
       return [];
     }
   });
@@ -940,7 +1026,7 @@ export async function syncAllPackageTracks(userId: string) {
     try {
       await syncPackageTracks({ userId, packageName: app.packageName });
     } catch (error) {
-      console.error(`Play track sync failed for ${app.packageName}`, error);
+      console.error(`Play track sync failed for ${app.packageName}`, serializeErrorForLog(error));
     }
   });
 }

@@ -280,7 +280,7 @@ export function PlayConnectionPanel({
         title="Google Play"
         action={<Badge tone="good">{statusLabel}</Badge>}
       />
-      <p className="mt-1 text-sm font-medium text-emerald-700">● Connected</p>
+      <p className="mt-1 text-sm font-medium text-emerald-700">Google Play Console connected ✓</p>
 
       <dl className="mt-5 grid gap-4 border-t border-line pt-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>
@@ -296,19 +296,19 @@ export function PlayConnectionPanel({
           </dd>
         </div>
       </dl>
-      <details className="mt-4 text-sm">
-        <summary className="cursor-pointer font-medium text-brand">View connection details</summary>
-        <dl className="mt-3 grid gap-3 rounded-control border border-line bg-surface p-3 sm:grid-cols-2">
-          <div className="min-w-0">
-            <dt className="text-xs text-muted">Developer account</dt>
-            <dd className="mt-1 truncate text-slate-700">{connection.accountEmail || "Not available"}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted">Cloud project</dt>
-            <dd className="mt-1 text-slate-700">{connection.cloudProjectId || "Not available"}</dd>
-          </div>
-        </dl>
-      </details>
+      {connection.method === "OAUTH" ? (
+        <details className="mt-4 text-sm">
+          <summary className="cursor-pointer font-medium text-brand">View connection details</summary>
+          <dl className="mt-3 grid gap-3 rounded-control border border-line bg-surface p-3 sm:grid-cols-2">
+            <div className="min-w-0">
+              <dt className="text-xs text-muted">Developer account</dt>
+              <dd className="mt-1 truncate text-slate-700">{connection.accountEmail || "Not available"}</dd>
+            </div>
+          </dl>
+        </details>
+      ) : connection.accountEmail ? (
+        <p className="mt-4 text-sm text-muted">Credential {connection.accountEmail}</p>
+      ) : null}
 
       {connection.lastError ? (
         <div className="mt-4 rounded-control border border-red-200 bg-red-50 px-3 py-2">

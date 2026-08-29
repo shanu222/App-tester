@@ -10,6 +10,7 @@ import { PlayConnectionPanel } from "@/components/play/play-connection-panel";
 import { PlayAppsPanel } from "@/components/play/play-apps-panel";
 import { PlayTestingGuide } from "@/components/play/play-testing-guide";
 import { publicErrorMessage, UnauthorizedError } from "@/lib/errors";
+import { serializeErrorForLog } from "@/lib/integrations/google-api-error";
 import { sleep } from "@/lib/integrations/play-retry";
 import { PlayPageRetry } from "@/components/play/play-page-retry";
 
@@ -35,7 +36,7 @@ export default async function PlayPage({
     user = await requireUser();
   } catch (error) {
     if (error instanceof UnauthorizedError) throw error;
-    console.error("[testloop][play] session lookup failed, retrying", error);
+    console.error("[testloop][play] session lookup failed, retrying", serializeErrorForLog(error));
     await sleep(400);
     user = await requireUser();
   }
@@ -50,12 +51,12 @@ export default async function PlayPage({
       listDiscoveredApps(user.id),
     ]);
   } catch (error) {
-    console.error("[testloop][play] page load failed", error);
+    console.error("[testloop][play] page load failed", serializeErrorForLog(error));
     loadError = publicErrorMessage(error);
     try {
       connectionRow = await getPlayConnection(user.id);
     } catch (retryError) {
-      console.error("[testloop][play] connection lookup retry failed", retryError);
+      console.error("[testloop][play] connection lookup retry failed", serializeErrorForLog(retryError));
     }
   }
   const connection = safePlayConnection(connectionRow);

@@ -132,6 +132,7 @@ describe("Play disconnect cleanup is TestLoop-side and transactional", () => {
 
     expect(disconnect).toContain("prisma.$transaction");
     expect(disconnect).toContain("googlePlayConnection.delete");
+    expect(disconnect).toContain("shredPlayServiceAccountSecret");
     expect(disconnect).not.toContain("androidpublisher");
     expect(disconnect).not.toContain("listPlayTracks");
     expect(disconnect).not.toContain("searchPlayApps");

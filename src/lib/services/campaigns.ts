@@ -38,9 +38,9 @@ export async function allocateCampaignSlug(desired: string) {
 async function requirePlayConnectionForPost(userId: string) {
   const play = await prisma.googlePlayConnection.findUnique({
     where: { userId },
-    select: { status: true, encryptedCredentials: true },
+    select: { status: true, playSecretPresent: true },
   });
-  if (play?.status !== "CONNECTED" || !play.encryptedCredentials) {
+  if (play?.status !== "CONNECTED" || !play.playSecretPresent) {
     throw new AppError(PLAY_NOT_CONNECTED_FIRST, 409, "PLAY_NOT_CONNECTED");
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { AppError, mapInfrastructureError, publicErrorMessage } from "@/lib/errors";
+import { serializeErrorForLog } from "@/lib/integrations/google-api-error";
 
 export function json<T>(data: T, init?: number | ResponseInit) {
   const responseInit = typeof init === "number" ? { status: init } : init;
@@ -29,7 +30,7 @@ export function handleRouteError(error: unknown) {
     console.error(`[DATABASE_ERROR] code=${mapped.code}`);
     return json({ error: mapped.message, code: mapped.code }, mapped.status);
   }
-  console.error(error);
+  console.error(serializeErrorForLog(error));
   return json({ error: publicErrorMessage(error) }, 500);
 }
 

@@ -38,12 +38,14 @@ vi.mock("google-auth-library", () => ({
 let parseServiceAccount: typeof import("../src/lib/integrations/play-diagnostics")["parseServiceAccount"];
 let runPlayDiagnostics: typeof import("../src/lib/integrations/play-diagnostics")["runPlayDiagnostics"];
 let runPlayOAuthDiagnostics: typeof import("../src/lib/integrations/play-diagnostics")["runPlayOAuthDiagnostics"];
+let publicPlayDiagnostics: typeof import("../src/lib/integrations/play-diagnostics")["publicPlayDiagnostics"];
 
 beforeEach(async () => {
   const mod = await import("../src/lib/integrations/play-diagnostics");
   parseServiceAccount = mod.parseServiceAccount;
   runPlayDiagnostics = mod.runPlayDiagnostics;
   runPlayOAuthDiagnostics = mod.runPlayOAuthDiagnostics;
+  publicPlayDiagnostics = mod.publicPlayDiagnostics;
 });
 
 afterEach(() => {
@@ -247,6 +249,12 @@ describe("play diagnostics classification", () => {
     expect(serialized).not.toContain("BEGIN PRIVATE KEY");
     expect(serialized).not.toContain("MIIBVgIBADANBgkq");
     expect(serialized).not.toContain("test-access-token");
+    const publicPayload = publicPlayDiagnostics(result);
+    expect(publicPayload.accountEmail).toBeNull();
+    expect(publicPayload.serviceAccountEmail).toBeNull();
+    expect(publicPayload.projectId).toBeNull();
+    expect(JSON.stringify(publicPayload)).not.toContain("play-bot@");
+    expect(JSON.stringify(publicPayload)).not.toContain("testloop-play");
   });
 });
 
@@ -324,9 +332,20 @@ describe("google error envelope", () => {
     expect(parseGoogleApiError(500, {}).message).toContain("HTTP 500");
   });
 
-  it("redacts PEM blocks and long tokens", () => {
+  it("redacts PEM blocks, JSON key fields, and service-account emails", () => {
     expect(redactSecrets(`key=${FAKE_KEY}`)).not.toContain("MIIBVgIBADANBgkq");
     expect(redactSecrets(`key=${FAKE_KEY}`)).toContain("[redacted key]");
     expect(redactSecrets(`token=${"a".repeat(200)}`)).toContain("[redacted]");
+    const dumped = JSON.stringify({
+      type: "service_account",
+      project_id: "testloop-play",
+      private_key: FAKE_KEY,
+      client_email: "play-bot@testloop-play.iam.gserviceaccount.com",
+    });
+    const redacted = redactSecrets(dumped);
+    expect(redacted).not.toContain("BEGIN PRIVATE KEY");
+    expect(redacted).not.toContain("play-bot@");
+    expect(redacted).not.toContain("testloop-play");
+    expect(redacted).toContain("[redacted]");
   });
 });

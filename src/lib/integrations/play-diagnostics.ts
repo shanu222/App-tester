@@ -87,7 +87,7 @@ export function parseServiceAccount(
   raw: string,
 ): { ok: true; serviceAccount: ServiceAccount } | { ok: false; message: string } {
   const trimmed = raw.trim();
-  if (!trimmed) return { ok: false, message: "Paste the service account JSON key." };
+  if (!trimmed) return { ok: false, message: "Upload the service account JSON key file." };
 
   let parsed: unknown;
   try {
@@ -96,7 +96,7 @@ export function parseServiceAccount(
     return {
       ok: false,
       message:
-        "Invalid service-account JSON: the text is not valid JSON. Download the key again from Google Cloud Console → IAM & Admin → Service Accounts → Keys and paste the whole file.",
+        "Invalid service-account JSON: the text is not valid JSON. Download the key again from Google Cloud Console → IAM & Admin → Service Accounts → Keys and upload the whole file.",
     };
   }
 
@@ -551,6 +551,19 @@ async function diagnoseWithToken(
     connected: true,
     checkedPackageName: target,
     packageAccessible: true,
-    detail: `Verified. Authenticated as ${identity.email ?? "the authorised account"} and confirmed read access to ${target} through the Google Play Developer API.`,
+    detail: `Verified. Confirmed read access to ${target} through the Google Play Developer API.`,
+  };
+}
+
+/** Fields the browser may see. Never includes private_key, client_email, project_id, or the JSON. */
+export function publicPlayDiagnostics(result: PlayDiagnostics): PlayDiagnostics {
+  return {
+    ...result,
+    accountEmail: result.method === "OAUTH" ? result.accountEmail : null,
+    serviceAccountEmail: null,
+    projectId: null,
+    detail: result.detail ? redactSecrets(result.detail) : null,
+    errorMessage: result.errorMessage ? redactSecrets(result.errorMessage) : null,
+    googleMessage: result.googleMessage ? redactSecrets(result.googleMessage) : null,
   };
 }

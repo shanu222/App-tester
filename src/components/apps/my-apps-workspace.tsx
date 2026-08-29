@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/widgets";
 import { TestingTypeBadge } from "@/components/ui/testing-type-badge";
 import { AppMark } from "@/components/brand/app-mark";
 import { AddAppWizard, type PlayAppOption } from "@/components/apps/add-app-wizard";
+import { RemoveAppButton } from "@/components/apps/remove-app-button";
 import { connectionLabel } from "@/lib/manual-app";
 import { Plus, RefreshCw, Search } from "lucide-react";
 
@@ -69,10 +70,15 @@ export function MyAppsWorkspace({
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [newPlayApps, setNewPlayApps] = useState<PlayNewApp[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [listedApps, setListedApps] = useState(apps);
+
+  useEffect(() => {
+    setListedApps(apps);
+  }, [apps]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return apps.filter((app) => {
+    return listedApps.filter((app) => {
       if (q && !app.name.toLowerCase().includes(q)) return false;
       if (filter === "CAMPAIGN_ACTIVE") return app.campaignStatus === "ACTIVE";
       if (filter === "MANUAL") return !app.syncedFromPlay;
@@ -82,7 +88,7 @@ export function MyAppsWorkspace({
       }
       return true;
     });
-  }, [apps, query, filter]);
+  }, [listedApps, query, filter]);
 
   async function syncPlay() {
     setSyncing(true);
@@ -125,7 +131,7 @@ export function MyAppsWorkspace({
 
   const wizardApps: PlayAppOption[] = [
     ...playApps,
-    ...apps
+    ...listedApps
       .filter((app) => !app.syncedFromPlay)
       .map((app) => ({
         id: app.id,
@@ -228,7 +234,7 @@ export function MyAppsWorkspace({
         </Card>
       ) : null}
 
-      {apps.length === 0 && !showForm ? (
+      {listedApps.length === 0 && !showForm ? (
         <EmptyState
           title="No apps yet"
           body="Add an app from Google Play, or publish a manual testing request."
@@ -284,6 +290,10 @@ export function MyAppsWorkspace({
                   >
                     {app.campaign ? "Manage testing" : "Publish testing"}
                   </Link>
+                  <RemoveAppButton
+                    appId={app.id}
+                    onRemoved={() => setListedApps((current) => current.filter((item) => item.id !== app.id))}
+                  />
                 </div>
               </Card>
             );

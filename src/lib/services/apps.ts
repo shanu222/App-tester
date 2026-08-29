@@ -162,6 +162,50 @@ export async function getApp(userId: string, id: string) {
   return app;
 }
 
+/**
+ * Remove an app from TestLoop only. Never calls Google Play APIs and never
+ * deletes or modifies the application in Google Play Console.
+ */
+export async function removeAppFromTestLoop(userId: string, id: string) {
+  const app = await prisma.app.findFirst({
+    where: { id, userId },
+    select: { id: true, name: true, campaigns: { select: { id: true } } },
+  });
+  if (!app) throw new NotFoundError("App not found.");
+  const campaignIds = app.campaigns.map((campaign) => campaign.id);
+
+  await prisma.$transaction(
+    async (tx) => {
+      if (campaignIds.length) {
+        await tx.notification.deleteMany({ where: { userId, campaignId: { in: campaignIds } } });
+        await tx.activityLog.deleteMany({ where: { userId, campaignId: { in: campaignIds } } });
+        await tx.emailEvent.deleteMany({ where: { userId, campaignId: { in: campaignIds } } });
+        await tx.message.deleteMany({ where: { userId, campaignId: { in: campaignIds } } });
+        await tx.messageTemplate.deleteMany({ where: { userId, campaignId: { in: campaignIds } } });
+        await tx.opportunity.deleteMany({ where: { userId, campaignId: { in: campaignIds } } });
+        await tx.commentDraft.deleteMany({ where: { userId, campaignId: { in: campaignIds } } });
+      }
+
+      await tx.emailEvent.deleteMany({
+        where: { userId, eventKey: { startsWith: `play_track:${id}:` } },
+      });
+      await tx.googlePlayApp.updateMany({
+        where: { userId, appId: id },
+        data: { appId: null, selected: false },
+      });
+      await tx.managedTestingCampaign.updateMany({
+        where: { userId, appId: id },
+        data: { appId: null },
+      });
+      await tx.app.delete({ where: { id } });
+    },
+    { timeout: 60_000 },
+  );
+
+  await logActivity({ userId, action: "APP_REMOVED", result: app.name });
+  return { removed: true as const, id };
+}
+
 export async function listAppsWithStats(userId: string) {
   const apps = await prisma.app.findMany({
     where: { userId },

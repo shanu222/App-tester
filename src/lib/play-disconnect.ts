@@ -46,3 +46,42 @@ export function playConnectionStatusLabel(input: { connected: boolean; status: s
 export function isPlayConnectionActive(status: string | null | undefined): boolean {
   return status === "CONNECTED";
 }
+
+const TERMINAL_MANAGED_PAYMENT_STATUSES = new Set(["FAILED", "CANCELLED", "REFUNDED"]);
+
+/** Payments that still need their TestLoop app after Play is disconnected. */
+export function managedPaymentProtectsPlayApp(status: string | null | undefined): boolean {
+  if (!status) return false;
+  return !TERMINAL_MANAGED_PAYMENT_STATUSES.has(status);
+}
+
+export function fulfillmentAppId(fulfillment: unknown): string | null {
+  if (!fulfillment || typeof fulfillment !== "object") return null;
+  const appId = (fulfillment as { appId?: unknown }).appId;
+  return typeof appId === "string" && appId.trim() ? appId.trim() : null;
+}
+
+export function playSyncedAppHasPurchasedTesting(input: {
+  managedCampaignCount: number;
+  protectingPaymentAppIds: Iterable<string>;
+  appId: string;
+}): boolean {
+  if (input.managedCampaignCount > 0) return true;
+  for (const id of input.protectingPaymentAppIds) {
+    if (id === input.appId) return true;
+  }
+  return false;
+}
+
+export function protectingAppIdsFromPayments(
+  payments: Array<{ status: string; fulfillment?: unknown; campaignAppId?: string | null }>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const payment of payments) {
+    if (!managedPaymentProtectsPlayApp(payment.status)) continue;
+    if (payment.campaignAppId) ids.add(payment.campaignAppId);
+    const fromFulfillment = fulfillmentAppId(payment.fulfillment);
+    if (fromFulfillment) ids.add(fromFulfillment);
+  }
+  return ids;
+}

@@ -1,4 +1,10 @@
-import type { GooglePlayConnection, GooglePlayConnectionMethod, GooglePlayStatus, Prisma } from "@prisma/client";
+import type {
+  GooglePlayConnection,
+  GooglePlayConnectionMethod,
+  GooglePlayStatus,
+  Prisma,
+  PrismaClient,
+} from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError, NotFoundError, mapInfrastructureError } from "@/lib/errors";
 import { logActivity } from "@/lib/audit";
@@ -35,11 +41,10 @@ import { campaignTestingUrl } from "@/lib/integrations/play-testers";
 import { createCampaign, ensureCampaignPublicFields } from "@/lib/services/campaigns";
 import { withTimeout } from "@/lib/integrations/play-retry";
 import {
-  PLAY_DISCONNECT_PARTIAL,
   PLAY_NOT_CONNECTED_FEATURE,
-  campaignDependsOnPlayConnection,
+  playSyncedAppHasPurchasedTesting,
+  protectingAppIdsFromPayments,
   stripPlayDisconnectedNote,
-  withPlayDisconnectedNote,
 } from "@/lib/play-disconnect";
 
 /**
@@ -343,59 +348,116 @@ export type PlayDisconnectResult = {
   error?: string;
 };
 
+type PlayDb = Prisma.TransactionClient | PrismaClient;
+
 /**
- * Remove TestLoop's synchronized Play cache and unpublish Play-dependent posts.
- *
- * This function must never call the Google Play API. It does not delete apps,
- * tracks, releases, testers, or any other Play Console resource.
+ * Remove TestLoop's Play cache and Play-synced apps that are not needed for a
+ * purchased managed-testing package. Manual apps and purchased Play-synced apps
+ * stay. This never calls the Google Play API.
  */
-export async function cleanupPlayDependentTestLoopData(userId: string) {
-  const campaigns = await prisma.campaign.findMany({
-    where: { userId },
-    include: { app: { select: { syncedFromPlay: true } } },
-  });
-  const dependent = campaigns.filter((campaign) => campaignDependsOnPlayConnection(campaign));
-
-  for (const campaign of dependent) {
-    await prisma.campaign.update({
-      where: { id: campaign.id },
-      data: {
-        published: false,
-        testingUrl: null,
-        webOptInUrl: null,
-        androidOptInUrl: null,
-        description: withPlayDisconnectedNote(campaign.description),
-        ...(campaign.status === "COMPLETED" ? {} : { status: "ARCHIVED" as const }),
+export async function cleanupPlayDependentTestLoopData(userId: string, tx: PlayDb = prisma) {
+  const [syncedApps, payments] = await Promise.all([
+    tx.app.findMany({
+      where: { userId, syncedFromPlay: true },
+      select: {
+        id: true,
+        campaigns: { select: { id: true } },
+        managedTestingCampaigns: { select: { id: true } },
       },
-    });
-  }
+    }),
+    tx.managedTestingPayment.findMany({
+      where: { userId },
+      select: {
+        status: true,
+        fulfillment: true,
+        campaign: { select: { appId: true } },
+      },
+    }),
+  ]);
 
-  const unsynced = await prisma.app.updateMany({
-    where: { userId, syncedFromPlay: true },
-    data: {
-      syncedFromPlay: false,
-      lastSyncedAt: null,
-      playConflictNote: null,
-      googlePlayStatus: "NOT_CONFIGURED",
+  const protectingPaymentAppIds = protectingAppIdsFromPayments(
+    payments.map((payment) => ({
+      status: payment.status,
+      fulfillment: payment.fulfillment,
+      campaignAppId: payment.campaign?.appId ?? null,
+    })),
+  );
+
+  const removable = syncedApps.filter(
+    (app) =>
+      !playSyncedAppHasPurchasedTesting({
+        appId: app.id,
+        managedCampaignCount: app.managedTestingCampaigns.length,
+        protectingPaymentAppIds,
+      }),
+  );
+  const removableAppIds = removable.map((app) => app.id);
+  const removableCampaignIds = removable.flatMap((app) => app.campaigns.map((campaign) => campaign.id));
+  const keptPlayAppIds = syncedApps.filter((app) => !removableAppIds.includes(app.id)).map((app) => app.id);
+
+  await tx.notification.deleteMany({
+    where: {
+      userId,
+      OR: [
+        ...(removableCampaignIds.length ? [{ campaignId: { in: removableCampaignIds } }] : []),
+        { type: { in: ["play_sync_issue", "play_track_change"] } },
+      ],
+    },
+  });
+  await tx.emailEvent.deleteMany({
+    where: {
+      userId,
+      OR: [
+        ...(removableCampaignIds.length ? [{ campaignId: { in: removableCampaignIds } }] : []),
+        { eventKey: { startsWith: "play_sync:" } },
+        { eventKey: { startsWith: "play_track:" } },
+      ],
     },
   });
 
-  await prisma.testingTrack.updateMany({
-    where: { syncedFromPlay: true, app: { userId } },
-    data: { testingLink: null },
+  if (removableCampaignIds.length) {
+    await tx.activityLog.deleteMany({ where: { userId, campaignId: { in: removableCampaignIds } } });
+    await tx.message.deleteMany({ where: { userId, campaignId: { in: removableCampaignIds } } });
+    await tx.messageTemplate.deleteMany({ where: { userId, campaignId: { in: removableCampaignIds } } });
+    await tx.opportunity.deleteMany({ where: { userId, campaignId: { in: removableCampaignIds } } });
+    await tx.commentDraft.deleteMany({ where: { userId, campaignId: { in: removableCampaignIds } } });
+  }
+
+  await tx.job.deleteMany({
+    where: {
+      userId,
+      OR: [{ type: "play_sync" }, { idempotencyKey: { startsWith: "play_sync:" } }],
+    },
   });
 
-  const playAppsRemoved = await prisma.googlePlayApp.count({ where: { userId } });
+  const playAppsRemoved = await tx.googlePlayApp.deleteMany({ where: { userId } });
+
+  if (removableAppIds.length) {
+    await tx.app.deleteMany({ where: { userId, id: { in: removableAppIds } } });
+  }
+
+  const unsynced =
+    keptPlayAppIds.length === 0
+      ? { count: 0 }
+      : await tx.app.updateMany({
+          where: { userId, id: { in: keptPlayAppIds } },
+          data: {
+            syncedFromPlay: false,
+            lastSyncedAt: null,
+            playConflictNote: null,
+            googlePlayStatus: "NOT_CONFIGURED",
+          },
+        });
 
   return {
-    campaignsUnpublished: dependent.length,
+    campaignsUnpublished: removableCampaignIds.length,
     appsUnsynced: unsynced.count,
-    playAppsRemoved,
+    playAppsRemoved: playAppsRemoved.count,
   };
 }
 
-async function clearLegacyPlayIntegration(userId: string) {
-  await prisma.integration.updateMany({
+async function clearLegacyPlayIntegration(userId: string, tx: PlayDb = prisma) {
+  await tx.integration.updateMany({
     where: { userId, provider: "GOOGLE_PLAY" },
     data: {
       status: "NOT_CONNECTED",
@@ -415,55 +477,41 @@ async function clearLegacyPlayIntegration(userId: string) {
 export async function disconnectPlay(userId: string): Promise<PlayDisconnectResult> {
   const connection = await getPlayConnection(userId);
 
-  let cleanup = {
-    campaignsUnpublished: 0,
-    appsUnsynced: 0,
-    playAppsRemoved: 0,
+  let cleanup: {
+    campaignsUnpublished: number;
+    appsUnsynced: number;
+    playAppsRemoved: number;
   };
-  let cleanupCompleted = false;
   try {
-    cleanup = await cleanupPlayDependentTestLoopData(userId);
-    cleanupCompleted = true;
+    cleanup = await prisma.$transaction(
+      async (tx) => {
+        const result = await cleanupPlayDependentTestLoopData(userId, tx);
+        const remaining = await tx.googlePlayConnection.findUnique({ where: { userId } });
+        if (remaining) {
+          await tx.googlePlayConnection.delete({ where: { userId } });
+        }
+        await clearLegacyPlayIntegration(userId, tx);
+        return result;
+      },
+      { timeout: 60_000 },
+    );
   } catch (error) {
     console.error("Play disconnect cleanup failed", error);
+    throw (
+      mapInfrastructureError(error) ??
+      new AppError("Google Play could not be disconnected. Try again.", 500, "PLAY_DISCONNECT_FAILED")
+    );
   }
 
-  let disconnected = !connection;
-  try {
-    const remaining = await getPlayConnection(userId);
-    if (remaining) {
-      await prisma.googlePlayConnection.delete({ where: { userId } });
-    }
-    await clearLegacyPlayIntegration(userId);
-    disconnected = true;
-    if (connection) {
-      await logActivity({
-        userId,
-        action: "PLAY_DISCONNECTED",
-        result: connection.googleAccountEmail ?? connection.method,
-      });
-    }
-  } catch (error) {
-    disconnected = !(await getPlayConnection(userId));
-    if (!disconnected) {
-      throw mapInfrastructureError(error) ?? new AppError(
-        "Google Play could not be disconnected. Try again.",
-        500,
-        "PLAY_DISCONNECT_FAILED",
-      );
-    }
+  if (connection) {
+    await logActivity({
+      userId,
+      action: "PLAY_DISCONNECTED",
+      result: connection.googleAccountEmail ?? connection.method,
+    }).catch((error) => console.error("Play disconnect audit log failed", error));
   }
 
-  if (!cleanupCompleted) {
-    return {
-      disconnected,
-      cleanupCompleted: false,
-      ...cleanup,
-      error: PLAY_DISCONNECT_PARTIAL,
-    };
-  }
-
-  return { disconnected, cleanupCompleted: true, ...cleanup };
+  return { disconnected: true, cleanupCompleted: true, ...cleanup };
 }
 
 export type DiscoveredApp = {

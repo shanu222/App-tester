@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { FirebaseError } from "firebase/app";
 import {
+  GoogleAuthProvider,
   createUserWithEmailAndPassword,
   getRedirectResult,
   sendEmailVerification,
@@ -10,6 +11,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
+  unlink,
   type User,
 } from "firebase/auth";
 import { signIn } from "next-auth/react";
@@ -18,11 +20,19 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/fields";
 import { GoogleGlyph } from "@/components/brand/google-glyph";
 import { PasswordField } from "@/components/auth/password-field";
+import { AuthToast } from "@/components/auth/auth-toast";
 import {
   VERIFY_BEFORE_SIGN_IN,
   emailActionSettings,
   readableAuthError,
 } from "@/lib/auth/firebase-auth-messages";
+import {
+  EMAIL_REGISTERED_WITH_GOOGLE,
+  EMAIL_REGISTERED_WITH_PASSWORD,
+  googleSignInConflictsWithPassword,
+  passwordSignInConflictsWithGoogle,
+} from "@/lib/auth/auth-method-conflict";
+import { lookupSignInMethods } from "@/lib/auth/lookup-sign-in-methods";
 
 /** Popup failures that are environmental rather than user error; retry via redirect. */
 const POPUP_FALLBACK = new Set([
@@ -40,6 +50,7 @@ export function FirebaseLogin() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [needsVerification, setNeedsVerification] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const exchangeForSession = useCallback(async (user: User) => {
     const idToken = await user.getIdToken(true);
@@ -52,6 +63,25 @@ export function FirebaseLogin() {
     window.location.assign(result.url || "/dashboard");
   }, []);
 
+  const completeGoogleSignIn = useCallback(
+    async (user: User) => {
+      const providers = user.providerData.map((item) => item.providerId);
+      if (googleSignInConflictsWithPassword(providers)) {
+        try {
+          await unlink(user, GoogleAuthProvider.PROVIDER_ID);
+        } catch {
+          // Keep the existing password credential; do not leave a Google session.
+        }
+        await firebaseAuth().signOut().catch(() => undefined);
+        setToast(EMAIL_REGISTERED_WITH_PASSWORD);
+        setPending(null);
+        return;
+      }
+      await exchangeForSession(user);
+    },
+    [exchangeForSession],
+  );
+
   // Completes a sign-in that fell back to a full-page redirect.
   useEffect(() => {
     let active = true;
@@ -59,16 +89,21 @@ export function FirebaseLogin() {
       .then((result) => {
         if (active && result?.user) {
           setPending("google");
-          return exchangeForSession(result.user);
+          return completeGoogleSignIn(result.user);
         }
       })
       .catch((cause) => {
-        if (active) setError(readableAuthError(cause));
+        if (!active) return;
+        if (cause instanceof FirebaseError && cause.code === "auth/account-exists-with-different-credential") {
+          setToast(EMAIL_REGISTERED_WITH_PASSWORD);
+          return;
+        }
+        setError(readableAuthError(cause));
       });
     return () => {
       active = false;
     };
-  }, [exchangeForSession]);
+  }, [completeGoogleSignIn]);
 
   function reset() {
     setError(null);
@@ -81,8 +116,14 @@ export function FirebaseLogin() {
     const auth = firebaseAuth();
     try {
       const result = await signInWithPopup(auth, googleProvider());
-      await exchangeForSession(result.user);
+      await completeGoogleSignIn(result.user);
     } catch (cause) {
+      if (cause instanceof FirebaseError && cause.code === "auth/account-exists-with-different-credential") {
+        await auth.signOut().catch(() => undefined);
+        setToast(EMAIL_REGISTERED_WITH_PASSWORD);
+        setPending(null);
+        return;
+      }
       if (cause instanceof FirebaseError && POPUP_FALLBACK.has(cause.code)) {
         try {
           await signInWithRedirect(auth, googleProvider());
@@ -106,12 +147,25 @@ export function FirebaseLogin() {
     return false;
   }
 
+  async function toastIfPasswordConflictsWithGoogle(address: string) {
+    const methods = await lookupSignInMethods(address);
+    if (passwordSignInConflictsWithGoogle(methods)) {
+      setToast(EMAIL_REGISTERED_WITH_GOOGLE);
+      return true;
+    }
+    return false;
+  }
+
   async function withEmail(event: React.FormEvent) {
     event.preventDefault();
     reset();
     setPending("email");
     const auth = firebaseAuth();
     try {
+      if (await toastIfPasswordConflictsWithGoogle(email.trim())) {
+        setPending(null);
+        return;
+      }
       const credential =
         mode === "create"
           ? await createUserWithEmailAndPassword(auth, email.trim(), password)
@@ -128,6 +182,18 @@ export function FirebaseLogin() {
       await exchangeForSession(credential.user);
     } catch (cause) {
       await auth.signOut().catch(() => undefined);
+      if (
+        cause instanceof FirebaseError &&
+        (cause.code === "auth/email-already-in-use" ||
+          cause.code === "auth/invalid-credential" ||
+          cause.code === "auth/wrong-password" ||
+          cause.code === "auth/account-exists-with-different-credential")
+      ) {
+        if (await toastIfPasswordConflictsWithGoogle(email.trim())) {
+          setPending(null);
+          return;
+        }
+      }
       setError(readableAuthError(cause));
       setPending(null);
     }
@@ -153,6 +219,7 @@ export function FirebaseLogin() {
       setNeedsVerification(true);
       setInfo(VERIFY_BEFORE_SIGN_IN);
     } catch (cause) {
+      if (await toastIfPasswordConflictsWithGoogle(email.trim())) return;
       setError(readableAuthError(cause));
     } finally {
       setPending(null);
@@ -168,6 +235,10 @@ export function FirebaseLogin() {
     }
     setPending("reset");
     try {
+      if (await toastIfPasswordConflictsWithGoogle(email.trim())) {
+        setPending(null);
+        return;
+      }
       await sendPasswordResetEmail(firebaseAuth(), email.trim(), emailActionSettings("/reset-password"));
       setInfo(`Password reset link sent to ${email.trim()}. Check your inbox for a secure link to choose a new password.`);
     } catch (cause) {
@@ -359,6 +430,7 @@ export function FirebaseLogin() {
           {info}
         </p>
       ) : null}
+      <AuthToast message={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

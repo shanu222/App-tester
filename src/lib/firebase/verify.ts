@@ -7,6 +7,7 @@ export type FirebaseIdentity = {
   name?: string;
   image?: string;
   provider: string;
+  providers: string[];
 };
 
 type LookupUser = {
@@ -67,12 +68,17 @@ export async function verifyFirebaseIdToken(idToken: string): Promise<FirebaseId
   if (!user?.localId || !email) return null;
 
   const federated = user.providerUserInfo?.find((info) => info.providerId && info.providerId !== "password");
+  const providers = (user.providerUserInfo || [])
+    .map((info) => info.providerId)
+    .filter((id): id is string => Boolean(id));
+  const provider = claims.firebase?.sign_in_provider || federated?.providerId || "password";
   return {
     uid: user.localId,
     email,
     emailVerified: Boolean(user.emailVerified),
     name: user.displayName || federated?.displayName || undefined,
     image: user.photoUrl || federated?.photoUrl || undefined,
-    provider: claims.firebase?.sign_in_provider || federated?.providerId || "password",
+    provider,
+    providers: providers.length ? providers : [provider],
   };
 }

@@ -4,6 +4,12 @@ import Credentials from "next-auth/providers/credentials";
 import { recordAuthError } from "@/lib/auth-error";
 import { env } from "@/lib/env";
 import { verifyFirebaseIdToken } from "@/lib/firebase/verify";
+import {
+  googleSignInConflictsWithPassword,
+  isGoogleAuthProvider,
+  isPasswordAuthProvider,
+  passwordSignInConflictsWithGoogle,
+} from "@/lib/auth/auth-method-conflict";
 
 /**
  * Firebase Authentication is the only way into TestLoop. Google sign-in and
@@ -24,6 +30,8 @@ const firebaseProvider = Credentials({
     const identity = await verifyFirebaseIdToken(idToken);
     if (!identity) return null;
     if (identity.provider === "password" && !identity.emailVerified) return null;
+    if (isGoogleAuthProvider(identity.provider) && googleSignInConflictsWithPassword(identity.providers)) return null;
+    if (isPasswordAuthProvider(identity.provider) && passwordSignInConflictsWithGoogle(identity.providers)) return null;
     return {
       id: identity.uid,
       email: identity.email,

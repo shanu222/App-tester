@@ -10,6 +10,12 @@ import {
   VERIFY_LINK_INVALID,
   readableAuthError,
 } from "../src/lib/auth/firebase-auth-messages";
+import {
+  EMAIL_REGISTERED_WITH_GOOGLE,
+  EMAIL_REGISTERED_WITH_PASSWORD,
+  googleSignInConflictsWithPassword,
+  passwordSignInConflictsWithGoogle,
+} from "../src/lib/auth/auth-method-conflict";
 
 function source(file: string) {
   return readFileSync(resolve(file), "utf8");
@@ -63,5 +69,33 @@ describe("sign-in password visibility and email verification", () => {
     );
     expect(readableAuthError(new FirebaseError("auth/expired-action-code", "x"), "reset")).toBe(RESET_LINK_INVALID);
     expect(readableAuthError(new FirebaseError("auth/invalid-action-code", "x"), "verify")).toBe(VERIFY_LINK_INVALID);
+  });
+});
+
+describe("authentication method conflict", () => {
+  it("uses the required toast copy and does not merge methods", () => {
+    expect(EMAIL_REGISTERED_WITH_GOOGLE).toBe(
+      "This email is already registered with Google Sign In. Please continue with Google.",
+    );
+    expect(EMAIL_REGISTERED_WITH_PASSWORD).toBe(
+      "This email is already registered with email/password. Please sign in using your email and password.",
+    );
+    expect(passwordSignInConflictsWithGoogle(["google.com"])).toBe(true);
+    expect(passwordSignInConflictsWithGoogle(["password"])).toBe(false);
+    expect(passwordSignInConflictsWithGoogle(["google.com", "password"])).toBe(false);
+    expect(googleSignInConflictsWithPassword(["password"])).toBe(true);
+    expect(googleSignInConflictsWithPassword(["google.com"])).toBe(false);
+
+    const login = source("src/components/auth/firebase-login.tsx");
+    expect(login).toContain("AuthToast");
+    expect(login).toContain("EMAIL_REGISTERED_WITH_GOOGLE");
+    expect(login).toContain("EMAIL_REGISTERED_WITH_PASSWORD");
+    expect(login).toContain("completeGoogleSignIn");
+    expect(login).not.toContain("linkWithPopup");
+    expect(login).not.toContain("linkWithCredential");
+
+    const authConfig = source("src/auth.config.ts");
+    expect(authConfig).toContain("googleSignInConflictsWithPassword");
+    expect(authConfig).toContain("passwordSignInConflictsWithGoogle");
   });
 });

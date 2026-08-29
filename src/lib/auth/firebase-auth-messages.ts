@@ -7,6 +7,10 @@ export const EMAIL_VERIFIED = "Your email address has been verified. You can now
 export const RESET_LINK_INVALID = "This reset link is invalid or has expired. Request a new password reset email.";
 export const VERIFY_LINK_INVALID =
   "This verification link is invalid or has expired. Request a new verification email.";
+export const OTP_INCORRECT = "That verification code is incorrect.";
+export const OTP_EXPIRED = "That verification code has expired. Request a new code.";
+export const OTP_VERIFIED = "Your email has been verified.";
+export const OTP_SEND_FAILED = "We could not send the verification email. Try again.";
 
 export function emailActionSettings(path = "/auth/action"): ActionCodeSettings {
   const origin = typeof window === "undefined" ? "" : window.location.origin;

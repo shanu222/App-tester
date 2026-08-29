@@ -4,9 +4,12 @@ import { resolve } from "node:path";
 import { FirebaseError } from "firebase/app";
 import {
   EMAIL_VERIFIED,
+  OTP_EXPIRED,
+  OTP_INCORRECT,
+  OTP_SEND_FAILED,
+  OTP_VERIFIED,
   PASSWORD_CHANGED,
   RESET_LINK_INVALID,
-  VERIFY_BEFORE_SIGN_IN,
   VERIFY_LINK_INVALID,
   readableAuthError,
 } from "../src/lib/auth/firebase-auth-messages";
@@ -35,14 +38,21 @@ describe("sign-in password visibility and email verification", () => {
     expect(login).toContain("Google Sign In");
   });
 
-  it("requires email/password accounts to verify before they can use TestLoop", () => {
+  it("requires a one-time email code before email/password accounts can use TestLoop", () => {
     const login = source("src/components/auth/firebase-login.tsx");
     const authConfig = source("src/auth.config.ts");
-    expect(login).toContain("VERIFY_BEFORE_SIGN_IN");
-    expect(login).toContain("Resend verification email");
-    expect(login).toContain("sendEmailVerification");
+    const middleware = source("src/middleware.ts");
+    expect(login).toContain("Verify your email");
+    expect(login).toContain("Resend code");
+    expect(login).toContain("/api/email-otp");
+    expect(login).not.toContain("sendEmailVerification");
     expect(authConfig).toContain('identity.provider === "password" && !identity.emailVerified');
-    expect(VERIFY_BEFORE_SIGN_IN).toBe("Please verify your email address before signing in.");
+    expect(authConfig).toContain("isPasswordEmailOtpVerified");
+    expect(middleware).toContain("/api/email-otp");
+    expect(OTP_INCORRECT).toBe("That verification code is incorrect.");
+    expect(OTP_EXPIRED).toBe("That verification code has expired. Request a new code.");
+    expect(OTP_VERIFIED).toBe("Your email has been verified.");
+    expect(OTP_SEND_FAILED).toBe("We could not send the verification email. Try again.");
   });
 
   it("sends a reset email and handles reset/verify action links", () => {

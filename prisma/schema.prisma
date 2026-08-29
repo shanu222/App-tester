@@ -257,6 +257,26 @@ model EmailVerificationToken {
   @@index([userId])
 }
 
+/**
+ * One-time email/password signup codes. Firebase cannot mark emailVerified
+ * from the client, so TestLoop stores hashed OTPs and gates the session on
+ * verifiedAt (or Firebase emailVerified for accounts verified earlier).
+ */
+model EmailSignupOtp {
+  id          String    @id @default(cuid())
+  email       String
+  firebaseUid String    @unique
+  codeHash    String
+  expiresAt   DateTime
+  attempts    Int       @default(0)
+  consumedAt  DateTime?
+  verifiedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([email])
+}
+
 model UserSettings {
   id                     String   @id @default(cuid())
   userId                 String   @unique

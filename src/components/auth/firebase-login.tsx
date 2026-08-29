@@ -6,7 +6,6 @@ import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
   getRedirectResult,
-  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -22,7 +21,10 @@ import { GoogleGlyph } from "@/components/brand/google-glyph";
 import { PasswordField } from "@/components/auth/password-field";
 import { AuthToast } from "@/components/auth/auth-toast";
 import {
-  VERIFY_BEFORE_SIGN_IN,
+  OTP_EXPIRED,
+  OTP_INCORRECT,
+  OTP_SEND_FAILED,
+  OTP_VERIFIED,
   emailActionSettings,
   readableAuthError,
 } from "@/lib/auth/firebase-auth-messages";
@@ -42,14 +44,39 @@ const POPUP_FALLBACK = new Set([
   "auth/operation-not-supported-in-this-environment",
 ]);
 
+type OtpResponse = {
+  ok?: boolean;
+  alreadyVerified?: boolean;
+  verified?: boolean;
+  error?: string;
+  code?: string;
+};
+
+function otpErrorMessage(data: OtpResponse, fallback: string) {
+  if (data.code === "OTP_INCORRECT") return OTP_INCORRECT;
+  if (data.code === "OTP_EXPIRED") return OTP_EXPIRED;
+  if (data.code === "OTP_DELIVERY_FAILED") return OTP_SEND_FAILED;
+  return data.error || fallback;
+}
+
+async function postEmailOtp(body: { action: "send" | "verify"; idToken: string; code?: string }) {
+  const response = await fetch("/api/email-otp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await response.json().catch(() => ({}))) as OtpResponse;
+  return { ok: response.ok, data };
+}
+
 export function FirebaseLogin() {
-  const [mode, setMode] = useState<"signin" | "create" | "reset">("signin");
+  const [mode, setMode] = useState<"signin" | "create" | "reset" | "verify">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [pending, setPending] = useState<"google" | "email" | "reset" | "verify" | null>(null);
+  const [code, setCode] = useState("");
+  const [pending, setPending] = useState<"google" | "email" | "reset" | "otp" | "resend" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [needsVerification, setNeedsVerification] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const exchangeForSession = useCallback(async (user: User) => {
@@ -58,9 +85,10 @@ export function FirebaseLogin() {
     if (!result || result.error) {
       setError("Signed in with Firebase, but TestLoop could not create a session. Try again.");
       setPending(null);
-      return;
+      return false;
     }
     window.location.assign(result.url || "/dashboard");
+    return true;
   }, []);
 
   const completeGoogleSignIn = useCallback(
@@ -138,15 +166,6 @@ export function FirebaseLogin() {
     }
   }
 
-  async function requireVerifiedPasswordUser(user: User) {
-    if (user.emailVerified) return true;
-    await firebaseAuth().signOut();
-    setNeedsVerification(true);
-    setInfo(VERIFY_BEFORE_SIGN_IN);
-    setPending(null);
-    return false;
-  }
-
   async function toastIfPasswordConflictsWithGoogle(address: string) {
     const methods = await lookupSignInMethods(address);
     if (passwordSignInConflictsWithGoogle(methods)) {
@@ -154,6 +173,43 @@ export function FirebaseLogin() {
       return true;
     }
     return false;
+  }
+
+  async function passwordUser() {
+    const existing = firebaseAuth().currentUser;
+    if (existing) return existing;
+    const credential = await signInWithEmailAndPassword(firebaseAuth(), email.trim(), password);
+    return credential.user;
+  }
+
+  async function sendSignupOtp(user: User) {
+    try {
+      const idToken = await user.getIdToken(true);
+      const { ok, data } = await postEmailOtp({ action: "send", idToken });
+      if (data.alreadyVerified) {
+        await exchangeForSession(user);
+        return "verified" as const;
+      }
+      if (!ok) {
+        setError(otpErrorMessage(data, OTP_SEND_FAILED));
+        return "failed" as const;
+      }
+      return "sent" as const;
+    } catch {
+      setError(OTP_SEND_FAILED);
+      return "failed" as const;
+    }
+  }
+
+  async function beginEmailOtp(user: User) {
+    setCode("");
+    setMode("verify");
+    const result = await sendSignupOtp(user);
+    if (result === "verified") return;
+    if (result === "sent") {
+      setInfo(`We sent a verification code to ${user.email || email.trim()}.`);
+    }
+    setPending(null);
   }
 
   async function withEmail(event: React.FormEvent) {
@@ -171,15 +227,19 @@ export function FirebaseLogin() {
           ? await createUserWithEmailAndPassword(auth, email.trim(), password)
           : await signInWithEmailAndPassword(auth, email.trim(), password);
 
-      if (!credential.user.emailVerified) {
-        if (mode === "create") {
-          await sendEmailVerification(credential.user, emailActionSettings("/verify-email"));
-        }
-        await requireVerifiedPasswordUser(credential.user);
+      if (credential.user.emailVerified) {
+        await exchangeForSession(credential.user);
         return;
       }
-      setNeedsVerification(false);
-      await exchangeForSession(credential.user);
+      if (mode !== "create") {
+        const idToken = await credential.user.getIdToken(true);
+        const session = await signIn("firebase", { idToken, redirect: false, callbackUrl: "/dashboard" });
+        if (session && !session.error) {
+          window.location.assign(session.url || "/dashboard");
+          return;
+        }
+      }
+      await beginEmailOtp(credential.user);
     } catch (cause) {
       await auth.signOut().catch(() => undefined);
       if (
@@ -199,25 +259,38 @@ export function FirebaseLogin() {
     }
   }
 
-  async function resendVerification() {
+  async function confirmOtp(event: React.FormEvent) {
+    event.preventDefault();
     reset();
-    if (!email.trim() || !password) {
-      setError("Enter the email and password for this account, then resend the verification email.");
-      return;
-    }
-    setPending("verify");
-    const auth = firebaseAuth();
+    setPending("otp");
     try {
-      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
-      if (credential.user.emailVerified) {
-        setNeedsVerification(false);
-        await exchangeForSession(credential.user);
+      const user = await passwordUser();
+      const idToken = await user.getIdToken(true);
+      const { ok, data } = await postEmailOtp({ action: "verify", idToken, code });
+      if (!ok) {
+        setError(otpErrorMessage(data, OTP_INCORRECT));
+        setPending(null);
         return;
       }
-      await sendEmailVerification(credential.user, emailActionSettings("/verify-email"));
-      await auth.signOut();
-      setNeedsVerification(true);
-      setInfo(VERIFY_BEFORE_SIGN_IN);
+      setInfo(OTP_VERIFIED);
+      await new Promise((resolve) => window.setTimeout(resolve, 800));
+      await exchangeForSession(user);
+    } catch (cause) {
+      setError(readableAuthError(cause));
+      setPending(null);
+    }
+  }
+
+  async function resendOtp() {
+    reset();
+    setPending("resend");
+    try {
+      const user = await passwordUser();
+      const result = await sendSignupOtp(user);
+      if (result === "verified") return;
+      if (result === "sent") {
+        setInfo(`We sent a verification code to ${user.email || email.trim()}.`);
+      }
     } catch (cause) {
       if (await toastIfPasswordConflictsWithGoogle(email.trim())) return;
       setError(readableAuthError(cause));
@@ -247,15 +320,30 @@ export function FirebaseLogin() {
     setPending(null);
   }
 
+  function leaveVerify(next: "signin" | "create") {
+    void firebaseAuth().signOut().catch(() => undefined);
+    setCode("");
+    setMode(next);
+    reset();
+  }
+
   const busy = pending !== null;
   const heading =
-    mode === "create" ? "Create your TestLoop account" : mode === "reset" ? "Forgot password" : "Welcome back";
+    mode === "create"
+      ? "Create your TestLoop account"
+      : mode === "reset"
+        ? "Forgot password"
+        : mode === "verify"
+          ? "Verify your email"
+          : "Welcome back";
   const subheading =
     mode === "create"
       ? "Join TestLoop to discover and manage software testing opportunities."
       : mode === "reset"
         ? "Enter your registered email address and we will send a password reset link."
-        : "Sign in to your TestLoop account.";
+        : mode === "verify"
+          ? `Enter the code we sent to ${email.trim() || "your email address"} to finish creating your account.`
+          : "Sign in to your TestLoop account.";
 
   return (
     <div className="space-y-5">
@@ -264,7 +352,7 @@ export function FirebaseLogin() {
         <p className="mt-1 text-sm leading-6 text-muted">{subheading}</p>
       </div>
 
-      {mode !== "reset" ? (
+      {mode !== "reset" && mode !== "verify" ? (
         <>
           <Button
             type="button"
@@ -303,6 +391,37 @@ export function FirebaseLogin() {
           </div>
           <Button type="submit" className="w-full" aria-busy={pending === "reset"} disabled={busy}>
             {pending === "reset" ? "Sending…" : "Send reset link"}
+          </Button>
+        </form>
+      ) : mode === "verify" ? (
+        <form className="space-y-4" onSubmit={(event) => void confirmOtp(event)}>
+          <div>
+            <Label htmlFor="firebase-otp">Verification code</Label>
+            <Input
+              id="firebase-otp"
+              name="code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              required
+              maxLength={6}
+              value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="6-digit code"
+              disabled={busy}
+            />
+          </div>
+          <Button type="submit" className="w-full" aria-busy={pending === "otp"} disabled={busy || code.length < 6}>
+            {pending === "otp" ? "Verifying…" : "Verify email"}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            aria-busy={pending === "resend"}
+            disabled={busy}
+            onClick={() => void resendOtp()}
+          >
+            {pending === "resend" ? "Sending…" : "Resend code"}
           </Button>
         </form>
       ) : (
@@ -357,19 +476,6 @@ export function FirebaseLogin() {
         </form>
       )}
 
-      {needsVerification && mode !== "reset" ? (
-        <Button
-          type="button"
-          variant="secondary"
-          className="w-full"
-          aria-busy={pending === "verify"}
-          disabled={busy}
-          onClick={() => void resendVerification()}
-        >
-          {pending === "verify" ? "Sending…" : "Resend verification email"}
-        </Button>
-      ) : null}
-
       <p className="text-sm text-muted">
         {mode === "create" ? (
           <>
@@ -385,16 +491,13 @@ export function FirebaseLogin() {
               Sign in
             </button>
           </>
-        ) : mode === "reset" ? (
+        ) : mode === "reset" || mode === "verify" ? (
           <>
-            Remembered your password?{" "}
+            {mode === "verify" ? "Use a different email? " : "Remembered your password? "}
             <button
               type="button"
               className="font-medium text-brand hover:underline"
-              onClick={() => {
-                setMode("signin");
-                reset();
-              }}
+              onClick={() => leaveVerify("signin")}
             >
               Sign in
             </button>
@@ -408,7 +511,6 @@ export function FirebaseLogin() {
               onClick={() => {
                 setMode("create");
                 reset();
-                setNeedsVerification(false);
               }}
             >
               Create an account

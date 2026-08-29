@@ -21,6 +21,7 @@ const PUBLIC_PREFIXES = [
   "/sitemap.xml",
   "/robots.txt",
   "/api/auth",
+  "/api/email-otp",
   "/api/health",
   "/api/cron",
   "/api/telemetry",

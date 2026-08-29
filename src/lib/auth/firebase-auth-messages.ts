@@ -11,6 +11,7 @@ export const OTP_INCORRECT = "That verification code is incorrect.";
 export const OTP_EXPIRED = "That verification code has expired. Request a new code.";
 export const OTP_VERIFIED = "Your email has been verified.";
 export const OTP_SEND_FAILED = "We could not send the verification email. Try again.";
+export const SIGN_IN_NOT_COMPLETED = "We could not complete sign-in. Try again.";
 
 export function emailActionSettings(path = "/auth/action"): ActionCodeSettings {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
@@ -39,16 +40,16 @@ export function readableAuthError(error: unknown, kind: "auth" | "reset" | "veri
       case "auth/too-many-requests":
         return "Too many attempts. Wait a moment and try again.";
       case "auth/unauthorized-domain":
-        return "This hostname is not in the Firebase authorized domains list.";
+        return "This website address is not authorized for sign-in.";
       case "auth/account-exists-with-different-credential":
-        return "This email already uses a different sign-in method. Use Google instead.";
+        return SIGN_IN_NOT_COMPLETED;
       case "auth/expired-action-code":
         return kind === "verify" ? VERIFY_LINK_INVALID : RESET_LINK_INVALID;
       case "auth/invalid-action-code":
         return kind === "verify" ? VERIFY_LINK_INVALID : RESET_LINK_INVALID;
       default:
-        return error.message.replace("Firebase: ", "");
+        return SIGN_IN_NOT_COMPLETED;
     }
   }
-  return error instanceof Error ? error.message : "Sign-in failed.";
+  return SIGN_IN_NOT_COMPLETED;
 }

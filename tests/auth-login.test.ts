@@ -10,6 +10,7 @@ import {
   OTP_VERIFIED,
   PASSWORD_CHANGED,
   RESET_LINK_INVALID,
+  SIGN_IN_NOT_COMPLETED,
   VERIFY_LINK_INVALID,
   readableAuthError,
 } from "../src/lib/auth/firebase-auth-messages";
@@ -101,11 +102,25 @@ describe("authentication method conflict", () => {
     expect(login).toContain("EMAIL_REGISTERED_WITH_GOOGLE");
     expect(login).toContain("EMAIL_REGISTERED_WITH_PASSWORD");
     expect(login).toContain("completeGoogleSignIn");
+    expect(login).toContain("onSessionRejected");
+    expect(login).toContain("SIGN_IN_NOT_COMPLETED");
+    expect(login).not.toContain("Signed in with Firebase");
     expect(login).not.toContain("linkWithPopup");
     expect(login).not.toContain("linkWithCredential");
 
     const authConfig = source("src/auth.config.ts");
     expect(authConfig).toContain("googleSignInConflictsWithPassword");
     expect(authConfig).toContain("passwordSignInConflictsWithGoogle");
+    expect(SIGN_IN_NOT_COMPLETED).toBe("We could not complete sign-in. Try again.");
+    expect(readableAuthError(new FirebaseError("auth/account-exists-with-different-credential", "Firebase: secret"))).toBe(
+      SIGN_IN_NOT_COMPLETED,
+    );
+    expect(readableAuthError(new FirebaseError("auth/internal-error", "Firebase: stack trace"))).toBe(
+      SIGN_IN_NOT_COMPLETED,
+    );
+    expect(readableAuthError(new FirebaseError("auth/internal-error", "Firebase: stack trace"))).not.toContain("Firebase");
+
+    const loginError = source("src/app/login-error/page.tsx");
+    expect(loginError).not.toContain("Technical details");
   });
 });

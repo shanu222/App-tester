@@ -24,7 +24,7 @@ export default async function LoginErrorPage({
 }: {
   searchParams: Promise<{ error?: string; reason?: string }>;
 }) {
-  const { error, reason } = await searchParams;
+  const { reason } = await searchParams;
   const detail = reason ? REASONS[reason] : null;
   const signInReady = firebaseAuthConfigured();
 
@@ -42,16 +42,6 @@ export default async function LoginErrorPage({
           <p className="mt-2 text-sm leading-6 text-muted">
             {detail || `${SITE_NAME} could not complete sign-in. Try again below.`}
           </p>
-
-          {reason ? (
-            <details className="mt-4">
-              <summary className="cursor-pointer text-sm font-medium text-slate-700">Technical details</summary>
-              <p className="mt-2 rounded-control border border-line bg-surface px-3 py-2 text-xs text-muted">
-                Reference: {reason}
-                {error && error !== reason ? ` (${error})` : ""}
-              </p>
-            </details>
-          ) : null}
 
           <div className="mt-6">
             {signInReady ? (

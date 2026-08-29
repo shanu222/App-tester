@@ -25,6 +25,7 @@ import {
   OTP_INCORRECT,
   OTP_SEND_FAILED,
   OTP_VERIFIED,
+  SIGN_IN_NOT_COMPLETED,
   emailActionSettings,
   readableAuthError,
 } from "@/lib/auth/firebase-auth-messages";
@@ -83,7 +84,6 @@ export function FirebaseLogin() {
     const idToken = await user.getIdToken(true);
     const result = await signIn("firebase", { idToken, redirect: false, callbackUrl: "/dashboard" });
     if (!result || result.error) {
-      setError("Signed in with Firebase, but TestLoop could not create a session. Try again.");
       setPending(null);
       return false;
     }
@@ -91,10 +91,35 @@ export function FirebaseLogin() {
     return true;
   }, []);
 
+  const onSessionRejected = useCallback(
+    async (user: User | null, via: "google" | "password") => {
+      const address = (user?.email || email).trim();
+      const providers = user?.providerData.map((item) => item.providerId) ?? [];
+      const methods = address ? await lookupSignInMethods(address) : [];
+      const combined = Array.from(new Set([...providers, ...methods]));
+      await firebaseAuth().signOut().catch(() => undefined);
+      if (via === "google" && googleSignInConflictsWithPassword(combined)) {
+        setToast(EMAIL_REGISTERED_WITH_PASSWORD);
+        setPending(null);
+        return;
+      }
+      if (via === "password" && passwordSignInConflictsWithGoogle(combined)) {
+        setToast(EMAIL_REGISTERED_WITH_GOOGLE);
+        setPending(null);
+        return;
+      }
+      setError(SIGN_IN_NOT_COMPLETED);
+      setPending(null);
+    },
+    [email],
+  );
+
   const completeGoogleSignIn = useCallback(
     async (user: User) => {
       const providers = user.providerData.map((item) => item.providerId);
-      if (googleSignInConflictsWithPassword(providers)) {
+      const lookedUp = user.email ? await lookupSignInMethods(user.email) : [];
+      const combined = Array.from(new Set([...providers, ...lookedUp]));
+      if (googleSignInConflictsWithPassword(combined)) {
         try {
           await unlink(user, GoogleAuthProvider.PROVIDER_ID);
         } catch {
@@ -105,9 +130,11 @@ export function FirebaseLogin() {
         setPending(null);
         return;
       }
-      await exchangeForSession(user);
+      if (!(await exchangeForSession(user))) {
+        await onSessionRejected(user, "google");
+      }
     },
-    [exchangeForSession],
+    [exchangeForSession, onSessionRejected],
   );
 
   // Completes a sign-in that fell back to a full-page redirect.
@@ -124,6 +151,7 @@ export function FirebaseLogin() {
         if (!active) return;
         if (cause instanceof FirebaseError && cause.code === "auth/account-exists-with-different-credential") {
           setToast(EMAIL_REGISTERED_WITH_PASSWORD);
+          setPending(null);
           return;
         }
         setError(readableAuthError(cause));
@@ -187,7 +215,9 @@ export function FirebaseLogin() {
       const idToken = await user.getIdToken(true);
       const { ok, data } = await postEmailOtp({ action: "send", idToken });
       if (data.alreadyVerified) {
-        await exchangeForSession(user);
+        if (!(await exchangeForSession(user))) {
+          await onSessionRejected(user, "password");
+        }
         return "verified" as const;
       }
       if (!ok) {
@@ -228,7 +258,9 @@ export function FirebaseLogin() {
           : await signInWithEmailAndPassword(auth, email.trim(), password);
 
       if (credential.user.emailVerified) {
-        await exchangeForSession(credential.user);
+        if (!(await exchangeForSession(credential.user))) {
+          await onSessionRejected(credential.user, "password");
+        }
         return;
       }
       if (mode !== "create") {
@@ -274,7 +306,9 @@ export function FirebaseLogin() {
       }
       setInfo(OTP_VERIFIED);
       await new Promise((resolve) => window.setTimeout(resolve, 800));
-      await exchangeForSession(user);
+      if (!(await exchangeForSession(user))) {
+        await onSessionRejected(user, "password");
+      }
     } catch (cause) {
       setError(readableAuthError(cause));
       setPending(null);
